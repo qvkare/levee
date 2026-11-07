@@ -24,6 +24,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(report, {
     // A report with no figures at all is an outage, not a result. The body has the same shape.
     status: report.status === "unavailable" ? 503 : 200,
-    headers: { ...CORS, "Cache-Control": fresh ? `public, max-age=0, s-maxage=${fresh}, stale-while-revalidate=${fresh}` : "no-store" },
+    headers: { ...CORS, "Cache-Control": fresh ? `public, max-age=${fresh}` : "no-store" },
   });
 }

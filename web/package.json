@@ -7,11 +7,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "build:worker": "opennextjs-cloudflare build",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview --port 8787",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "typecheck": "tsc --noEmit",
     "test": "node --test --disable-warning=ExperimentalWarning \"lib/**/*.test.ts\"",
     "design-check": "node tools/design-check.mjs app components lib README.md"
   },
   "dependencies": {
+    "@opennextjs/cloudflare": "1.20.16",
     "next": "16.4.5",
     "react": "19.3.1",
     "react-dom": "19.3.1",
@@ -21,6 +25,7 @@
     "@types/node": "^22.20.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "wrangler": "4.158.0"
   }
 }

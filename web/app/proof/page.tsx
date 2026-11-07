@@ -3,6 +3,9 @@ import { StackTable, type Column } from "@/components/stack-table.tsx";
 import { CHAIN_NAMES, evmLink, nearLink, readRuns, type EvidenceRun, type Outcome } from "@/lib/evidence.ts";
 import { integer } from "@/lib/format.ts";
 
+/** Built once, from the evidence folder. It must not render on a Worker, which has no such folder. */
+export const dynamic = "force-static";
+
 export const metadata: Metadata = { title: "Proof", description: "Every recorded Levee run, including failures, with explorer links." };
 
 const OUTCOME_NAMES: Record<Outcome, string> = { success: "Success", failed: "Failed", aborted: "Aborted", unreadable: "Unreadable" };

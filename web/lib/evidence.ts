@@ -1,9 +1,11 @@
 /**
  * Reads evidence/runs/*.json at build time (spec section 6). A record that cannot be parsed is
  * listed as unreadable and not dropped, because failed runs stay visible.
+ *
+ * Only prerendered pages may call readRuns. A Worker has no evidence folder at runtime, and a page
+ * rendered there would report no runs whatever had happened.
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 
 export type Outcome = "success" | "failed" | "aborted" | "unreadable";
 
@@ -89,15 +91,15 @@ export function parseRun(id: string, raw: string): EvidenceRun {
 
 /** The repository's evidence folder. `next build` runs from web/, so it is one level up. */
 export function evidenceDir(): string {
-  return process.env.LEVEE_EVIDENCE_DIR || join(process.cwd(), "..", "evidence", "runs");
+  return process.env.LEVEE_EVIDENCE_DIR || `${process.cwd()}/../evidence/runs`;
 }
 
 /** Newest first: run ids start with a timestamp. */
 export function readRuns(dir: string = evidenceDir()): EvidenceRun[] {
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
+  if (!existsSync(/* turbopackIgnore: true */ dir)) return [];
+  return readdirSync(/* turbopackIgnore: true */ dir)
     .filter((name) => name.endsWith(".json"))
-    .map((name) => parseRun(name.replace(/\.json$/, ""), readFileSync(join(dir, name), "utf8")))
+    .map((name) => parseRun(name.replace(/\.json$/, ""), readFileSync(/* turbopackIgnore: true */ `${dir}/${name}`, "utf8")))
     .sort((a, b) => b.id.localeCompare(a.id));
 }
 

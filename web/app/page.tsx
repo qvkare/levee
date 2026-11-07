@@ -9,8 +9,8 @@ import { DEFAULT_TARGET } from "@/lib/math.ts";
 import { chartModel } from "@/lib/reading.ts";
 import { getRiskReport } from "@/lib/risk.ts";
 
-/** The example level is rebuilt once a minute, so the first screen is fast and still live. */
-export const revalidate = 60;
+/** Prerendered. Workers serve this from static assets, with no revalidation. */
+export const dynamic = "force-static";
 
 /** These are other people's positions and can close, so the first one still holding water is shown. */
 async function liveExample() {
