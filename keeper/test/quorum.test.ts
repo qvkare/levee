@@ -169,7 +169,8 @@ describe('evaluateQuorum: freshness', () => {
 });
 
 describe('readQuorum', () => {
-  const quorumOptions = { ...options };
+  const { nowMs: _unused, ...quorumOptions } = options;
+  const now = () => nowMs;
 
   it('reads each endpoint and judges the answers', async () => {
     const result = await readQuorum(
@@ -178,8 +179,26 @@ describe('readQuorum', () => {
         { url: 'b', read: async () => sample('b') },
       ],
       quorumOptions,
+      now,
     );
     expect(result.ok).toBe(true);
+  });
+
+  it('judges freshness after the reads finish, so slow reads cannot hide an old block', async () => {
+    let clock = nowMs;
+    const slow = async (rpc: string) => {
+      clock += 60_000;
+      return sample(rpc);
+    };
+    const result = await readQuorum(
+      [
+        { url: 'a', read: () => slow('a') },
+        { url: 'b', read: () => slow('b') },
+      ],
+      quorumOptions,
+      () => clock,
+    );
+    expect(result).toMatchObject({ ok: false, reason: 'stale', nowMs: nowMs + 120_000 });
   });
 
   it('records an endpoint that fails instead of throwing', async () => {
@@ -189,6 +208,7 @@ describe('readQuorum', () => {
         { url: 'b', read: () => Promise.reject(new Error('connection refused')) },
       ],
       quorumOptions,
+      now,
     );
     expect(result).toMatchObject({ ok: false, reason: 'too_few_rpcs' });
     expect(result.failures[0]?.rpc).toBe('b');
@@ -203,6 +223,7 @@ describe('readQuorum', () => {
         { url: 'b', read: () => Promise.reject(error) },
       ],
       quorumOptions,
+      now,
     );
     expect(result.failures[0]?.error).toBe('HTTP request failed.');
   });

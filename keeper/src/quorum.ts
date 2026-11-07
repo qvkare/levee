@@ -45,15 +45,16 @@ export const DEFAULT_QUORUM: Omit<QuorumOptions, 'chainId' | 'nowMs'> = {
 
 export type QuorumRefusal = 'too_few_rpcs' | 'stale' | 'disagreement';
 
+interface QuorumEvidence {
+  samples: Sample[];
+  failures: RpcFailure[];
+  /** The clock the freshness check used, kept so that `replay` can repeat it. */
+  nowMs: number;
+}
+
 export type QuorumResult =
-  | { ok: true; sample: Sample; samples: Sample[]; failures: RpcFailure[] }
-  | {
-      ok: false;
-      reason: QuorumRefusal;
-      detail: string;
-      samples: Sample[];
-      failures: RpcFailure[];
-    };
+  | ({ ok: true; sample: Sample } & QuorumEvidence)
+  | ({ ok: false; reason: QuorumRefusal; detail: string } & QuorumEvidence);
 
 /** Every number the decision reads. Comparing only the health factor would let one
  *  endpoint inflate the amount through the debt or the price. */
@@ -99,13 +100,6 @@ function distinctEndpoints(samples: Sample[]): Sample[] {
   });
 }
 
-const refuse = (
-  reason: QuorumRefusal,
-  detail: string,
-  samples: Sample[],
-  failures: RpcFailure[],
-): QuorumResult => ({ ok: false, reason, detail, samples, failures });
-
 /** Pure, so that `replay` can repeat the judgement from recorded samples. */
 export function evaluateQuorum(
   rawSamples: Sample[],
@@ -114,6 +108,13 @@ export function evaluateQuorum(
 ): QuorumResult {
   const samples = distinctEndpoints(rawSamples);
   const failures = [...rawFailures];
+  const evidence = { samples, failures, nowMs: options.nowMs };
+  const refuse = (reason: QuorumRefusal, detail: string): QuorumResult => ({
+    ok: false,
+    reason,
+    detail,
+    ...evidence,
+  });
 
   const onChain = samples.filter((sample) => {
     if (sample.chainId === options.chainId) return true;
@@ -126,21 +127,25 @@ export function evaluateQuorum(
   if (fresh.length < options.minEndpoints) {
     const stale = onChain.length - fresh.length;
     const detail = `${fresh.length} of ${options.minEndpoints} endpoints usable, ${stale} stale, ${failures.length} failed`;
-    return refuse(stale > 0 ? 'stale' : 'too_few_rpcs', detail, samples, failures);
+    return refuse(stale > 0 ? 'stale' : 'too_few_rpcs', detail);
   }
 
   // Every fresh endpoint has a veto. There is no majority: a minority may be the honest one.
   const disagreement = findDisagreement(fresh, options.maxDeviationBps);
-  if (disagreement) return refuse('disagreement', disagreement, samples, failures);
+  if (disagreement) return refuse('disagreement', disagreement);
 
   const sample = fresh.reduce((best, next) => (next.blockNumber > best.blockNumber ? next : best));
-  return { ok: true, sample, samples, failures };
+  return { ok: true, sample, ...evidence };
 }
 
-/** Reads every endpoint in parallel and judges the result. */
+/**
+ * Reads every endpoint in parallel and judges the result. The clock is read after the
+ * reads finish, so that a slow endpoint cannot make an old block look fresh.
+ */
 export async function readQuorum(
   endpoints: { url: string; read: () => Promise<Sample> }[],
-  options: QuorumOptions,
+  options: Omit<QuorumOptions, 'nowMs'>,
+  now: () => number,
 ): Promise<QuorumResult> {
   const settled = await Promise.allSettled(endpoints.map((endpoint) => endpoint.read()));
   const samples: Sample[] = [];
@@ -153,5 +158,5 @@ export async function readQuorum(
       failures.push({ rpc, error: String(result.reason?.shortMessage ?? result.reason) });
     }
   });
-  return evaluateQuorum(samples, failures, options);
+  return evaluateQuorum(samples, failures, { ...options, nowMs: now() });
 }
