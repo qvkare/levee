@@ -2562,7 +2562,6 @@ version = "0.1.0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
- "alloy-rlp",
  "anyhow",
  "hex",
  "k256",

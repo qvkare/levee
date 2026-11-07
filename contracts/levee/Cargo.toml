@@ -26,6 +26,5 @@ proptest = "1"
 # Independent implementations, so the tests never check our encoder against itself.
 alloy-consensus = { version = "2", features = ["k256"] }
 alloy-primitives = "1"
-alloy-rlp = "0.3"
 k256 = { version = "0.13", features = ["ecdsa", "arithmetic"] }
 sha3 = "0.10"
