@@ -98,7 +98,7 @@ function missTable(cell: Cell): string {
 function warningRows(rows: WarningRow[]): string {
   const limits = ['10', '30', '60', '120', '300', '900', '3600'];
   return table(
-    ['T', 'Median gap (n)', ...limits.map((l) => `≥ ${duration(Number(l))}`), 'Below T since arming', 'Never below T'],
+    ['T', 'Median gap (n)', ...limits.map((l) => `≥ ${duration(Number(l))}`), 'Below T since arming', 'Not below T before liquidation'],
     rows.map((r) => [
       r.trigger.toFixed(2),
       `${duration(r.medianGapSec)} (${r.withDescent})`,
@@ -178,7 +178,7 @@ function fullGrid(cells: Cell[], excluded: number): string {
 function examples(rows: Example[]): string {
   return table(
     ['Case', 'Chain', 'Borrower', 'Debt', 'HF at arming', 'First below T', 'First liquidation', 'Result', 'Tx'],
-    rows.map((e) => [e.label, e.chain, `\`${e.user}\``, usd(e.debtUsd), e.hfAtArming.toFixed(3), e.firstBelowTrigger ?? 'never', e.liquidation, e.reason, `\`${e.tx}\``]),
+    rows.map((e) => [e.label, e.chain, `\`${e.user}\``, usd(e.debtUsd), e.hfAtArming.toFixed(3), e.firstBelowTrigger ?? 'not observed', e.liquidation, e.reason, `\`${e.tx}\``]),
   );
 }
 
