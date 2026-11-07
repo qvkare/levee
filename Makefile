@@ -1,9 +1,9 @@
-.PHONY: judge verify replay backtest attack-demo test test-contracts test-keeper test-evm test-web
+.PHONY: judge verify replay backtest quote-dry attack-demo test test-contracts test-keeper test-evm test-web
 
 RUN := evidence/runs/2026-11-07T19-23-34Z-base-sepolia-1.json
 
 # No keys and no funds. Run `pnpm install` first.
-judge: verify replay backtest
+judge: verify replay backtest quote-dry
 
 # Spec section 6. Reads every recorded run back from public chains.
 verify:
@@ -16,6 +16,11 @@ replay:
 # Recomputes the backtest from cached data.
 backtest:
 	pnpm --silent --filter backtest backtest
+
+# Live NEAR Intents dry quotes for the reserve routes. Nothing moves.
+# Confidential when INTENTS_PARTNER_KEY is set, public otherwise.
+quote-dry:
+	node web/scripts/quote-route.ts
 
 # A real function-call key tries every method it should not reach, in near-sandbox.
 attack-demo:

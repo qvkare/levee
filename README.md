@@ -26,9 +26,11 @@ make judge
 | `make verify` | Every recorded run read back from public chains: the NEAR receipt, the rescuer derived from the MPC root key, the EVM sender, target, selector, asset, borrower and amount |
 | `make replay` | One real rescue walked step by step, offline |
 | `make backtest` | The backtest recomputed from cached data, including misses |
+| `make quote-dry` | Live NEAR Intents dry quotes for the reserve routes: Arbitrum to Base, Base to Arbitrum, Base to Hyperliquid. Nothing moves |
 | `make attack-demo` | A real function-call key tries every other method in near-sandbox and is refused. Needs Rust and `cargo-near` |
 | `make test` | All suites. Needs Rust, `cargo-near` and Foundry |
 | `curl 'https://levee.qvkare.com/api/risk?address=0x...'` | The same reading as JSON |
+| `curl 'https://levee.qvkare.com/api/route?from=arbitrum&to=base&amount=20'` | A live confidential dry quote for moving a reserve to a rescuer |
 
 ## Live evidence
 
@@ -81,7 +83,7 @@ The worst a stolen keeper key can do is repay debt early, burn rescuer gas up to
 - **Function-call keys.** The keeper's key is limited to `rescue` by the protocol. `make attack-demo` shows it.
 - **NEAR contract as the policy layer.** One policy controls rescuers on several chains, and it has no admin or upgrade path. Keys on the testnet deployment have not been removed yet; `it_still_works_with_every_key_deleted` covers a locked contract in the sandbox.
 
-NEAR Intents is not used yet. It is planned for the reserve layer below.
+- **NEAR Intents.** The site and `make quote-dry` take live confidential 1Click quotes for the reserve routes, with a partner key. No reserve moves through Intents yet: the reserve layer below is not built.
 
 ## Backtest
 
