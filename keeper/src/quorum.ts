@@ -1,0 +1,157 @@
+/**
+ * Quorum read of a position. Spec section 5: act only if at least two RPC endpoints
+ * agree within 0.5% and are less than 30 seconds old. One bad endpoint can therefore
+ * stop a rescue but cannot cause one.
+ */
+
+/** One endpoint's view of a position, all read at one block. */
+export interface Sample {
+  rpc: string;
+  chainId: number;
+  blockNumber: bigint;
+  /** Seconds since the Unix epoch, from the block header. */
+  blockTimestamp: bigint;
+  healthFactor: bigint;
+  totalCollateralBase: bigint;
+  totalDebtBase: bigint;
+  liquidationThresholdBps: bigint;
+  usdcPriceBase: bigint;
+  usdcDebt: bigint;
+  rescuerUsdc: bigint;
+  rescuerAllowance: bigint;
+}
+
+export interface RpcFailure {
+  rpc: string;
+  error: string;
+}
+
+export interface QuorumOptions {
+  chainId: number;
+  nowMs: number;
+  /** Distinct endpoints that must agree. */
+  minEndpoints: number;
+  /** A sample this old or older does not count. */
+  maxAgeSecs: number;
+  /** Largest allowed gap between two samples of a field, in basis points of the larger. */
+  maxDeviationBps: bigint;
+}
+
+export const DEFAULT_QUORUM: Omit<QuorumOptions, 'chainId' | 'nowMs'> = {
+  minEndpoints: 2,
+  maxAgeSecs: 30,
+  maxDeviationBps: 50n,
+};
+
+export type QuorumRefusal = 'too_few_rpcs' | 'stale' | 'disagreement';
+
+export type QuorumResult =
+  | { ok: true; sample: Sample; samples: Sample[]; failures: RpcFailure[] }
+  | {
+      ok: false;
+      reason: QuorumRefusal;
+      detail: string;
+      samples: Sample[];
+      failures: RpcFailure[];
+    };
+
+/** Every number the decision reads. Comparing only the health factor would let one
+ *  endpoint inflate the amount through the debt or the price. */
+const COMPARED_FIELDS = [
+  'healthFactor',
+  'totalCollateralBase',
+  'totalDebtBase',
+  'liquidationThresholdBps',
+  'usdcPriceBase',
+  'usdcDebt',
+  'rescuerUsdc',
+  'rescuerAllowance',
+] as const satisfies readonly (keyof Sample)[];
+
+function withinDeviation(a: bigint, b: bigint, maxDeviationBps: bigint): boolean {
+  const [low, high] = a < b ? [a, b] : [b, a];
+  return (high - low) * 10_000n <= high * maxDeviationBps;
+}
+
+function findDisagreement(samples: Sample[], maxDeviationBps: bigint): string | null {
+  for (const field of COMPARED_FIELDS) {
+    const values = samples.map((sample) => sample[field]);
+    const low = values.reduce((a, b) => (b < a ? b : a));
+    const high = values.reduce((a, b) => (b > a ? b : a));
+    if (!withinDeviation(low, high, maxDeviationBps)) {
+      const seen = samples.map((sample) => `${sample.rpc}=${sample[field]}`).join(' ');
+      return `${field} differs by more than ${maxDeviationBps} bps: ${seen}`;
+    }
+  }
+  return null;
+}
+
+const ageSecs = (sample: Sample, nowMs: number): number =>
+  Math.abs(nowMs / 1000 - Number(sample.blockTimestamp));
+
+/** Keeps the first sample per endpoint, so one endpoint listed twice is still one. */
+function distinctEndpoints(samples: Sample[]): Sample[] {
+  const seen = new Set<string>();
+  return samples.filter((sample) => {
+    if (seen.has(sample.rpc)) return false;
+    seen.add(sample.rpc);
+    return true;
+  });
+}
+
+const refuse = (
+  reason: QuorumRefusal,
+  detail: string,
+  samples: Sample[],
+  failures: RpcFailure[],
+): QuorumResult => ({ ok: false, reason, detail, samples, failures });
+
+/** Pure, so that `replay` can repeat the judgement from recorded samples. */
+export function evaluateQuorum(
+  rawSamples: Sample[],
+  rawFailures: RpcFailure[],
+  options: QuorumOptions,
+): QuorumResult {
+  const samples = distinctEndpoints(rawSamples);
+  const failures = [...rawFailures];
+
+  const onChain = samples.filter((sample) => {
+    if (sample.chainId === options.chainId) return true;
+    failures.push({ rpc: sample.rpc, error: `serves chain ${sample.chainId}` });
+    return false;
+  });
+
+  const fresh = onChain.filter((sample) => ageSecs(sample, options.nowMs) < options.maxAgeSecs);
+
+  if (fresh.length < options.minEndpoints) {
+    const stale = onChain.length - fresh.length;
+    const detail = `${fresh.length} of ${options.minEndpoints} endpoints usable, ${stale} stale, ${failures.length} failed`;
+    return refuse(stale > 0 ? 'stale' : 'too_few_rpcs', detail, samples, failures);
+  }
+
+  // Every fresh endpoint has a veto. There is no majority: a minority may be the honest one.
+  const disagreement = findDisagreement(fresh, options.maxDeviationBps);
+  if (disagreement) return refuse('disagreement', disagreement, samples, failures);
+
+  const sample = fresh.reduce((best, next) => (next.blockNumber > best.blockNumber ? next : best));
+  return { ok: true, sample, samples, failures };
+}
+
+/** Reads every endpoint in parallel and judges the result. */
+export async function readQuorum(
+  endpoints: { url: string; read: () => Promise<Sample> }[],
+  options: QuorumOptions,
+): Promise<QuorumResult> {
+  const settled = await Promise.allSettled(endpoints.map((endpoint) => endpoint.read()));
+  const samples: Sample[] = [];
+  const failures: RpcFailure[] = [];
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      samples.push(result.value);
+    } else {
+      const rpc = endpoints[index]?.url ?? 'unknown';
+      failures.push({ rpc, error: String(result.reason?.shortMessage ?? result.reason) });
+    }
+  });
+  return evaluateQuorum(samples, failures, options);
+}
