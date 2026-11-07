@@ -297,6 +297,7 @@ async function signAndSubmit(
   } catch (error) {
     if (error instanceof NearRescueError) {
       record.near_tx = error.nearTx;
+      record.near_sender = error.nearSender;
       return attempt.finish('failed', error.reason, error.message);
     }
     return attempt.finish('failed', 'near_failed', describeError(error));

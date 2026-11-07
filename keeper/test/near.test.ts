@@ -183,6 +183,46 @@ describe('NearRescuer.rescue', () => {
     expect(outcome.result.kind).toBe('rescue');
   });
 
+  it('keeps waiting through an RPC fault, since the transaction is already in flight', async () => {
+    let lookups = 0;
+    fakeRpc({
+      ...baseHandlers,
+      tx: () => {
+        lookups += 1;
+        if (lookups < 2) return rpcError('INTERNAL_ERROR', { error_message: 'node restarting' });
+        return outcomeWith({ SuccessValue: encodeValue(rescueResult) });
+      },
+    });
+
+    const outcome = await rescuer().rescue(request);
+
+    expect(lookups).toBe(2);
+    expect(outcome.result.kind).toBe('rescue');
+  });
+
+  it('keeps the hash and the last error when the faults outlast the deadline', async () => {
+    fakeRpc({
+      ...baseHandlers,
+      tx: () => rpcError('INTERNAL_ERROR', { error_message: 'node restarting' }),
+    });
+
+    let clock = 0;
+    const error = await rescuer({
+      // Each read of the clock moves it 600, which leaves room for exactly one poll.
+      timeoutMs: 1_500,
+      now: () => {
+        clock += 600;
+        return clock;
+      },
+    })
+      .rescue(request)
+      .catch((caught) => caught);
+
+    expect(error.reason).toBe('near_timeout');
+    expect(error.nearTx).toEqual(expect.any(String));
+    expect(error.message).toContain('node restarting');
+  });
+
   it('treats a timeout on the send as sent, because the transaction may still land', async () => {
     fakeRpc({
       ...baseHandlers,
@@ -193,6 +233,46 @@ describe('NearRescuer.rescue', () => {
     const outcome = await rescuer().rescue(request);
 
     expect(outcome.result.kind).toBe('rescue');
+  });
+
+  it('treats a lost answer to the send as sent, then finds the result by polling', async () => {
+    fakeRpc({
+      ...baseHandlers,
+      send_tx: () => {
+        throw new Error('socket hang up');
+      },
+      tx: () => outcomeWith({ SuccessValue: encodeValue(rescueResult) }),
+    });
+
+    const outcome = await rescuer().rescue(request);
+
+    expect(outcome.result.kind).toBe('rescue');
+  });
+
+  it('retries an invalid nonce with a fresh read of the chain', async () => {
+    let sends = 0;
+    const calls = fakeRpc({
+      ...baseHandlers,
+      send_tx: () => {
+        sends += 1;
+        if (sends > 1) return { final_execution_status: 'INCLUDED' };
+        return {
+          error: {
+            name: 'HANDLER_ERROR',
+            cause: { name: 'INVALID_TRANSACTION', info: {} },
+            code: -32000,
+            message: 'Server error',
+            data: { TxExecutionError: { InvalidTxError: { InvalidNonce: { ak_nonce: 50, tx_nonce: 42 } } } },
+          },
+        };
+      },
+      tx: () => outcomeWith({ SuccessValue: encodeValue(rescueResult) }),
+    });
+
+    await rescuer().rescue(request);
+
+    expect(sends).toBe(2);
+    expect(calls.filter((call) => call.method === 'query').length).toBeGreaterThanOrEqual(2);
   });
 
   it('reports a contract panic with the transaction hash', async () => {
@@ -207,6 +287,7 @@ describe('NearRescuer.rescue', () => {
     expect(error.reason).toBe('near_failed');
     expect(error.message).toContain('cooldown');
     expect(error.nearTx).toEqual(expect.any(String));
+    expect(error.nearSender).toBe(accountId);
   });
 
   it('refuses a result that lacks the signature', async () => {
@@ -249,6 +330,7 @@ describe('NearRescuer.rescue', () => {
 
     expect(error.reason).toBe('near_rejected');
     expect(error.nearTx).toBeNull();
+    expect(error.nearSender).toBeNull();
   });
 });
 

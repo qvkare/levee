@@ -322,7 +322,7 @@ describe('NEAR failures', () => {
   it('records a failed rescue with its hash', async () => {
     await setup();
     h.ctx.near = fakeNear(h.mpc, {
-      fail: new NearRescueError('near_failed', 'budget exceeded', 'FailedNearTx'),
+      fail: new NearRescueError('near_failed', 'budget exceeded', 'FailedNearTx', 'keeper.testnet'),
     });
 
     const run = recorded(await tick(h.ctx));
@@ -331,6 +331,7 @@ describe('NEAR failures', () => {
       outcome: 'failed',
       failure_reason: 'near_failed: budget exceeded',
       near_tx: 'FailedNearTx',
+      near_sender: 'keeper.testnet',
       evm_tx: null,
     });
     expectNothingBroadcast();

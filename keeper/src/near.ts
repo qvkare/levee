@@ -13,8 +13,8 @@ import {
 } from 'near-api-js';
 import {
   InvalidNonceError,
-  TransactionTimeoutError,
-  UnknownTransactionError,
+  InvalidTransactionError,
+  TransactionExecutionError,
 } from 'near-api-js/rpc-errors';
 import { z } from 'zod';
 import type { Network } from './chains.js';
@@ -31,7 +31,7 @@ export const NEAR_RPC_URLS: Record<Network, string[]> = {
   testnet: ['https://test.rpc.fastnear.com', 'https://archival-rpc.testnet.fastnear.com'],
 };
 
-/** Everything the contract's rules need, plus the ceiling on what the MPC can cost. */
+/** The most one call can attach. `sign` needs a share of it, and the rest is refunded. */
 const DEFAULT_RESCUE_GAS_TGAS = 300;
 
 /** The MPC contract yields for about 200 blocks before giving up on a signature. */
@@ -39,6 +39,9 @@ const DEFAULT_RESCUE_TIMEOUT_MS = 150_000;
 
 const POLL_INTERVAL_MS = 1_000;
 const NONCE_ATTEMPTS = 3;
+
+/** Few and short, because the rescue has its own deadline and polls on top of this. */
+const RESCUE_RPC_RETRIES = { retries: 3, wait: 250, backoff: 1.5 };
 
 export interface RescueFees {
   nonce: number;
@@ -70,8 +73,10 @@ export class NearRescueError extends Error {
   constructor(
     readonly reason: 'near_rejected' | 'near_failed' | 'near_bad_result' | 'near_timeout',
     message: string,
-    /** Set once the transaction has been sent. */
+    /** Set once the transaction may have left, or null if a node refused it outright. */
     readonly nearTx: string | null,
+    /** Who signed `nearTx`. The RPC needs it to look the hash up. */
+    readonly nearSender: string | null,
   ) {
     super(message);
     this.name = 'NearRescueError';
@@ -100,6 +105,13 @@ const failureOf = (status: unknown): string | null =>
     ? JSON.stringify(status.Failure)
     : null;
 
+const messageOf = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+/** A node answered and turned the transaction down, so it cannot still land. */
+const refusedByNode = (error: unknown): boolean =>
+  error instanceof TransactionExecutionError || error instanceof InvalidTransactionError;
+
 export interface NearRescuerOptions {
   rpcUrl: string;
   contract: string;
@@ -115,11 +127,11 @@ export function createNearRescuer(options: NearRescuerOptions): NearRescuer {
   const now = options.now ?? Date.now;
   const gas = teraToGas(options.gasTgas ?? DEFAULT_RESCUE_GAS_TGAS);
   const timeoutMs = options.timeoutMs ?? DEFAULT_RESCUE_TIMEOUT_MS;
-  const provider = new JsonRpcProvider({ url: rpcUrl });
+  const provider = new JsonRpcProvider({ url: rpcUrl }, RESCUE_RPC_RETRIES);
   const newAccount = () => new Account(accountId, provider, privateKey as KeyPairString);
   let account = newAccount();
 
-  /** Signs locally so the hash is known even if the RPC times out on the send. */
+  /** Signs locally so the hash is known even if the answer to the send never arrives. */
   async function send(request: RescueRequest): Promise<string> {
     // A function-call access key cannot attach a deposit, so this is always zero.
     const action = actions.functionCall('rescue', rescueArgs(request), gas, 0n);
@@ -138,20 +150,26 @@ export function createNearRescuer(options: NearRescuerOptions): NearRescuer {
         await provider.sendTransactionUntil(signedTransaction, 'INCLUDED');
         return nearTx;
       } catch (error) {
-        if (error instanceof TransactionTimeoutError) return nearTx;
         if (error instanceof InvalidNonceError && attempt < NONCE_ATTEMPTS) {
           // The nonce cache is private to Account, so a fresh one rereads the chain.
           account = newAccount();
           continue;
         }
-        const message = error instanceof Error ? error.message : String(error);
-        throw new NearRescueError('near_rejected', message, null);
+        if (refusedByNode(error)) {
+          throw new NearRescueError('near_rejected', messageOf(error), null, null);
+        }
+        // A timeout or a lost answer. It may have gone out, and polling will find out.
+        return nearTx;
       }
     }
   }
 
-  /** The MPC signature can outlast one RPC wait, so this keeps asking until it lands. */
+  /**
+   * The MPC signature can outlast one RPC wait, and the transaction is out of our hands
+   * by now, so no error here means failure. Only the deadline does.
+   */
   async function waitForExecution(nearTx: string, deadline: number): Promise<TxResponse> {
+    let lastError = 'no answer';
     while (now() < deadline) {
       try {
         return await provider.viewTransactionStatus({
@@ -160,13 +178,16 @@ export function createNearRescuer(options: NearRescuerOptions): NearRescuer {
           waitUntil: 'EXECUTED_OPTIMISTIC',
         });
       } catch (error) {
-        const pending =
-          error instanceof TransactionTimeoutError || error instanceof UnknownTransactionError;
-        if (!pending) throw error;
+        lastError = messageOf(error);
         await sleep(POLL_INTERVAL_MS);
       }
     }
-    throw new NearRescueError('near_timeout', `no result within ${timeoutMs} ms`, nearTx);
+    throw new NearRescueError(
+      'near_timeout',
+      `no result within ${timeoutMs} ms: ${lastError}`,
+      nearTx,
+      accountId,
+    );
   }
 
   return {
@@ -177,11 +198,11 @@ export function createNearRescuer(options: NearRescuerOptions): NearRescuer {
       const outcome = await waitForExecution(nearTx, deadline);
 
       const failure = failureOf(outcome.status);
-      if (failure) throw new NearRescueError('near_failed', failure, nearTx);
+      if (failure) throw new NearRescueError('near_failed', failure, nearTx, accountId);
 
       const parsed = rescueResultSchema.safeParse(getTransactionLastResult(outcome));
       if (!parsed.success) {
-        throw new NearRescueError('near_bad_result', parsed.error.message, nearTx);
+        throw new NearRescueError('near_bad_result', parsed.error.message, nearTx, accountId);
       }
       return { nearTx, nearSender: accountId, includedAtMs, signedAtMs: now(), result: parsed.data };
     },

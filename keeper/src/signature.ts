@@ -194,8 +194,8 @@ const sameAddress = (a: string | null | undefined, b: string): boolean =>
   a?.toLowerCase() === b.toLowerCase();
 
 /**
- * The broadcast gate. Every field is compared with what was asked for, so a bug or a
- * compromise anywhere upstream ends here rather than on chain.
+ * The broadcast gate. Everything the keeper asked for is compared with what was signed,
+ * so a bug or a compromise anywhere upstream ends here rather than on chain.
  */
 export function assertMatchesIntent(assembled: AssembledTransaction, intent: RepayIntent): void {
   const { tx, signer } = assembled;
