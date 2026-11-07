@@ -135,13 +135,15 @@ The budget and the cooldown slot are reserved before the MPC call and released i
 
 A timed-out MPC request does not prove that no signature exists, since a node's late `respond` is public. The release assumes none will be used. The exposure is bounded: such a signature can only repay the borrower's debt from the rescuer.
 
+The callback returns `{ kind, id, unsigned_tx, tx_hash, big_r, s, recovery_id }`, and logs the same as an event, so anyone can assemble and broadcast the signed transaction. `kind` is `rescue`, `allowance`, `withdraw_float` or `sweep_gas`. All hex is `0x`-prefixed and lowercase. `tx_hash` is the hash that was signed, not the hash of the broadcast transaction, which also covers the signature. `big_r` is the 33-byte compressed point, and `recovery_id` is the EIP-1559 `y_parity`.
+
+If no signature comes back, the callback returns `null` and logs `rescue_failed`, or `sign_failed` for the other kinds, with `{ kind, id, tx_hash, reason, released }`. It must not panic, because that would roll back the release. `reason` is `mpc_failed` when the call failed. It is `malformed_response` when the call succeeded but the response cannot be read: a signature may exist, so the reservation stands.
+
+Caps bound what gets signed, not when it lands. A signature stays valid until its nonce is used, so signatures held from different days can land together, and a pause does not stop one already issued. They can still only repay the borrower's debt, and an owner can void one by using its nonce first, with `sweep_gas` at amount zero.
+
 ### Loosening
 
 A tighten cancels a queued loosening. Otherwise a loosening queued before the tighten could undo it in less than 24 hours. For the same reason, queueing again restarts the delay. A tighten with unchanged values is how an owner cancels a queued loosening.
-
-The callback returns `{ kind, id, unsigned_tx, tx_hash, big_r, s, recovery_id }`, and logs the same as an event, so anyone can assemble and broadcast the signed transaction. `kind` is `rescue`, `allowance`, `withdraw_float` or `sweep_gas`. All hex is `0x`-prefixed and lowercase. `tx_hash` is the hash that was signed, not the hash of the broadcast transaction, which also covers the signature. `big_r` is the 33-byte compressed point, and `recovery_id` is the EIP-1559 `y_parity`.
-
-If no signature comes back, the callback returns `null` and logs `rescue_failed` with `{ kind, id, tx_hash, reason, released }`. It must not panic, because that would roll back the release. `reason` is `mpc_failed` when the call failed. It is `malformed_response` when the call succeeded but the response cannot be read: a signature may exist, so the reservation stands.
 
 ### Derivation
 
@@ -153,7 +155,7 @@ A signing method takes at least 35 Tgas. Attach more, such as 100 Tgas: unused g
 
 | Constant | Value | Reason |
 |---|---|---|
-| `SIGN_GAS` | 20 Tgas, plus all unused gas | The live signer requires 15, and its own load testing attaches 20 |
+| `SIGN_GAS` | 20 Tgas, plus all unused gas | The live signer requires 15. Real calls succeed on testnet with 20 attached, and the margin covers a small rise |
 | `ON_SIGNED_GAS` | 10 Tgas, fixed | `on_signed` burns 1.7. The margin costs nothing, because unused gas is refunded, and this contract cannot be upgraded if protocol gas costs rise |
 | `MIN_SIGNING_GAS` | 35 Tgas | Those two, plus 5 for the method itself, which burns 2.6 |
 

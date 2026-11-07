@@ -32,7 +32,7 @@ Do not build with plain `cargo build --target wasm32-unknown-unknown`. It compil
 
 ### Why this wasm is accepted
 
-Rust 1.96 emits `memory.copy`, `memory.fill` and sign-extension instructions, and `wasm-opt` does not remove them: `levee.wasm` contains all three. Older NEAR VMs rejected such code. It is accepted here because every supported protocol version now runs Wasmtime with `reftypes_bulk_memory` on.
+Rust 1.96 emits `memory.copy`, `memory.fill` and sign-extension instructions, and `wasm-opt` does not remove them: `levee.wasm` contains all three. Older NEAR VMs rejected such code. It is accepted here because protocol 88 runs Wasmtime with `reftypes_bulk_memory` on.
 
 The contract was deployed and run on near-sandbox 2.14.0, which is the nearcore commit (`bc4e9e8`) mainnet runs. `EXPERIMENTAL_protocol_config` showed no differences between the sandbox's `runtime_config` and mainnet's at protocol 88. Read on 2026-11-07. Check this again before a mainnet deployment if either has moved.
 
