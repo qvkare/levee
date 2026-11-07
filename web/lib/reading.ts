@@ -42,7 +42,7 @@ export function chartModel(report: RiskReport): ChartModel {
   const perp = nearestPerp(report);
   if (perp?.distance != null) {
     const distance = Math.max(0, perp.distance);
-    marks.push({ id: "hyperliquid", name: `Hyperliquid ${perp.market}`, value: `${percent(distance)} to liquidation`, fall: distance });
+    marks.push({ id: "hyperliquid", name: `Hyperliquid ${perp.market}`, value: `${percent(distance)} away`, fall: distance });
   }
   if (marks.length === 0) return { state: "dry", waterFall: null, marks, summary: "Dry channel. Nothing at this address can be liquidated at the moment." };
 
