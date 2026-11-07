@@ -53,7 +53,10 @@ abstract contract RepayPath is AaveFork {
         uint256 healthBefore = healthFactorOf(borrower);
 
         vm.prank(rescuer);
+        uint256 gasBefore = gasleft();
         uint256 repaid = pool.repay(address(usdc), REPAY, VARIABLE_RATE, borrower);
+        // Run with --isolate for a figure with cold storage, as a real transaction sees.
+        console2.log(target.name, "repay gas", gasBefore - gasleft());
 
         assertEq(repaid, REPAY, "repay returns the explicit amount");
         assertEq(usdc.balanceOf(rescuer), 0, "rescuer paid exactly the amount");
