@@ -399,6 +399,38 @@ describe('broadcast and receipt failures', () => {
     const run = recorded(await tick(h.ctx));
 
     expect(run.outcome).toBe('success');
+    expect(run.trace?.broadcast).toEqual([
+      { rpc: h.a.url, ok: true, error: null },
+      { rpc: h.b.url, ok: true, error: null },
+    ]);
+  });
+
+  it('does not count an endpoint that reports a different hash', async () => {
+    await setup();
+    h.b.broadcast = async () => `0x${'00'.repeat(32)}`;
+
+    const run = recorded(await tick(h.ctx));
+
+    expect(run.outcome).toBe('success');
+    expect(run.trace?.broadcast?.[1]).toMatchObject({
+      rpc: h.b.url,
+      ok: false,
+      error: expect.stringContaining('returned hash'),
+    });
+  });
+
+  it('fails when every endpoint reports a different hash and nothing lands', async () => {
+    await setup();
+    const lie = async (): Promise<`0x${string}`> => `0x${'00'.repeat(32)}`;
+    h.a.broadcast = lie;
+    h.b.broadcast = lie;
+    h.a.receipt = null;
+    h.b.receipt = null;
+
+    const run = recorded(await tick(h.ctx));
+
+    expect(run.outcome).toBe('failed');
+    expect(run.failure_reason).toMatch(/^broadcast_rejected/);
   });
 
   it('fails when no endpoint accepts it and it has not landed', async () => {

@@ -1,4 +1,14 @@
-import { type Address, type Hex, encodeFunctionData, keccak256, parseAbi, parseTransaction } from 'viem';
+import {
+  type Address,
+  type Hex,
+  concatHex,
+  encodeFunctionData,
+  keccak256,
+  numberToHex,
+  parseAbi,
+  parseTransaction,
+  toRlp,
+} from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { describe, expect, it } from 'vitest';
 import {
@@ -158,6 +168,27 @@ describe('assembleSignedTransaction', () => {
 
   it('refuses bytes that are not an EIP-1559 transaction', async () => {
     const result = { ...signed(), unsigned_tx: 'deadbeef' };
+    expect(await refusedReason(() => assembleSignedTransaction(result))).toBe('malformed_transaction');
+  });
+
+  it('refuses a zero encoded as a byte, a slip that changes the hash the MPC signed', async () => {
+    const unsigned = concatHex([
+      '0x02',
+      toRlp([
+        numberToHex(intent.chainId),
+        '0x00', // Canonical RLP for a zero is the empty string.
+        numberToHex(intent.maxPriorityFeePerGas),
+        numberToHex(intent.maxFeePerGas),
+        numberToHex(300_000n),
+        pool,
+        '0x',
+        repayCalldata(usdc, intent.amount, 2n, borrower),
+        [],
+      ]),
+    ]);
+
+    const result = mpc.sign(unsigned, 1);
+
     expect(await refusedReason(() => assembleSignedTransaction(result))).toBe('malformed_transaction');
   });
 
