@@ -70,29 +70,39 @@ function RunsTable({ runs }: { runs: EvidenceRun[] }) {
           {runs.map((run) => (
             <tr key={run.id} role="row">
               <td role="cell" data-label="Run">
-                <code>{run.id}</code>
+                <span>
+                  <code>{run.id}</code>
+                </span>
               </td>
               <td role="cell" data-label="Outcome">
-                {OUTCOME_NAMES[run.outcome]}
-                {run.failureReason && <small>{run.failureReason}</small>}
+                <span>
+                  {OUTCOME_NAMES[run.outcome]}
+                  {run.failureReason && <small>{run.failureReason}</small>}
+                </span>
               </td>
               <td role="cell" data-label="Chain" className="wide">
-                {network(run)}
+                <span>{network(run)}</span>
               </td>
               <td role="cell" data-label="Repaid" className="num">
-                <Num>{usdcAmount(run.amount)}</Num>
+                <span>
+                  <Num>{usdcAmount(run.amount)}</Num>
+                </span>
               </td>
               <td role="cell" data-label="Health before and after" className="num">
-                {run.healthBefore ? <Num>{`${run.healthBefore} to ${run.healthAfter ?? "not recorded"}`}</Num> : <span className="quiet">not read</span>}
+                <span>{run.healthBefore ? <Num>{`${run.healthBefore} to ${run.healthAfter ?? "not recorded"}`}</Num> : <span className="quiet">not read</span>}</span>
               </td>
               <td role="cell" data-label="Detection to inclusion" className="num">
-                {run.latencyMs === null ? <span className="quiet">none</span> : <Num>{seconds(run.latencyMs)}</Num>}
+                <span>{run.latencyMs === null ? <span className="quiet">none</span> : <Num>{seconds(run.latencyMs)}</Num>}</span>
               </td>
               <td role="cell" data-label="NEAR">
-                <RecordLink link={nearLink(run)} />
+                <span>
+                  <RecordLink link={nearLink(run)} />
+                </span>
               </td>
               <td role="cell" data-label="Basescan">
-                <RecordLink link={evmLink(run)} />
+                <span>
+                  <RecordLink link={evmLink(run)} />
+                </span>
               </td>
             </tr>
           ))}
@@ -274,16 +284,20 @@ function BacktestSection({ backtest }: { backtest: Backtest }) {
             {reasons.map(({ reason, count }) => (
               <tr key={reason} role="row">
                 <td role="cell" data-label="Why">
-                  {MISS_NAMES[reason]}
+                  <span>{MISS_NAMES[reason]}</span>
                 </td>
                 <td role="cell" data-label="Positions" className="num">
-                  <Num>{integer(count)}</Num>
+                  <span>
+                    <Num>{integer(count)}</Num>
+                  </span>
                 </td>
                 <td role="cell" data-label="Share" className="num">
-                  <Num>{share(count, cell.positions)}</Num>
+                  <span>
+                    <Num>{share(count, cell.positions)}</Num>
+                  </span>
                 </td>
                 <td role="cell" data-label="What happened" data-plain="true">
-                  {MISS_MEANINGS[reason]}
+                  <span>{MISS_MEANINGS[reason]}</span>
                 </td>
               </tr>
             ))}

@@ -31,7 +31,7 @@ export function TextTable<Row>({ columns, rows, rowKey, label }: { columns: Colu
             <tr key={rowKey(row)} role="row">
               {columns.map((column) => (
                 <td key={column.label} role="cell" data-label={column.label} data-plain={column.plain || undefined} className={column.num ? "num" : undefined}>
-                  {column.cell(row)}
+                  <span>{column.cell(row)}</span>
                 </td>
               ))}
             </tr>

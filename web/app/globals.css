@@ -1948,38 +1948,36 @@ input[type="range"]::-moz-range-thumb {
     border-bottom: 1px solid var(--rule);
   }
 
-  /* The label sits in its own column and the value flows as text, so figures split by <Num> stay whole. */
+  /* Two grid items: the label, and the value in one span, so figures split by <Num> stay whole. */
   .stack-early td {
-    position: relative;
-    padding: 2px 0 2px 120px;
+    display: grid;
+    grid-template-columns: 128px minmax(0, 1fr);
+    gap: 8px;
+    padding: 2px 0;
     border: 0;
     font-size: 15px;
     white-space: normal;
   }
 
   .stack-early td:first-child {
-    padding-left: 0;
+    display: block;
     font-size: 16px;
   }
 
   .stack-early td:not(:first-child)::before {
     content: attr(data-label);
-    position: absolute;
-    top: 2px;
-    left: 0;
-    width: 112px;
     font-weight: 400;
+    white-space: normal;
     color: var(--ink-2);
   }
 
   .stack-early td[data-plain]:not(:first-child) {
-    padding: 4px 0 2px;
+    display: block;
+    padding-top: 4px;
   }
 
   .stack-early td[data-plain]:not(:first-child)::before {
-    position: static;
     display: block;
-    width: auto;
   }
 
   .stack-early code {
@@ -2010,38 +2008,36 @@ input[type="range"]::-moz-range-thumb {
     border-bottom: 1px solid var(--rule);
   }
 
-  /* The label sits in its own column and the value flows as text, so figures split by <Num> stay whole. */
+  /* Two grid items: the label, and the value in one span, so figures split by <Num> stay whole. */
   .stack td {
-    position: relative;
-    padding: 2px 0 2px 120px;
+    display: grid;
+    grid-template-columns: 128px minmax(0, 1fr);
+    gap: 8px;
+    padding: 2px 0;
     border: 0;
     font-size: 15px;
     white-space: normal;
   }
 
   .stack td:first-child {
-    padding-left: 0;
+    display: block;
     font-size: 16px;
   }
 
   .stack td:not(:first-child)::before {
     content: attr(data-label);
-    position: absolute;
-    top: 2px;
-    left: 0;
-    width: 112px;
     font-weight: 400;
+    white-space: normal;
     color: var(--ink-2);
   }
 
   .stack td[data-plain]:not(:first-child) {
-    padding: 4px 0 2px;
+    display: block;
+    padding-top: 4px;
   }
 
   .stack td[data-plain]:not(:first-child)::before {
-    position: static;
     display: block;
-    width: auto;
   }
 
   .stack code {
