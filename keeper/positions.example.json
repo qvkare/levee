@@ -1,0 +1,9 @@
+{
+  "positions": [
+    { "id": 1, "trigger": "1.25", "target": "1.6" }
+  ],
+  "fee_ceilings": {
+    "84532": { "max_fee_per_gas": "2000000000", "max_priority_fee_per_gas": "1000000000" },
+    "421614": { "max_fee_per_gas": "2000000000", "max_priority_fee_per_gas": "1000000000" }
+  }
+}

@@ -55,6 +55,15 @@ Selectors:
 
 Aave `repay` takes an explicit amount when `onBehalfOf` is not the caller. Variable rate mode is `2`.
 
+Measured on forks at the blocks pinned in `evm/`, on `POOL_REVISION` 11:
+
+- `type(uint256).max` from anyone but `onBehalfOf` reverts with `NoExplicitAmountToRepayOnBehalf()`.
+- An amount above the debt is clamped. The Pool takes only the debt from the caller's balance and allowance.
+- A repay when there is no debt reverts with `NoDebtOfSelectedType()` and charges nothing.
+- `repay` uses about 160,000 gas. Set `gas_limit_repay` to at least 300,000, because Aave's nested calls fail on a tight limit. On Arbitrum gas also pays for L1 data, which a fork does not show, so confirm that limit on testnet.
+
+`POOL_REVISION` is 11 on Base and Arbitrum, 10 on Base Sepolia and 3 on Arbitrum Sepolia. Revision 3 has no `getReserveVariableDebtToken`, so read the debt token from `getReserveData`, which works on all four.
+
 ## 4. Contract
 
 Crate: `contracts/levee`, Rust, `near-sdk` 5.x.
@@ -83,7 +92,7 @@ pub struct Position {
     pub cooldown_secs: u32,
     pub paused: bool,
     pub spent_today: U128,
-    pub day: u64,
+    pub day: u64,                         // whole days since the Unix epoch, UTC
     pub last_rescue_at: u64,              // nanoseconds
     pub pending_loosen: Option<PendingLoosen>,
 }
@@ -126,6 +135,8 @@ Reject unless all of these hold:
 4. `spent_today + amount <= max_per_day`, using a UTC day bucket from `env::block_timestamp`.
 5. `now - last_rescue_at >= cooldown_secs`.
 6. Both fee values are at or below the chain's ceilings, and the priority fee is at or below the max fee. A transaction that breaks the last part cannot be included, so signing it would only burn budget.
+
+`rescue` takes no attached deposit. A function-call access key cannot attach one, so the contract pays the 1 yoctoNEAR for `sign` from its own balance.
 
 The contract then builds an EIP-1559 transaction itself: chain id, nonce, fees, gas limit, `to = Pool`, value 0, the `repay` calldata and an empty access list. It hashes `keccak256(0x02 || rlp(fields))` and calls MPC with path `rescuer_path(id)`. The contract attaches the 1 yoctoNEAR from its own balance, because a function-call key cannot attach a deposit.
 
@@ -192,7 +203,7 @@ Package: `keeper`, TypeScript, Node 22. One keeper serves one or more positions 
 Loop, every 5 seconds per position:
 
 1. Read `getUserAccountData(borrower)` from at least two RPC endpoints. Act only if they agree within 0.5% and are less than 30 seconds old.
-2. If `healthFactor < trigger`, compute `amount` to reach `target`, capped by the position, the rescuer USDC balance and the debt.
+2. If `healthFactor < trigger`, compute `amount` to reach `target`, capped by the position, the rescuer USDC balance, the rescuer's allowance to the Pool and the USDC debt.
 3. Read rescuer nonce and fees from the chain.
 4. Call `rescue` with a function-call key. Wait for the callback result.
 5. Assemble the signed EIP-1559 transaction, verify the recovered address equals the derived rescuer, and broadcast to both RPCs.
@@ -203,6 +214,8 @@ Repay needed to reach target `T`, with collateral `C` (USD), liquidation thresho
 ```
 R = D - (C * L) / T
 ```
+
+`C`, `D` and `R` are in Aave's base currency, 8 decimals of USD. Convert `R` to USDC base units at Aave's oracle price for USDC, rounding up, then add 2 base units: Aave burns scaled debt rounding down and reads the balance rounding up, so the bare formula lands just under `T`.
 
 The trigger, target and RPC list live off chain. No LLM is involved.
 
@@ -226,13 +239,32 @@ The trigger, target and RPC list live off chain. No LLM is involved.
   "timestamps_ms": { "detected": 0, "near_included": 0, "signed": 0, "broadcast": 0, "included": 0 },
   "near_tx": "...",
   "evm_tx": "0x...",
-  "evm_block": 0
+  "evm_block": 0,
+  "near_contract": "levee.near",
+  "near_sender": "keeper.near",
+  "trace": {}
 }
 ```
 
-Failures are recorded, not deleted. `evidence/claims.json` maps every public claim to a test or a run.
+- `near_sender` and `near_contract` are required. NEAR RPC cannot resolve a hash without its sender, and the rescuer's derivation depends on the contract.
+- `outcome` is `aborted` when the keeper refused and nothing reached the lending chain, and `failed` when an attempt was made and did not land.
+- A step the run did not reach is `null`.
+- `trace` is optional. It holds the inputs and results of each step, so that `keeper replay` can repeat the run with no keys and no network.
+- `network` is `simulated` for a run on a local fork with a local key standing in for the MPC. A simulated run does not count as proof.
 
-`make verify` resolves each hash and checks: the NEAR receipt succeeded, the EVM `from` equals the derived rescuer, `to` equals the Pool, the selector is `0x573ade81`, the asset is USDC, `onBehalfOf` is the borrower and the amount is within caps.
+Failures are recorded, not deleted. `evidence/claims.json` maps every public claim to a test or a run. It holds `{ "claims": [...] }`, and each claim has an `id`, the `claim` text, and exactly one of `test` (`{ "path", "name" }`) or `run` (a run id).
+
+`make verify` resolves each hash and checks: the NEAR receipt succeeded, the EVM `from` equals the derived rescuer, `to` equals the Pool, the selector is `0x573ade81`, the asset is USDC, `onBehalfOf` is the borrower and the amount is within caps. It also checks that the EVM transaction's signing hash equals the `tx_hash` the contract returned, which ties the NEAR receipt to that transaction.
+
+It prints one verdict per claim:
+
+| Verdict | Meaning |
+|---|---|
+| `PASS` | Every check ran and held, on a real network, for a successful run |
+| `FAIL` | A check did not hold or could not be made |
+| `RECORDED` | On file but not proven by this tool: a test it did not run, a simulated run, or a failed run kept for the record |
+
+A failed run may hold a hash that did not land, such as a rejected broadcast. That agrees with the record and is `RECORDED`, not `FAIL`.
 
 ## 7. Public risk tool
 

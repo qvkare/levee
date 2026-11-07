@@ -1,0 +1,118 @@
+{
+  "run_id": "2026-11-07T11-33-57Z-base-1",
+  "network": "simulated",
+  "position_id": 1,
+  "chain_id": 8453,
+  "borrower": "0x187aEFbB46F66e8f0d5c02d2B104a25f52Be7CFD",
+  "rescuer": "0xdfA29506a710898b19d7B3ef12B416F82907C837",
+  "amount": "3142319518",
+  "outcome": "success",
+  "failure_reason": null,
+  "health_factor_before": "1.2003",
+  "health_factor_after": "1.599999",
+  "timestamps_ms": {
+    "detected": 1794051237913,
+    "near_included": 1794051237917,
+    "signed": 1794051237917,
+    "broadcast": 1794051237944,
+    "included": 1794051238296
+  },
+  "near_tx": "SIMULATED-NOT-A-NEAR-HASH",
+  "evm_tx": "0xb570a1994ed755b102582c6e57f3e38e799e7445e34c712cb774cad816334049",
+  "evm_block": 54260051,
+  "near_contract": "simulated-levee.testnet",
+  "near_sender": "keeper.testnet",
+  "trace": {
+    "trigger": "1.25",
+    "target": "1.6",
+    "manual_amount": null,
+    "quorum": {
+      "now_ms": 1794051237913,
+      "samples": [
+        {
+          "rpc": "http://127.0.0.1:53229",
+          "chain_id": 8453,
+          "block_number": "54260050",
+          "block_timestamp": "1794051236",
+          "health_factor": "1200300069193841402",
+          "total_collateral_base": "1796959172995",
+          "total_debt_base": "1257556959344",
+          "liquidation_threshold_bps": "8400",
+          "usdc_price_base": "99975000",
+          "usdc_debt": "12578714272",
+          "rescuer_usdc": "50000000000",
+          "rescuer_allowance": "500000000000"
+        },
+        {
+          "rpc": "http://127.0.0.1:53229/",
+          "chain_id": 8453,
+          "block_number": "54260050",
+          "block_timestamp": "1794051236",
+          "health_factor": "1200300069193841402",
+          "total_collateral_base": "1796959172995",
+          "total_debt_base": "1257556959344",
+          "liquidation_threshold_bps": "8400",
+          "usdc_price_base": "99975000",
+          "usdc_debt": "12578714272",
+          "rescuer_usdc": "50000000000",
+          "rescuer_allowance": "500000000000"
+        }
+      ],
+      "failures": [],
+      "refused": null
+    },
+    "caps": {
+      "max_per_rescue": "5000000000",
+      "remaining_today": "10000000000",
+      "rescuer_balance": "50000000000",
+      "rescuer_allowance": "500000000000",
+      "cooldown_remaining_secs": 0,
+      "paused": false
+    },
+    "decision": {
+      "action": "repay",
+      "reason": null,
+      "amount": "3142319518",
+      "needed": "3142319518",
+      "limited_by": "target",
+      "projected_health_factor": "1600000000492472168"
+    },
+    "fees": {
+      "nonce": 1,
+      "max_fee_per_gas": "1000012774",
+      "max_priority_fee_per_gas": "1000000000"
+    },
+    "rescue_result": {
+      "kind": "rescue",
+      "id": 1,
+      "unsigned_tx": "02f8af82210501843b9aca00843b9afbe6830493e094a238dd80c259a72e81d7e4664a9801593f98d1c580b884573ade81000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda0291300000000000000000000000000000000000000000000000000000000bb4bfd9e0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000187aefbb46f66e8f0d5c02d2b104a25f52be7cfdc0",
+      "tx_hash": "5a9388ceb4cbb82ac9c32c08d3425c33d42cb7c3f8750455cae347b0962243f9",
+      "big_r": {
+        "affine_point": "03C10189A0821E4FEDA4BDF959B7E5BA8597E778DDA00D18EC25D0FC4F3F3062F3"
+      },
+      "s": {
+        "scalar": "1A080297BD7FAE60F6A848919D2FCF44744230FFB2D64BF70A140A1909251BAC"
+      },
+      "recovery_id": 1
+    },
+    "signed_tx": "0x02f8f282210501843b9aca00843b9afbe6830493e094a238dd80c259a72e81d7e4664a9801593f98d1c580b884573ade81000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda0291300000000000000000000000000000000000000000000000000000000bb4bfd9e0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000187aefbb46f66e8f0d5c02d2b104a25f52be7cfdc001a0c10189a0821e4feda4bdf959b7e5ba8597e778dda00d18ec25d0fc4f3f3062f3a01a080297bd7fae60f6a848919d2fcf44744230ffb2d64bf70a140a1909251bac",
+    "broadcast": [
+      {
+        "rpc": "http://127.0.0.1:53229",
+        "ok": true,
+        "error": null
+      },
+      {
+        "rpc": "http://127.0.0.1:53229/",
+        "ok": true,
+        "error": null
+      }
+    ],
+    "receipt": {
+      "success": true,
+      "block_number": "54260051",
+      "gas_used": "162472",
+      "effective_gas_price": "1000005589"
+    }
+  }
+}
