@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { buildDrill, hopsFor, keyFrames, type Branch, type DrillFrame, type DrillRun, type DrillTerms } from "@/lib/drill.ts";
 import { integer, percent, stageValue, usd } from "@/lib/format.ts";
@@ -216,12 +215,7 @@ export function FloodDrill({ initial }: { initial: DrillTerms }) {
 
       <figcaption className="drill-foot">
         {terms.source === "example" ? "An example, because no public position could be read. " : `A public position, ${terms.label}: ${usd(terms.debtUsd)} of debt against ${usd(terms.collateralUsd)} of collateral. `}
-        Trigger and target are this drill&apos;s settings. Every reading after the first is simulated.{" "}
-        {terms.address && (
-          <Link href={`/a/${terms.address}`} prefetch={false}>
-            Open this position
-          </Link>
-        )}
+        Trigger and target are this drill&apos;s settings. Every reading after the first is simulated.
       </figcaption>
     </figure>
   );
