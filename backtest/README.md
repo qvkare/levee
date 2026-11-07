@@ -49,7 +49,7 @@ To add a window, add it to `WINDOWS` in `src/config.ts` and run `fetch-data`.
 | Block ranges | Pinned in `data/derived/blocks.json` |
 | Position | One borrower on one chain in one window. Its race is against its first `LiquidationCall` in that window |
 | In scope | Holds native USDC variable debt at the block before that first liquidation. Decided by token address, because USDC.e on Arbitrum also has the symbol USDC |
-| Mixed debt | Stays in scope, with repays capped at the USDC share. Reported separately |
+| Mixed debt | Under 99% USDC. Stays in scope, with repays capped at the USDC share. Reported separately |
 | Excluded | No native USDC debt. `results/summary.md` lists how many and why |
 
 ## Data sources
@@ -119,6 +119,7 @@ Both use the same survival rule as the rescue.
 12. **Mixed debt keeps its USDC share** from the block before the liquidation.
 13. **Reserve costs are not modelled:** no yield forgone, gas, NEAR fees or MPC fees. The supply yield of the collateral baseline is left out too.
 14. **Parameters are read at the window start.** Thresholds, bonuses and eMode come from `data/derived/markets.json`.
+15. **The collateral baseline can always supply USDC.** It uses USDC's normal threshold of 0.78 and ignores supply caps, isolation mode and any eMode that would exclude USDC. The reserve is USDC, so the baseline does not fall with the crash. A reserve held in the position's own asset would do worse.
 
 ## Failure conditions
 
