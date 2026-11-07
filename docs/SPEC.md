@@ -60,7 +60,7 @@ Measured on forks at the blocks pinned in `evm/`, on `POOL_REVISION` 11:
 - `type(uint256).max` from anyone but `onBehalfOf` reverts with `NoExplicitAmountToRepayOnBehalf()`.
 - An amount above the debt is clamped. The Pool takes only the debt from the caller's balance and allowance.
 - A repay when there is no debt reverts with `NoDebtOfSelectedType()` and charges nothing.
-- `repay` uses about 160,000 gas before intrinsic cost. Set `gas_limit_repay` to at least 300,000, because Aave's nested calls fail on a tight limit. On Arbitrum gas also pays for L1 data, which a fork does not show, so confirm that limit on testnet.
+- `repay` uses about 160,000 gas. Set `gas_limit_repay` to at least 300,000, because Aave's nested calls fail on a tight limit. On Arbitrum gas also pays for L1 data, which a fork does not show, so confirm that limit on testnet.
 
 `POOL_REVISION` is 11 on Base and Arbitrum, 10 on Base Sepolia and 3 on Arbitrum Sepolia. Revision 3 has no `getReserveVariableDebtToken`, so read the debt token from `getReserveData`, which works on all four.
 

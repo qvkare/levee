@@ -99,7 +99,7 @@ What the forks actually did, at Pool revision 11.
 | Amount above the debt, 13,581.859635 against 12,581.859636 owed on Base | Returns the debt. Only the debt leaves the caller's balance and allowance |
 | Amount of 0 | Reverts `InvalidAmount()` |
 | Repay when there is no debt | Reverts `NoDebtOfSelectedType()` and charges nothing |
-| Allowance below the amount | Reverts, nothing moves |
+| Allowance below the amount | Reverts `ERC20: transfer amount exceeds allowance`, nothing moves |
 | Debt right after borrowing | 1 base unit above the amount borrowed, on both chains |
 
 Two results changed the keeper:
@@ -109,7 +109,7 @@ Two results changed the keeper:
 
 ## Gas
 
-`repay` used about 160,000 gas on both chains, not counting the 21,000 intrinsic cost. That is 158,745 on Base and 160,254 on Arbitrum, measured with cold storage:
+`repay` used about 160,000 gas on both chains. That is 158,745 on Base and 160,254 on Arbitrum with cold storage, and 162,472 from the receipt of a real transaction in the keeper's end-to-end test on the Base fork.
 
 ```sh
 forge test --isolate --match-test test_thirdPartyRepay -vv
