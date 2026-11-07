@@ -1,10 +1,18 @@
-import { AddressForm } from "@/components/address-form.tsx";
+import { SiteHeader } from "@/components/site-header.tsx";
+import { Axis } from "@/components/wall.tsx";
 
 export default function NotFound() {
   return (
-    <main id="main">
-      <h1>There is no page here. Paste an address instead.</h1>
-      <AddressForm />
-    </main>
+    <>
+      <SiteHeader />
+      <main id="main">
+        <div className="board">
+          <div className="empty">
+            <h1 className="lead-title">There is no page here. Paste an address instead.</h1>
+          </div>
+          <Axis />
+        </div>
+      </main>
+    </>
   );
 }
