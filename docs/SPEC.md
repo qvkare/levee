@@ -147,7 +147,9 @@ The callback returns `{ kind, id, unsigned_tx, tx_hash, big_r, s, recovery_id }`
 
 ### Events
 
-NEP-297, standard `levee`, version `1.0.0`: `position_registered`, `rescue_requested`, `rescue_signed`, `rescue_failed`, `allowance_signed`, `float_withdrawn`, `caps_tightened`, `caps_loosen_queued`, `caps_loosened`, `keeper_changed`, `paused`, `resumed`.
+NEP-297, standard `levee`, version `1.0.0`: `position_registered`, `rescue_requested`, `rescue_signed`, `rescue_failed`, `allowance_signed`, `float_withdrawn`, `gas_swept`, `sign_failed`, `caps_tightened`, `caps_loosen_queued`, `caps_loosened`, `keeper_changed`, `paused`, `resumed`.
+
+`gas_swept` is `sweep_gas`'s equivalent of `float_withdrawn`. `sign_failed` is `rescue_failed` for the other kinds of signature, so that a count of `rescue_failed` stays a count of failed rescues.
 
 ### Mainnet lock
 
