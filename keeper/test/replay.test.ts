@@ -151,6 +151,17 @@ describe('replaying an altered record', () => {
     expect(await mismatched(run)).toEqual(['Signature']);
   });
 
+  it('catches a refusal whose rescuer was edited to match the signer', async () => {
+    const stranger = createSimulatedMpc();
+    h.ctx.near = fakeNear(stranger);
+    const run = clone(await record());
+    expect(run.failure_reason).toMatch(/^signer_mismatch/);
+
+    run.rescuer = stranger.address;
+
+    expect(await mismatched(run)).toEqual(['Signature']);
+  });
+
   it('catches an EVM hash that is not the signed transaction', async () => {
     const run = clone(await record());
     run.evm_tx = `0x${'00'.repeat(32)}`;

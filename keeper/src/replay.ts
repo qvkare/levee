@@ -124,7 +124,9 @@ async function signatureStep(run: RunRecord, trace: Trace): Promise<ReplayStep |
   if (!trace.rescue_result) return null;
   const chain = chainInfo(run.chain_id);
   const lines: string[] = [];
-  const refusedInRecord = run.outcome === 'aborted' && trace.signed_tx === null;
+  // A rescue result in an aborted record means the gate refused it, so a pass here
+  // contradicts the record.
+  const refusedInRecord = run.outcome === 'aborted';
 
   try {
     const assembled = await assembleSignedTransaction(trace.rescue_result);
