@@ -282,7 +282,7 @@ function perpFigures(entry: PerpEntry, readAt: number | null): Figures {
   const { perp } = entry;
   return {
     id: entry.id,
-    position: perp.dex ? `${perp.market}, ${perp.dex}` : perp.market,
+    position: perp.market,
     distance: entry.distance === null ? "None reported" : percent(entry.distance),
     health: `${perp.side === "long" ? "Long" : "Short"}, ${perp.leverage}x`,
     healthNote: ` ${perp.margin}`,

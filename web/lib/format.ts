@@ -93,7 +93,7 @@ export function joined(items: string[]): string {
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
-/** Seconds from milliseconds, to one decimal. */
+/** Seconds from milliseconds, to one decimal. A shorter time says so, and does not print zero. */
 export function seconds(milliseconds: number): string {
-  return `${(milliseconds / 1000).toFixed(1)} s`;
+  return milliseconds < 100 ? "under 0.1 s" : `${(milliseconds / 1000).toFixed(1)} s`;
 }
