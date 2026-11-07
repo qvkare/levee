@@ -231,7 +231,7 @@ export function renderSummary(summary: Summary): string {
   out.push('');
   out.push(`That count flatters the race. ${main.armedBelowTrigger} positions were already below the trigger at arming, so their repay fired at once and not during the crash. That is an upfront repay, not a rescue. **Among the ${armedAbove} positions armed above the trigger, ${savedAbove} (${pct(savedAbove, armedAbove)}) were saved.**`);
   out.push('');
-  out.push(`Gross liquidation bonus avoided on saved positions: **${usd(main.bonusAvoidedUsd)}** of ${usd(main.bonusAtRiskUsd)} at risk (first episode only). Reserve used on saved positions: ${usd(main.reserveUsedOnSavedUsd)}, from ${usd(main.reserveHeldUsd)} held across all in-scope positions.`);
+  out.push(`Gross liquidation bonus avoided on saved positions: **${usd(main.bonusAvoidedUsd)}** of ${usd(main.bonusAtRiskUsd)} at risk (first episode only), of which ${usd(main.bonusAvoidedArmedAboveUsd)} on positions armed above the trigger. Reserve used on saved positions: ${usd(main.reserveUsedOnSavedUsd)}, from ${usd(main.reserveHeldUsd)} held across all in-scope positions.`);
   out.push('');
   out.push(`Holding the same USDC as Aave collateral from the start, with no keeper at all: **${headline.fair.holdAsCollateral}** survive (${pct(headline.fair.holdAsCollateral, headline.fair.positions)}), avoiding ${usd(headline.fair.bonusAvoidedCollateralUsd)}. Saved by Levee only: ${headline.fair.leveeOnly}. Saved by collateral only: ${headline.fair.collateralOnly}.`);
   out.push('');

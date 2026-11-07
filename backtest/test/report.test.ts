@@ -142,6 +142,7 @@ describe('aggregate', () => {
 
   it('counts bonus avoided only on saved positions', () => {
     assert.equal(cell.bonusAvoidedUsd, 30);
+    assert.equal(cell.bonusAvoidedArmedAboveUsd, 10);
     assert.equal(cell.bonusAtRiskUsd, 150);
   });
 

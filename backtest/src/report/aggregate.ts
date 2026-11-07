@@ -65,6 +65,8 @@ export interface Cell {
   /** Among misses, those that beat the real liquidation and failed later in the window. */
   failedLaterInWindow: number;
   bonusAvoidedUsd: number;
+  /** The part of `bonusAvoidedUsd` on positions armed above T, where a race happened. */
+  bonusAvoidedArmedAboveUsd: number;
   bonusAtRiskUsd: number;
   reserveHeldUsd: number;
   reserveUsedOnSavedUsd: number;
@@ -94,6 +96,7 @@ export function aggregate(rows: Array<{ item: Prepared; outcome: Outcome }>, par
     reasons: emptyReasons(),
     failedLaterInWindow: 0,
     bonusAvoidedUsd: 0,
+    bonusAvoidedArmedAboveUsd: 0,
     bonusAtRiskUsd: 0,
     reserveHeldUsd: 0,
     reserveUsedOnSavedUsd: 0,
@@ -109,6 +112,7 @@ export function aggregate(rows: Array<{ item: Prepared; outcome: Outcome }>, par
       cell.bonusAvoidedUsd += item.firstEpisodeBonusUsd;
       cell.reserveUsedOnSavedUsd += outcome.repaid;
       if (outcome.armedBelowTrigger) cell.savedArmedBelowTrigger++;
+      else cell.bonusAvoidedArmedAboveUsd += item.firstEpisodeBonusUsd;
     } else {
       cell.notSaved++;
       cell.reserveUsedOnMissesUsd += outcome.repaid;
@@ -119,7 +123,7 @@ export function aggregate(rows: Array<{ item: Prepared; outcome: Outcome }>, par
 }
 
 function roundCell(cell: Cell): Cell {
-  for (const key of ['bonusAvoidedUsd', 'bonusAtRiskUsd', 'reserveHeldUsd', 'reserveUsedOnSavedUsd', 'reserveUsedOnMissesUsd'] as const) {
+  for (const key of ['bonusAvoidedUsd', 'bonusAvoidedArmedAboveUsd', 'bonusAtRiskUsd', 'reserveHeldUsd', 'reserveUsedOnSavedUsd', 'reserveUsedOnMissesUsd'] as const) {
     cell[key] = Math.round(cell[key]);
   }
   return cell;
