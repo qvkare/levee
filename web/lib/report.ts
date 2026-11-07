@@ -1,4 +1,4 @@
-/** Assembles the report from the venue reads. Pure, and safe to import in the browser. */
+/** Assembles the report from the venue reads. Pure, so the browser can import it too. */
 import { repayFigure } from "./aave-model.ts";
 import { CHAINS } from "./chains.ts";
 import { standingForFall } from "./math.ts";

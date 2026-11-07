@@ -1046,7 +1046,7 @@ summary {
   position: relative;
   container-type: inline-size;
   border-top: 3px solid var(--ink);
-  --stage: clamp(432px, calc(100svh - 312px), 680px);
+  --sim-height: clamp(432px, calc(100svh - 312px), 680px);
 }
 
 .sim::before {
@@ -1089,11 +1089,11 @@ summary {
   color: var(--ink);
 }
 
-.sim-stage {
+.sim-field {
   position: relative;
   display: flex;
   flex-direction: column;
-  height: var(--stage);
+  height: var(--sim-height);
   margin-top: 8px;
 }
 
@@ -1161,7 +1161,7 @@ summary {
 
 .sim-crit .crit {
   margin-top: 0;
-  font-size: min(46.5cqw, calc(var(--stage) * 0.86));
+  font-size: min(46.5cqw, calc(var(--sim-height) * 0.86));
 }
 
 .sim-crit .rest {
@@ -1845,7 +1845,7 @@ input[type="range"]::-moz-range-thumb {
   }
 
   .sim {
-    --stage: 372px;
+    --sim-height: 372px;
   }
 
   .sim-head {

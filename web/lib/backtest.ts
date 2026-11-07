@@ -1,6 +1,6 @@
 /**
  * Reads backtest/results/summary.json at build time. Every figure on the site comes from this file,
- * and the file's own warnings decide what is shown: never one cell alone. Only prerendered pages
+ * and the file's own warnings decide what is shown: one cell is not shown alone. Only prerendered pages
  * may call readBacktest, because a Worker has no such folder.
  */
 import { existsSync, readFileSync } from "node:fs";

@@ -10,7 +10,7 @@ import { dirname } from "node:path";
 
 export type Outcome = "success" | "failed" | "aborted" | "unreadable";
 
-/** Each moment of a run, in milliseconds. Null when the run never got there. */
+/** Each moment of a run, in milliseconds. Null when the run did not get there. */
 export interface Timestamps {
   detected: number | null;
   nearIncluded: number | null;

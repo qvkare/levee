@@ -53,7 +53,7 @@ export interface RowModel {
   /** Takes the place of both on a small row. */
   short: string;
   percent: string;
-  /** Distance in percent, for the axis. Never quite zero, so the rule has something to divide by. */
+  /** Distance in percent, for the axis. Held just above zero, so the rule has something to divide by. */
   d: number;
   tier: Tier;
   /** Levee cannot reach it. The number is drawn in outline. */

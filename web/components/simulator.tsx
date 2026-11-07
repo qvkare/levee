@@ -102,7 +102,7 @@ export function Simulator({ terms }: { terms: SimulatorTerms }) {
         </p>
       </div>
 
-      <div className="sim-stage">
+      <div className="sim-field">
         {lastStretch ? (
           <div className="sim-crit">
             <p className="crit">{percent(distanceWithout ?? 0)}</p>

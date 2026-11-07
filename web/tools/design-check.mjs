@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * design-check: flags the AI-default patterns banned in DESIGN.md (portfolio reference, section 4).
- * It matches code and copy. It cannot judge a concept; the DESIGN.md process does that.
+ * design-check: flags the AI-default patterns and the retired vocabulary banned in DESIGN.md
+ * (section "Banned"). It matches code and copy. It cannot judge a concept; DESIGN.md does that.
  * Zero dependencies, Node 18+.
  *
  *   node tools/design-check.mjs <dir-or-file> [more paths] [--json]
@@ -139,8 +139,34 @@ const RULES = [
   {
     id: "round-number",
     in: [...UI, ...DOCS],
-    re: /(?<![\d.,$])\d{1,3}(?:,\d{3})+\+|(?<![\w.])\d+[kKmM]\+(?!\w)|\b10x\b|\b99\.9+%/,
+    // A bare 10x is a real leverage on this site. Only the marketing use is banned.
+    re: /(?<![\d.,$])\d{1,3}(?:,\d{3})+\+|(?<![\w.])\d+[kKmM]\+(?!\w)|\b10x\s+(?:faster|better|more|cheaper|safer|easier|returns?|growth|yield)\b|\b99\.9+%/i,
     msg: "Round or unsourced number. Use a live figure, or cite it with a date.",
+  },
+  {
+    id: "overclaim",
+    in: [...UI, ...SCRIPT, ...DOCS],
+    re: /\bnever\b|\bguarantee[sd]?\b|\btrustless\b|\bwithin seconds\b/i,
+    msg: "A claim no table on this site backs. Say what was measured, and where.",
+  },
+  {
+    id: "retired-vocabulary",
+    in: [...UI, ...SCRIPT, ...STYLE, ...DOCS],
+    re: /\bflood|\bfreeboard\b|\bhydrograph|\bgauges?\b|\bstaff\b|\briver\b|\bwater\b|\b(?:action|watch) stage\b|\bcrest\b|\bdrill\b|\bBarlow\b|Old Standard|\bLentic\b/i,
+    msg: "Vocabulary or type from the retired design. The page speaks of distance, the wall and liquidation.",
+  },
+  {
+    id: "italic",
+    in: [...STYLE, ...UI],
+    re: /font-style:\s*italic|\bitalic\b(?=[^"'`]*["'`])/,
+    msg: "Italic type. The design has one face, upright, in two weights.",
+  },
+  {
+    id: "crisis-red",
+    in: [...STYLE, ...UI, ...SCRIPT],
+    re: /#e4231b\b/i,
+    unless: /^\s*--crisis:/,
+    msg: "Crisis red outside its token. It is a full-page state in the last 5%, set by data-crisis, and never an accent.",
   },
 ];
 
@@ -173,6 +199,7 @@ function scan(file) {
     if (line.length > 2000) return; // minified or generated
     if (ALLOW.test(line) || (i > 0 && ALLOW.test(lines[i - 1]))) return;
     for (const r of rules) {
+      if (r.unless?.test(line)) continue;
       const m = r.re.exec(line);
       if (m) found.push({ file, line: i + 1, col: m.index + 1, rule: r.id, msg: r.msg, text: line.trim().slice(0, 140) });
     }
