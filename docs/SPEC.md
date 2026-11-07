@@ -41,8 +41,8 @@ Addresses come from `bgd-labs/aave-address-book`.
 
 MPC: `v1.signer` 3.17.0 on mainnet, `v1.signer-prod.testnet` 3.18.0 on testnet.
 
-- Call `sign({ request: { path, domain_id: 0, payload_v2: { Ecdsa: "<32 bytes hex>" } } })` with a deposit of 1 yoctoNEAR. At least 10 Tgas must be attached.
-- A secp256k1 response has `big_r`, `s`, `recovery_id`. `r` is bytes 1..33 of the compressed `big_r`. `s` is low-s normalised. The payload is signed as given, with no further hashing.
+- Call `sign({ request: { path, domain_id: 0, payload_v2: { Ecdsa: "<32 bytes hex>" } } })` with a deposit of 1 yoctoNEAR. At least 15 Tgas must be attached: `sign_call_gas_attachment_requirement_tera_gas` is 15 in the config of both live contracts, read on 2026-11-07.
+- A secp256k1 response is `{ scheme: "Secp256k1", big_r: { affine_point }, s: { scalar }, recovery_id }`, with bare lowercase hex. `r` is bytes 1..33 of the compressed `big_r`. `s` is low-s normalised. The payload is signed as given, with no further hashing.
 - View `derived_public_key({ path, predecessor, domain_id: 0 })` returns the derived key. Check a recovered key against it.
 
 Selectors:
@@ -85,26 +85,36 @@ pub struct Position {
     pub spent_today: U128,
     pub day: u64,
     pub last_rescue_at: u64,              // nanoseconds
+    pub pending_loosen: Option<PendingLoosen>,
+}
+
+pub struct PendingLoosen {
+    pub max_per_rescue: U128,
+    pub max_per_day: U128,
+    pub cooldown_secs: u32,
+    pub ready_at: u64,                    // nanoseconds
 }
 ```
+
+EVM addresses are `0x` followed by exactly 40 hex characters, and are stored lowercase. The zero address is refused: a borrower cannot be changed, and value sent to zero is burnt.
 
 ### Methods
 
 | Method | Caller | Effect |
 |---|---|---|
-| `new(mpc_contract, chains)` | init | Stores immutable config. Rejects duplicate chain ids |
-| `register(chain_id, borrower, keeper, max_per_rescue, max_per_day, cooldown_secs) -> u64` | anyone, payable | Creates a position owned by the caller. Attached deposit covers storage |
+| `new(mpc_contract, chains)` | the contract account, once | Stores immutable config. Rejects duplicate chain ids, an empty chain list, malformed addresses, a zero max fee ceiling and a gas limit below 21000. Private, so nobody can get in between deployment and this call and point the contract at their own signer |
+| `register(chain_id, borrower, keeper, max_per_rescue, max_per_day, cooldown_secs) -> u64` | anyone, payable | Creates a position owned by the caller. Ids start at 1. Both caps must be above zero. The deposit pays for the most storage the position can ever use, a 64-character keeper and a queued loosening, because `set_keeper` and `queue_loosen` take no deposit. The surplus is refunded |
 | `set_keeper(id, keeper)` | owner | Replaces the keeper |
-| `tighten(id, max_per_rescue, max_per_day, cooldown_secs)` | owner | Immediate. Each value may only get stricter |
-| `queue_loosen(id, ...)`, `apply_loosen(id)` | owner | Loosening takes effect after 24 hours |
+| `tighten(id, max_per_rescue, max_per_day, cooldown_secs)` | owner | Immediate. Each value may only get stricter or stay the same. Cancels any queued loosening |
+| `queue_loosen(id, max_per_rescue, max_per_day, cooldown_secs)`, `apply_loosen(id)` | owner | Loosening takes effect after 24 hours. Each value may only get looser or stay the same, and at least one must change. Queueing again replaces the queue and restarts the delay |
 | `pause(id)`, `resume(id)` | owner | A paused position cannot rescue |
-| `prepare_allowance(id, amount, fees)` | keeper or owner | Signs `USDC.approve(Pool, amount)` from the rescuer. `amount` is at most `30 * max_per_day` |
+| `prepare_allowance(id, amount, fees)` | keeper or owner | Signs `USDC.approve(Pool, amount)` from the rescuer. `amount` is at most `30 * max_per_day`, and zero revokes. A paused position refuses the keeper but not the owner, who may need to revoke |
 | `rescue(id, amount, fees)` | keeper | Signs `Pool.repay(USDC, amount, 2, borrower)`. See below |
-| `withdraw_float(id, amount, fees)` | owner | Signs `USDC.transfer(borrower, amount)`. The destination is fixed |
-| `sweep_gas(id, amount_wei, fees)` | owner | Signs a value transfer to `borrower` |
-| `get_position(id)`, `rescuer_path(id)`, `preview_rescue(id, amount, fees)` | view | `preview_rescue` returns the unsigned tx hex and hash |
+| `withdraw_float(id, amount, fees)` | owner | Signs `USDC.transfer(borrower, amount)`. The destination is fixed. Works while paused, so an owner can always leave |
+| `sweep_gas(id, amount_wei, fees)` | owner | Signs a value transfer to `borrower`, with `gas_limit_transfer`. A flat 21000 would not do: on Arbitrum the gas limit has to cover L1 data cost. Works while paused. An amount of zero can replace a stuck nonce |
+| `get_position(id)`, `rescuer_path(id)`, `preview_rescue(id, amount, fees)`, `get_chain(chain_id)`, `get_mpc_contract()` | view | `get_position` reports the current UTC day: `spent_today` reads 0 if the stored bucket is from an earlier day. `preview_rescue` returns the unsigned tx hex and hash, and fails as `rescue` would under rules 2 to 6. A view has no caller, so it cannot check rule 1. `get_chain` and `get_mpc_contract` let anyone audit the immutable config |
 
-`fees` is `{ nonce: u64, max_fee_per_gas: U128, max_priority_fee_per_gas: U128 }`.
+`fees` is `{ nonce: u64, max_fee_per_gas: U128, max_priority_fee_per_gas: U128 }`. Rule 6 below applies to every method that signs, not only `rescue`, or a stolen keeper key could burn rescuer gas above the ceiling through `prepare_allowance`.
 
 ### `rescue` rules
 
@@ -115,27 +125,65 @@ Reject unless all of these hold:
 3. `0 < amount <= max_per_rescue`.
 4. `spent_today + amount <= max_per_day`, using a UTC day bucket from `env::block_timestamp`.
 5. `now - last_rescue_at >= cooldown_secs`.
-6. Both fee values are at or below the chain's ceilings.
+6. Both fee values are at or below the chain's ceilings, and the priority fee is at or below the max fee. A transaction that breaks the last part cannot be included, so signing it would only burn budget.
 
-The contract then builds an EIP-1559 transaction itself: chain id, nonce, fees, gas limit, `to = Pool`, value 0, the `repay` calldata and an empty access list. It hashes `keccak256(0x02 || rlp(fields))` and calls MPC with path `rescuer_path(id)`.
+The contract then builds an EIP-1559 transaction itself: chain id, nonce, fees, gas limit, `to = Pool`, value 0, the `repay` calldata and an empty access list. It hashes `keccak256(0x02 || rlp(fields))` and calls MPC with path `rescuer_path(id)`. The contract attaches the 1 yoctoNEAR from its own balance, because a function-call key cannot attach a deposit.
 
 The keeper never supplies calldata, a target or a payload. It supplies only the position id, the amount and `fees`. The EVM nonce is not tracked on chain because the contract cannot see Base. A wrong nonce wastes budget but cannot move value anywhere else.
 
-The budget is reserved before the MPC call and released if the MPC call fails.
+The budget and the cooldown slot are reserved before the MPC call and released if the MPC call fails, so a keeper can retry straight after an MPC failure. A release only gives back what the reservation still holds: a charge to an earlier UTC day is not taken off the current day, and a cooldown taken by a later rescue stays.
 
-The callback returns `{ kind, id, unsigned_tx, tx_hash, big_r, s, recovery_id }`, and logs the same as an event, so anyone can assemble and broadcast the signed transaction.
+A timed-out MPC request does not prove that no signature exists, since a node's late `respond` is public. The release assumes none will be used. The exposure is bounded: such a signature can only repay the borrower's debt from the rescuer.
+
+The callback returns `{ kind, id, unsigned_tx, tx_hash, big_r, s, recovery_id }`, and logs the same as an event, so anyone can assemble and broadcast the signed transaction. `kind` is `rescue`, `allowance`, `withdraw_float` or `sweep_gas`. All hex is `0x`-prefixed and lowercase. `tx_hash` is the hash that was signed, not the hash of the broadcast transaction, which also covers the signature. `big_r` is the 33-byte compressed point, and `recovery_id` is the EIP-1559 `y_parity`.
+
+If no signature comes back, the callback returns `null` and logs `rescue_failed`, or `sign_failed` for the other kinds, with `{ kind, id, tx_hash, reason, released }`. It must not panic, because that would roll back the release. `reason` is `mpc_failed` when the call failed. It is `malformed_response` when the call succeeded but the response cannot be read: a signature may exist, so the reservation stands.
+
+Caps bound what gets signed, not when it lands. A signature stays valid until its nonce is used, so signatures held from different days can land together, and a pause does not stop one already issued. They can still only repay the borrower's debt, and an owner can void one by using its nonce first, with `sweep_gas` at amount zero.
+
+### Loosening
+
+A tighten cancels a queued loosening. Otherwise a loosening queued before the tighten could undo it in less than 24 hours. For the same reason, queueing again restarts the delay. A tighten with unchanged values is how an owner cancels a queued loosening.
 
 ### Derivation
 
 `rescuer_path(id) = "levee/v1/{id}"`, with the Levee contract as predecessor and domain 0. Each position has its own rescuer address.
 
+### Gas
+
+A signing method takes at least 35 Tgas. Attach more, such as 100 Tgas: unused gas is refunded.
+
+| Constant | Value | Reason |
+|---|---|---|
+| `SIGN_GAS` | 20 Tgas, plus all unused gas | The live signer requires 15. Real calls succeed on testnet with 20 attached, and the margin covers a small rise |
+| `ON_SIGNED_GAS` | 10 Tgas, fixed | `on_signed` burns 1.7. The margin costs nothing, because unused gas is refunded, and this contract cannot be upgraded if protocol gas costs rise |
+| `MIN_SIGNING_GAS` | 35 Tgas | Those two, plus 5 for the method itself, which burns 2.6 |
+
+Unused gas goes to `sign` because the signer's requirement is its own config and a vote can raise it. With no upgrade path, the only answer to a rise is to attach more, so that has to work. A sandbox test proves it does.
+
+Measured on 2026-11-07:
+
+| Receipt | Burnt | Measured on |
+|---|---|---|
+| Transaction conversion | 0.31 Tgas | near-sandbox 2.14.0 |
+| `rescue` | 2.59 Tgas | near-sandbox 2.14.0 |
+| `sign` | 4.27 Tgas | `v1.signer-prod.testnet`, secp256k1 |
+| `return_signature_and_clean_state_on_success` | 3.45 Tgas of a fixed 7 | `v1.signer-prod.testnet`, secp256k1 |
+| `on_signed` | 1.72 Tgas, or 1.65 on failure | near-sandbox 2.14.0 |
+| Three refunds | 0.67 Tgas | near-sandbox 2.14.0 |
+| Whole rescue | 13.0 Tgas | Sum of the above |
+
+The sandbox figures transfer to mainnet: near-sandbox 2.14.0 is the nearcore commit mainnet runs, and its runtime config showed no differences from mainnet's at protocol 88. The test `gas_of_a_rescue` fails if the budget stops fitting.
+
 ### Events
 
-NEP-297, standard `levee`, version `1.0.0`: `position_registered`, `rescue_requested`, `rescue_signed`, `rescue_failed`, `allowance_signed`, `float_withdrawn`, `caps_tightened`, `caps_loosen_queued`, `caps_loosened`, `keeper_changed`, `paused`, `resumed`.
+NEP-297, standard `levee`, version `1.0.0`: `position_registered`, `rescue_requested`, `rescue_signed`, `rescue_failed`, `allowance_signed`, `float_withdrawn`, `gas_swept`, `sign_failed`, `caps_tightened`, `caps_loosen_queued`, `caps_loosened`, `keeper_changed`, `paused`, `resumed`.
+
+`gas_swept` is `sweep_gas`'s equivalent of `float_withdrawn`. `sign_failed` is `rescue_failed` for the other kinds of signature, so that a count of `rescue_failed` stays a count of failed rescues.
 
 ### Mainnet lock
 
-After deployment and `new`, all full-access keys are deleted. There is no upgrade path and no admin method.
+After deployment and `new`, all full-access keys are deleted. There is no upgrade path and no admin method. Fund the contract above its storage cost first: every signature costs it 1 yoctoNEAR, and anyone can top it up later.
 
 ## 5. Keeper
 

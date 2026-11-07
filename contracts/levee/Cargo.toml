@@ -1,0 +1,30 @@
+[package]
+name = "levee"
+description = "Signs repayments for a borrower within caps, from a chain-signature rescuer address"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = { workspace = true }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+near-sdk = { workspace = true, features = ["unit-testing"] }
+near-workspaces = "0.24"
+near-sandbox = "0.4"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+proptest = "1"
+# Independent implementations, so the tests never check our encoder against itself.
+alloy-consensus = { version = "2", features = ["k256"] }
+alloy-primitives = "1"
+k256 = { version = "0.13", features = ["ecdsa", "arithmetic"] }
+sha3 = "0.10"
