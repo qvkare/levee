@@ -10,7 +10,8 @@ import { EXAMPLES } from "@/lib/examples.ts";
 
 /**
  * Prerendered, so it loads from static assets and its HTML holds a real reading at a stated block.
- * The drill takes a fresh reading in the browser. Evidence is only readable here, at build time.
+ * The drill takes a fresh reading in the browser. Evidence is only readable here, at build time, so
+ * this page must not render on a Worker.
  */
 export const dynamic = "force-static";
 

@@ -31,9 +31,14 @@ const REQUEST_TIMEOUT_MS = 4000;
 /** Reserve reads below run in groups of this many per asset. */
 const READS_PER_ASSET = 6;
 
-/** A client per read: viem shares in-flight promises inside a client, which Workers requests must not. */
+/**
+ * A client per read: viem shares in-flight promises inside a client, which Workers requests must not.
+ * The stamp is there for prerendering. Next keeps fetches between builds, keyed by their headers, and
+ * without it a new build would reuse an old reading while saying it was read at build time.
+ */
 function clientFor(chain: ChainConfig): PublicClient {
-  const transport = fallback(rpcUrls(chain).map((url) => http(url, { timeout: REQUEST_TIMEOUT_MS, retryCount: 0 })));
+  const fetchOptions = { headers: { "x-levee-read": String(Date.now()) } };
+  const transport = fallback(rpcUrls(chain).map((url) => http(url, { timeout: REQUEST_TIMEOUT_MS, retryCount: 0, fetchOptions })));
   return createPublicClient({ chain: VIEM_CHAINS[chain.key], transport }) as PublicClient;
 }
 
