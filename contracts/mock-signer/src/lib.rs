@@ -100,8 +100,7 @@ impl MockSigner {
         require!(!self.failing, "mock signer was told to fail");
 
         let Payload::Ecdsa(payload) = request.payload_v2;
-        let bytes = hex::decode(&payload)
-            .unwrap_or_else(|_| env::panic_str("payload is not hex"));
+        let bytes = hex::decode(&payload).unwrap_or_else(|_| env::panic_str("payload is not hex"));
         let bytes: [u8; 32] = bytes
             .try_into()
             .unwrap_or_else(|_| env::panic_str("payload is not 32 bytes"));

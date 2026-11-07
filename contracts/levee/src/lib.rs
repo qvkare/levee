@@ -182,8 +182,7 @@ impl Levee {
 
         // `set_keeper` and `queue_loosen` take no deposit but can grow the record, so
         // the room they may need is charged now. The contract never pays for storage.
-        let growth_room =
-            PENDING_LOOSEN_BYTES + MAX_ACCOUNT_ID_LEN - keeper.as_str().len() as u64;
+        let growth_room = PENDING_LOOSEN_BYTES + MAX_ACCOUNT_ID_LEN - keeper.as_str().len() as u64;
         let bytes = env::storage_usage() - usage_before + growth_room;
         let cost = env::storage_byte_cost().saturating_mul(u128::from(bytes));
         let surplus = env::attached_deposit()
@@ -478,7 +477,10 @@ impl Levee {
 
     fn owned_position(&self, id: u64) -> &Position {
         let position = self.position(id);
-        require!(env::predecessor_account_id() == position.owner, ERR_NOT_OWNER);
+        require!(
+            env::predecessor_account_id() == position.owner,
+            ERR_NOT_OWNER
+        );
         position
     }
 
@@ -487,7 +489,10 @@ impl Levee {
             .positions
             .get_mut(&id)
             .unwrap_or_else(|| env::panic_str(ERR_NO_POSITION));
-        require!(env::predecessor_account_id() == position.owner, ERR_NOT_OWNER);
+        require!(
+            env::predecessor_account_id() == position.owner,
+            ERR_NOT_OWNER
+        );
         position
     }
 

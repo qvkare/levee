@@ -140,24 +140,27 @@ fn calls() -> Vec<Call> {
         .into_iter()
         .flat_map(|receipt| {
             let receiver = receipt.receiver_id.clone();
-            receipt.actions.into_iter().filter_map(move |action| match action {
-                MockAction::FunctionCallWeight {
-                    method_name,
-                    args,
-                    attached_deposit,
-                    prepaid_gas,
-                    gas_weight,
-                    ..
-                } => Some(Call {
-                    receiver: receiver.clone(),
-                    method: String::from_utf8(method_name).unwrap(),
-                    args: serde_json::from_slice(&args).unwrap(),
-                    deposit: attached_deposit,
-                    gas: prepaid_gas,
-                    weight: gas_weight.0,
-                }),
-                _ => None,
-            })
+            receipt
+                .actions
+                .into_iter()
+                .filter_map(move |action| match action {
+                    MockAction::FunctionCallWeight {
+                        method_name,
+                        args,
+                        attached_deposit,
+                        prepaid_gas,
+                        gas_weight,
+                        ..
+                    } => Some(Call {
+                        receiver: receiver.clone(),
+                        method: String::from_utf8(method_name).unwrap(),
+                        args: serde_json::from_slice(&args).unwrap(),
+                        deposit: attached_deposit,
+                        gas: prepaid_gas,
+                        weight: gas_weight.0,
+                    }),
+                    _ => None,
+                })
         })
         .collect()
 }
@@ -167,10 +170,13 @@ fn transfers() -> Vec<(AccountId, NearToken)> {
         .into_iter()
         .flat_map(|receipt| {
             let receiver = receipt.receiver_id.clone();
-            receipt.actions.into_iter().filter_map(move |action| match action {
-                MockAction::Transfer { deposit, .. } => Some((receiver.clone(), deposit)),
-                _ => None,
-            })
+            receipt
+                .actions
+                .into_iter()
+                .filter_map(move |action| match action {
+                    MockAction::Transfer { deposit, .. } => Some((receiver.clone(), deposit)),
+                    _ => None,
+                })
         })
         .collect()
 }
@@ -383,14 +389,7 @@ mod registration {
         testing_env!(context(OWNER, NOON)
             .attached_deposit(NearToken::from_near(1))
             .build());
-        contract.register(
-            1,
-            BORROWER.into(),
-            account(KEEPER),
-            U128(1),
-            U128(1),
-            0,
-        );
+        contract.register(1, BORROWER.into(), account(KEEPER), U128(1), U128(1), 0);
     }
 
     #[test]
@@ -434,14 +433,7 @@ mod registration {
         testing_env!(context(OWNER, NOON)
             .attached_deposit(NearToken::from_near(1))
             .build());
-        contract.register(
-            8453,
-            BORROWER.into(),
-            account(KEEPER),
-            U128(0),
-            U128(1),
-            0,
-        );
+        contract.register(8453, BORROWER.into(), account(KEEPER), U128(0), U128(1), 0);
     }
 
     #[test]
@@ -451,14 +443,7 @@ mod registration {
         testing_env!(context(OWNER, NOON)
             .attached_deposit(NearToken::from_near(1))
             .build());
-        contract.register(
-            8453,
-            BORROWER.into(),
-            account(KEEPER),
-            U128(1),
-            U128(0),
-            0,
-        );
+        contract.register(8453, BORROWER.into(), account(KEEPER), U128(1), U128(0), 0);
     }
 
     #[test]
@@ -516,7 +501,10 @@ mod registration {
         contract.positions.flush();
 
         let grown_to = env::storage_usage() - usage_before;
-        assert!(u128::from(grown_to) <= paid_bytes, "{grown_to} > {paid_bytes}");
+        assert!(
+            u128::from(grown_to) <= paid_bytes,
+            "{grown_to} > {paid_bytes}"
+        );
     }
 }
 
@@ -802,12 +790,18 @@ mod rescue_rules {
         assert_eq!(ERR_OVER_MAX_PER_RESCUE, "amount exceeds max_per_rescue");
         assert_eq!(ERR_OVER_DAILY_BUDGET, "amount exceeds the daily budget");
         assert_eq!(ERR_COOLDOWN, "cooldown has not elapsed");
-        assert_eq!(ERR_MAX_FEE_CEILING, "max_fee_per_gas exceeds the chain ceiling");
+        assert_eq!(
+            ERR_MAX_FEE_CEILING,
+            "max_fee_per_gas exceeds the chain ceiling"
+        );
         assert_eq!(
             ERR_PRIORITY_FEE_CEILING,
             "max_priority_fee_per_gas exceeds the chain ceiling"
         );
-        assert_eq!(ERR_OVER_MAX_ALLOWANCE, "amount exceeds 30 times max_per_day");
+        assert_eq!(
+            ERR_OVER_MAX_ALLOWANCE,
+            "amount exceeds 30 times max_per_day"
+        );
     }
 }
 
@@ -1357,7 +1351,12 @@ mod caps {
     fn tighten_rejects_a_higher_rescue_cap() {
         let (mut contract, id) = setup();
         act_as(OWNER, NOON);
-        contract.tighten(id, U128(MAX_PER_RESCUE + 1), U128(MAX_PER_DAY), COOLDOWN_SECS);
+        contract.tighten(
+            id,
+            U128(MAX_PER_RESCUE + 1),
+            U128(MAX_PER_DAY),
+            COOLDOWN_SECS,
+        );
     }
 
     #[test]
@@ -1365,7 +1364,12 @@ mod caps {
     fn tighten_rejects_a_higher_daily_cap() {
         let (mut contract, id) = setup();
         act_as(OWNER, NOON);
-        contract.tighten(id, U128(MAX_PER_RESCUE), U128(MAX_PER_DAY + 1), COOLDOWN_SECS);
+        contract.tighten(
+            id,
+            U128(MAX_PER_RESCUE),
+            U128(MAX_PER_DAY + 1),
+            COOLDOWN_SECS,
+        );
     }
 
     #[test]
@@ -1373,7 +1377,12 @@ mod caps {
     fn tighten_rejects_a_shorter_cooldown() {
         let (mut contract, id) = setup();
         act_as(OWNER, NOON);
-        contract.tighten(id, U128(MAX_PER_RESCUE), U128(MAX_PER_DAY), COOLDOWN_SECS - 1);
+        contract.tighten(
+            id,
+            U128(MAX_PER_RESCUE),
+            U128(MAX_PER_DAY),
+            COOLDOWN_SECS - 1,
+        );
     }
 
     #[test]
@@ -1386,7 +1395,10 @@ mod caps {
 
     #[test]
     fn the_error_constants_are_the_ones_callers_see() {
-        assert_eq!(ERR_TIGHTEN_MAX_PER_RESCUE, "max_per_rescue may only decrease");
+        assert_eq!(
+            ERR_TIGHTEN_MAX_PER_RESCUE,
+            "max_per_rescue may only decrease"
+        );
         assert_eq!(ERR_TIGHTEN_MAX_PER_DAY, "max_per_day may only decrease");
         assert_eq!(ERR_TIGHTEN_COOLDOWN, "cooldown_secs may only increase");
         assert_eq!(ERR_NO_PENDING_LOOSEN, "no loosening is queued");

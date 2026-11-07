@@ -105,7 +105,12 @@ fn decode(unsigned: &[u8]) -> TxEip1559 {
 }
 
 /// The checks every transaction has to pass, whatever it is.
-fn assert_decodes_to(unsigned: &[u8], chain: &ChainConfig, fees: &Fees, gas_limit: u64) -> TxEip1559 {
+fn assert_decodes_to(
+    unsigned: &[u8],
+    chain: &ChainConfig,
+    fees: &Fees,
+    gas_limit: u64,
+) -> TxEip1559 {
     let tx = decode(unsigned);
     assert_eq!(tx.chain_id, chain.chain_id);
     assert_eq!(tx.nonce, fees.nonce);

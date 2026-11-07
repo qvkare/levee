@@ -112,8 +112,18 @@ fn fixture_covers_every_kind_on_both_chains() {
 fn target_and_value_match_cast() {
     for vector in vectors() {
         let tx = vector.built_tx();
-        assert_eq!(hex_of(&tx.to), vector.to.to_lowercase(), "target of {}", vector.name);
-        assert_eq!(tx.value.to_string(), vector.value, "value of {}", vector.name);
+        assert_eq!(
+            hex_of(&tx.to),
+            vector.to.to_lowercase(),
+            "target of {}",
+            vector.name
+        );
+        assert_eq!(
+            tx.value.to_string(),
+            vector.value,
+            "value of {}",
+            vector.name
+        );
     }
 }
 

@@ -161,9 +161,7 @@ mod tests {
         let request = SignRequest {
             path: live["path"].as_str().unwrap().into(),
             domain_id: live["domain_id"].as_u64().unwrap(),
-            payload_v2: SignPayload::Ecdsa(
-                live["payload_v2"]["Ecdsa"].as_str().unwrap().into(),
-            ),
+            payload_v2: SignPayload::Ecdsa(live["payload_v2"]["Ecdsa"].as_str().unwrap().into()),
         };
         assert_eq!(&serde_json::to_value(&request).unwrap(), live);
     }
@@ -192,14 +190,26 @@ mod tests {
 
     #[test]
     fn rejects_the_wrong_lengths() {
-        assert_eq!(parse_signature(&response(&"02".repeat(32), &scalar(), 0)), None);
-        assert_eq!(parse_signature(&response(&big_r(), &"cd".repeat(31), 0)), None);
-        assert_eq!(parse_signature(&response(&big_r(), &"cd".repeat(33), 0)), None);
+        assert_eq!(
+            parse_signature(&response(&"02".repeat(32), &scalar(), 0)),
+            None
+        );
+        assert_eq!(
+            parse_signature(&response(&big_r(), &"cd".repeat(31), 0)),
+            None
+        );
+        assert_eq!(
+            parse_signature(&response(&big_r(), &"cd".repeat(33), 0)),
+            None
+        );
     }
 
     #[test]
     fn rejects_non_hex() {
-        assert_eq!(parse_signature(&response(&big_r(), &"zz".repeat(32), 0)), None);
+        assert_eq!(
+            parse_signature(&response(&big_r(), &"zz".repeat(32), 0)),
+            None
+        );
     }
 
     #[test]
