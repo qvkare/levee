@@ -20,3 +20,6 @@ dist/
 .DS_Store
 .vercel
 .turbo
+
+# local tool state
+.claude/
