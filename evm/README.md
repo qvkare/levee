@@ -26,7 +26,7 @@ The crash comparison prints its table with:
 forge test -vv --match-test test_crash_printsTheDifference
 ```
 
-The first run pages state in from a public RPC and takes a minute or so. Foundry caches it under `~/.foundry/cache`, and later runs take about a second. To check a cold run without clearing that cache:
+The first run pages state in from public RPCs and took about 20 seconds when measured. Foundry caches it under `~/.foundry/cache`, and later runs take about a second. To check a cold run without clearing that cache:
 
 ```sh
 forge test --no-storage-caching

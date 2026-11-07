@@ -202,7 +202,7 @@ The trigger, target and RPC list live off chain. No LLM is involved.
 - `outcome` is `aborted` when the keeper refused and nothing reached the lending chain, and `failed` when an attempt was made and did not land.
 - A step the run did not reach is `null`.
 - `trace` is optional. It holds the inputs and results of each step, so that `keeper replay` can repeat the run with no keys and no network.
-- `network` is `simulated` for a run on a local fork with a local key standing in for the MPC. A simulated run is never proof of anything.
+- `network` is `simulated` for a run on a local fork with a local key standing in for the MPC. A simulated run does not count as proof.
 
 Failures are recorded, not deleted. `evidence/claims.json` maps every public claim to a test or a run. It holds `{ "claims": [...] }`, and each claim has an `id`, the `claim` text, and exactly one of `test` (`{ "path", "name" }`) or `run` (a run id).
 
@@ -216,7 +216,7 @@ It prints one verdict per claim:
 | `FAIL` | A check did not hold or could not be made |
 | `RECORDED` | On file but not proven by this tool: a test it did not run, a simulated run, or a failed run kept for the record |
 
-A failed run may hold a hash that never landed, such as a rejected broadcast. That agrees with the record and is `RECORDED`, not `FAIL`.
+A failed run may hold a hash that did not land, such as a rejected broadcast. That agrees with the record and is `RECORDED`, not `FAIL`.
 
 ## 7. Public risk tool
 

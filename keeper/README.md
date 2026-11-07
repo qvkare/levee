@@ -81,7 +81,7 @@ Before a rescue can land:
 
 ## Run records
 
-Every attempt that wanted to act leaves `evidence/runs/<run-id>.json`, and a record is never overwritten.
+Every attempt that wanted to act leaves `evidence/runs/<run-id>.json`. A file is created exclusively, so a later run cannot replace an earlier record.
 
 | `outcome` | Meaning |
 |---|---|
