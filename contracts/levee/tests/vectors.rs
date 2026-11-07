@@ -5,10 +5,11 @@
 
 use std::collections::BTreeSet;
 
-use levee::address::parse_address;
-use levee::evm::{
-    approve_calldata, repay_calldata, signing_hash, transfer_calldata, Eip1559Tx,
-};
+use levee::address::normalise_address;
+use levee::evm::{signing_hash, Eip1559Tx};
+use levee::txs::{approve_tx, repay_tx, sweep_tx, transfer_tx};
+use levee::types::{ChainConfig, Fees, Position};
+use near_sdk::json_types::U128;
 use near_sdk::test_utils::VMContextBuilder;
 use near_sdk::testing_env;
 use serde::Deserialize;
@@ -41,34 +42,44 @@ struct Vector {
 }
 
 impl Vector {
-    fn amount(&self) -> u128 {
-        self.amount.parse().unwrap()
-    }
-
-    /// Calldata the way the contract builds it, from the same inputs cast had.
-    fn built_calldata(&self) -> Vec<u8> {
-        let pool = parse_address(&self.pool).unwrap();
-        let usdc = parse_address(&self.usdc).unwrap();
-        let borrower = parse_address(&self.borrower).unwrap();
-        match self.kind.as_str() {
-            "repay" => repay_calldata(&usdc, self.amount(), &borrower),
-            "approve" => approve_calldata(&pool, self.amount()),
-            "transfer" => transfer_calldata(&borrower, self.amount()),
-            "value" => Vec::new(),
-            other => panic!("unknown kind {other}"),
-        }
-    }
-
+    /// The transaction the contract builds from the same inputs cast had.
     fn built_tx(&self) -> Eip1559Tx {
-        Eip1559Tx {
+        let chain = ChainConfig {
             chain_id: self.chain_id,
+            pool: normalise_address(&self.pool).unwrap(),
+            usdc: normalise_address(&self.usdc).unwrap(),
+            max_fee_per_gas_ceiling: U128(u128::MAX),
+            max_priority_fee_ceiling: U128(u128::MAX),
+            gas_limit_approve: self.gas_limit,
+            gas_limit_repay: self.gas_limit,
+            gas_limit_transfer: self.gas_limit,
+        };
+        let position = Position {
+            owner: "owner.near".parse().unwrap(),
+            keeper: "keeper.near".parse().unwrap(),
+            chain_id: self.chain_id,
+            borrower: normalise_address(&self.borrower).unwrap(),
+            max_per_rescue: U128(0),
+            max_per_day: U128(0),
+            cooldown_secs: 0,
+            paused: false,
+            spent_today: U128(0),
+            day: 0,
+            last_rescue_at: 0,
+            pending_loosen: None,
+        };
+        let fees = Fees {
             nonce: self.nonce,
-            max_priority_fee_per_gas: self.max_priority_fee_per_gas.parse().unwrap(),
-            max_fee_per_gas: self.max_fee_per_gas.parse().unwrap(),
-            gas_limit: self.gas_limit,
-            to: parse_address(&self.to).unwrap(),
-            value: self.value.parse().unwrap(),
-            data: self.built_calldata(),
+            max_fee_per_gas: U128(self.max_fee_per_gas.parse().unwrap()),
+            max_priority_fee_per_gas: U128(self.max_priority_fee_per_gas.parse().unwrap()),
+        };
+        let amount: u128 = self.amount.parse().unwrap();
+        match self.kind.as_str() {
+            "repay" => repay_tx(&chain, &position, amount, &fees),
+            "approve" => approve_tx(&chain, amount, &fees),
+            "transfer" => transfer_tx(&chain, &position, amount, &fees),
+            "value" => sweep_tx(&chain, &position, amount, &fees),
+            other => panic!("unknown kind {other}"),
         }
     }
 }
@@ -98,10 +109,19 @@ fn fixture_covers_every_kind_on_both_chains() {
 }
 
 #[test]
+fn target_and_value_match_cast() {
+    for vector in vectors() {
+        let tx = vector.built_tx();
+        assert_eq!(hex_of(&tx.to), vector.to.to_lowercase(), "target of {}", vector.name);
+        assert_eq!(tx.value.to_string(), vector.value, "value of {}", vector.name);
+    }
+}
+
+#[test]
 fn calldata_matches_cast() {
     for vector in vectors() {
         assert_eq!(
-            hex_of(&vector.built_calldata()),
+            hex_of(&vector.built_tx().data),
             vector.calldata,
             "calldata differs for {}",
             vector.name

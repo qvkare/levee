@@ -111,7 +111,7 @@ EVM addresses are `0x` followed by exactly 40 hex characters, and are stored low
 | `prepare_allowance(id, amount, fees)` | keeper or owner | Signs `USDC.approve(Pool, amount)` from the rescuer. `amount` is at most `30 * max_per_day` |
 | `rescue(id, amount, fees)` | keeper | Signs `Pool.repay(USDC, amount, 2, borrower)`. See below |
 | `withdraw_float(id, amount, fees)` | owner | Signs `USDC.transfer(borrower, amount)`. The destination is fixed |
-| `sweep_gas(id, amount_wei, fees)` | owner | Signs a value transfer to `borrower` |
+| `sweep_gas(id, amount_wei, fees)` | owner | Signs a value transfer to `borrower`, with `gas_limit_transfer`. A flat 21000 would not do: on Arbitrum the gas limit has to cover L1 data cost |
 | `get_position(id)`, `rescuer_path(id)`, `preview_rescue(id, amount, fees)` | view | `preview_rescue` returns the unsigned tx hex and hash |
 
 `fees` is `{ nonce: u64, max_fee_per_gas: U128, max_priority_fee_per_gas: U128 }`.
