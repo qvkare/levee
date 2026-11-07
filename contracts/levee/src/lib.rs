@@ -56,7 +56,6 @@ pub const ERR_DEPOSIT_TOO_LOW: &str = "attached deposit does not cover storage";
 pub const ERR_NO_POSITION: &str = "position not found";
 pub const ERR_NOT_OWNER: &str = "caller is not the owner";
 pub const ERR_NOT_KEEPER: &str = "caller is not the keeper";
-pub const ERR_NOT_KEEPER_OR_OWNER: &str = "caller is neither the keeper nor the owner";
 pub const ERR_GAS_TOO_LOW: &str = "not enough gas attached to reach the signer";
 
 /// What `on_signed` needs to know about the signature it is waiting for.
@@ -322,17 +321,10 @@ impl Levee {
         LeveeEvent::Resumed { id }.emit();
     }
 
-    /// Signs `USDC.approve(Pool, amount)` from the rescuer. An amount of zero revokes
-    /// the allowance, and an owner can do that while paused.
+    /// Signs `USDC.approve(Pool, amount)` from the rescuer. Owner only, so a stolen keeper
+    /// key cannot burn rescuer gas on approvals. An amount of zero revokes the allowance.
     pub fn prepare_allowance(&mut self, id: u64, amount: U128, fees: Fees) -> Promise {
-        let caller = env::predecessor_account_id();
-        let position = self.position(id);
-        let is_owner = caller == position.owner;
-        require!(
-            is_owner || caller == position.keeper,
-            ERR_NOT_KEEPER_OR_OWNER
-        );
-        require!(is_owner || !position.paused, policy::ERR_PAUSED);
+        let position = self.owned_position(id);
         require!(
             amount.0 <= policy::max_allowance(position),
             policy::ERR_OVER_MAX_ALLOWANCE

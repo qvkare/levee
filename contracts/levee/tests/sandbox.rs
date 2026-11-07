@@ -799,7 +799,7 @@ async fn a_paused_position_cannot_rescue() -> anyhow::Result<()> {
     let outcome = h.rescue(&h.keeper, id, 1, 0).transact().await?;
     assert_rejected(&outcome, "position is paused");
 
-    // The keeper cannot spend rescuer gas on approvals during a pause either.
+    // Approvals are owner only, so a keeper key cannot spend rescuer gas on them.
     let allowance = h
         .keeper
         .call(h.levee.id(), "prepare_allowance")
@@ -807,7 +807,7 @@ async fn a_paused_position_cannot_rescue() -> anyhow::Result<()> {
         .gas(CALL_GAS)
         .transact()
         .await?;
-    assert_rejected(&allowance, "position is paused");
+    assert_rejected(&allowance, "caller is not the owner");
 
     // The owner can still leave.
     let withdrawn = h
@@ -938,7 +938,7 @@ async fn fee_ceilings_hold_for_every_signing_method() -> anyhow::Result<()> {
             .await?;
         assert_rejected(&rescue, message);
         let allowance = h
-            .keeper
+            .owner
             .call(h.levee.id(), "prepare_allowance")
             .args_json(json!({ "id": id, "amount": "1", "fees": fees }))
             .gas(CALL_GAS)
@@ -1624,7 +1624,7 @@ async fn the_allowance_limit_is_thirty_days_of_budget() -> anyhow::Result<()> {
     let limit = 30 * CAPS.max_per_day;
 
     let over = h
-        .keeper
+        .owner
         .call(h.levee.id(), "prepare_allowance")
         .args_json(json!({ "id": id, "amount": (limit + 1).to_string(), "fees": fees(0) }))
         .gas(CALL_GAS)
@@ -1639,11 +1639,11 @@ async fn the_allowance_limit_is_thirty_days_of_budget() -> anyhow::Result<()> {
         .gas(CALL_GAS)
         .transact()
         .await?;
-    assert_rejected(&stranger, "caller is neither the keeper nor the owner");
+    assert_rejected(&stranger, "caller is not the owner");
 
     let at = h
         .signed(
-            h.keeper
+            h.owner
                 .call(h.levee.id(), "prepare_allowance")
                 .args_json(json!({ "id": id, "amount": limit.to_string(), "fees": fees(0) }))
                 .gas(CALL_GAS),

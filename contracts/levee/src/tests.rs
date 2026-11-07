@@ -1110,11 +1110,11 @@ mod allowance {
     const MAX: u128 = 30 * MAX_PER_DAY;
 
     #[test]
-    fn the_keeper_can_prepare_it() {
+    #[should_panic(expected = "caller is not the owner")]
+    fn the_keeper_cannot_prepare_it() {
         let (mut contract, id) = setup();
         act_as(KEEPER, NOON);
         let _ = contract.prepare_allowance(id, U128(MAX), fees());
-        assert_eq!(pending().kind, SignKind::Allowance);
     }
 
     #[test]
@@ -1126,7 +1126,7 @@ mod allowance {
     }
 
     #[test]
-    #[should_panic(expected = "caller is neither the keeper nor the owner")]
+    #[should_panic(expected = "caller is not the owner")]
     fn a_stranger_cannot() {
         let (mut contract, id) = setup();
         act_as(STRANGER, NOON);
@@ -1137,7 +1137,7 @@ mod allowance {
     #[should_panic(expected = "amount exceeds 30 times max_per_day")]
     fn one_over_the_limit_is_rejected() {
         let (mut contract, id) = setup();
-        act_as(KEEPER, NOON);
+        act_as(OWNER, NOON);
         let _ = contract.prepare_allowance(id, U128(MAX + 1), fees());
     }
 
@@ -1147,7 +1147,7 @@ mod allowance {
         let (mut contract, id) = setup();
         act_as(OWNER, NOON);
         contract.tighten(id, U128(MAX_PER_RESCUE), U128(10), COOLDOWN_SECS);
-        act_as(KEEPER, NOON);
+        act_as(OWNER, NOON);
         let _ = contract.prepare_allowance(id, U128(301), fees());
     }
 
@@ -1162,21 +1162,11 @@ mod allowance {
     #[test]
     fn it_only_ever_approves_the_pool_on_usdc() {
         let (mut contract, id) = setup();
-        act_as(KEEPER, NOON);
+        act_as(OWNER, NOON);
         let _ = contract.prepare_allowance(id, U128(5), fees());
         let chain = contract.get_chain(8453).unwrap();
         let expected = hex_of(&txs::approve_tx(&chain, 5, &fees()).unsigned_bytes());
         assert_eq!(pending().unsigned_tx, expected);
-    }
-
-    #[test]
-    #[should_panic(expected = "position is paused")]
-    fn a_keeper_cannot_while_paused() {
-        let (mut contract, id) = setup();
-        act_as(OWNER, NOON);
-        contract.pause(id);
-        act_as(KEEPER, NOON);
-        let _ = contract.prepare_allowance(id, U128(1), fees());
     }
 
     #[test]
@@ -1192,7 +1182,7 @@ mod allowance {
     #[should_panic(expected = "max_fee_per_gas exceeds the chain ceiling")]
     fn fee_ceilings_apply() {
         let (mut contract, id) = setup();
-        act_as(KEEPER, NOON);
+        act_as(OWNER, NOON);
         let mut high = fees();
         high.max_fee_per_gas = U128(MAX_FEE_CEILING + 1);
         let _ = contract.prepare_allowance(id, U128(1), high);
@@ -1201,7 +1191,7 @@ mod allowance {
     #[test]
     fn it_uses_no_daily_budget() {
         let (mut contract, id) = setup();
-        act_as(KEEPER, NOON);
+        act_as(OWNER, NOON);
         let _ = contract.prepare_allowance(id, U128(MAX), fees());
         assert_eq!(spent(&contract, id), 0);
     }
