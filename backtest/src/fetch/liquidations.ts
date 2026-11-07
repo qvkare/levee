@@ -1,6 +1,8 @@
 // Step 1: every LiquidationCall on the pinned Pools, inside the pinned block ranges.
 // Each chain is fetched from two independent providers and the sets are compared.
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { decodeEventLog, parseAbiItem } from 'viem';
 import { CHAINS, type ChainKey } from '../config.ts';
 import { DERIVED_DIR, writeJson } from '../paths.ts';
@@ -29,7 +31,7 @@ export interface Liquidation {
   receiveAToken: boolean;
 }
 
-export const LIQUIDATIONS_FILE = join(DERIVED_DIR, 'liquidations.json');
+export const LIQUIDATIONS_FILE = join(DERIVED_DIR, 'liquidations.json.gz');
 export const LIQUIDATIONS_PROVENANCE_FILE = join(DERIVED_DIR, 'liquidations.provenance.json');
 
 const logKey = (log: Pick<RawLog, 'transactionHash' | 'logIndex'>): string => `${log.transactionHash}:${parseInt(log.logIndex, 16)}`;
@@ -55,6 +57,10 @@ function decode(chain: ChainKey, window: string, log: RawLog): Liquidation {
     liquidator: args.liquidator.toLowerCase(),
     receiveAToken: args.receiveAToken,
   };
+}
+
+export function readLiquidations(): Liquidation[] {
+  return JSON.parse(gunzipSync(readFileSync(LIQUIDATIONS_FILE)).toString('utf8')) as Liquidation[];
 }
 
 export async function fetchLiquidations(): Promise<Liquidation[]> {
@@ -96,7 +102,7 @@ export async function fetchLiquidations(): Promise<Liquidation[]> {
     for (const log of union.values()) all.push(decode(chain.key, range.window, log));
   }
   all.sort((a, b) => a.chain.localeCompare(b.chain) || a.block - b.block || a.logIndex - b.logIndex);
-  writeJson(LIQUIDATIONS_FILE, all, false);
+  writeFileSync(LIQUIDATIONS_FILE, gzipSync(JSON.stringify(all), { level: 9 }));
   writeJson(LIQUIDATIONS_PROVENANCE_FILE, provenance);
   return all;
 }

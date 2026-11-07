@@ -1,12 +1,10 @@
 // Raw reads to compact committed files, and the measured error of the frozen-portfolio
 // method. Reads data/raw only; no network.
-import { gzipSync } from 'node:zlib';
-import { writeFileSync, readFileSync } from 'node:fs';
 import type { ChainKey } from './config.ts';
 import { CHAINS } from './config.ts';
 import { VALIDATION_FILE, writePositions, type CompactPoint, type DerivedEvent, type DerivedPosition } from './data.ts';
 import { BLOCKS_FILE, type BlockRange } from './fetch/blocks.ts';
-import { LIQUIDATIONS_FILE, type Liquidation } from './fetch/liquidations.ts';
+import type { Liquidation } from './fetch/liquidations.ts';
 import { readOracleUpdates } from './fetch/oracle.ts';
 import { FINE_CEILING, readPaths, sortedUsers, type Sample } from './fetch/paths.ts';
 import { loadPositions, type PositionKey } from './fetch/positions.ts';
@@ -305,7 +303,6 @@ export async function derive(): Promise<void> {
       bonusRatioError: summarize(pooled.bonus),
     },
   });
-  writeFileSync(`${LIQUIDATIONS_FILE}.gz`, gzipSync(readFileSync(LIQUIDATIONS_FILE), { level: 9 }));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) await derive();

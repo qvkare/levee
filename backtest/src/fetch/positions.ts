@@ -1,8 +1,7 @@
 // A position is one user on one chain in one window. Its race is against the first
 // LiquidationCall it took in that window.
 import type { ChainKey } from '../config.ts';
-import { readJson } from '../paths.ts';
-import { LIQUIDATIONS_FILE, type Liquidation } from './liquidations.ts';
+import { readLiquidations, type Liquidation } from './liquidations.ts';
 
 export interface PositionKey {
   chain: ChainKey;
@@ -13,7 +12,7 @@ export interface PositionKey {
 }
 
 export function loadPositions(): PositionKey[] {
-  const events = readJson<Liquidation[]>(LIQUIDATIONS_FILE);
+  const events = readLiquidations();
   const positions = new Map<string, PositionKey>();
   for (const event of events) {
     const key = `${event.chain}:${event.window}:${event.user}`;
