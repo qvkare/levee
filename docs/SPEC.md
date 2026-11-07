@@ -26,6 +26,8 @@ Out of scope: TEEs, an LLM in the money path, pooling user funds, a token, tradi
 
 The worst a stolen keeper key can do is repay the borrower's debt early, burn rescuer gas up to the fee ceiling, or burn the daily budget.
 
+Caps bound signing, not landing. A signature already issued stays valid until its nonce is used, and pausing stops only new signatures. Such a signature can still only repay the registered borrower's debt, and it was already charged to the budget. An owner can burn it by landing any transaction at that nonce, for example `withdraw_float`.
+
 The contract cannot read the lending chain, so it does not know the health factor. The trigger is kept by the keeper, off chain. Caps bound what any trigger can do.
 
 ## 3. Chain facts
@@ -117,7 +119,7 @@ EVM addresses are `0x` followed by exactly 40 hex characters, and are stored low
 | `tighten(id, max_per_rescue, max_per_day, cooldown_secs)` | owner | Immediate. Each value may only get stricter or stay the same. Cancels any queued loosening |
 | `queue_loosen(id, max_per_rescue, max_per_day, cooldown_secs)`, `apply_loosen(id)` | owner | Loosening takes effect after 24 hours. Each value may only get looser or stay the same, and at least one must change. Queueing again replaces the queue and restarts the delay |
 | `pause(id)`, `resume(id)` | owner | A paused position cannot rescue |
-| `prepare_allowance(id, amount, fees)` | keeper or owner | Signs `USDC.approve(Pool, amount)` from the rescuer. `amount` is at most `30 * max_per_day`, and zero revokes. A paused position refuses the keeper but not the owner, who may need to revoke |
+| `prepare_allowance(id, amount, fees)` | owner | Signs `USDC.approve(Pool, amount)` from the rescuer. `amount` is at most `30 * max_per_day`, and zero revokes. Owner only, so a stolen keeper key cannot burn rescuer gas on approvals |
 | `rescue(id, amount, fees)` | keeper | Signs `Pool.repay(USDC, amount, 2, borrower)`. See below |
 | `withdraw_float(id, amount, fees)` | owner | Signs `USDC.transfer(borrower, amount)`. The destination is fixed. Works while paused, so an owner can always leave |
 | `sweep_gas(id, amount_wei, fees)` | owner | Signs a value transfer to `borrower`, with `gas_limit_transfer`. A flat 21000 would not do: on Arbitrum the gas limit has to cover L1 data cost. Works while paused. An amount of zero can replace a stuck nonce |
