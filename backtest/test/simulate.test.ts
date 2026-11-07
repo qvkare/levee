@@ -88,6 +88,18 @@ describe('misses', () => {
     assert.equal(outcome.repaid, 0);
   });
 
+  it('treats the real liquidation as fact when nothing landed first', () => {
+    // Frozen numbers put HF at 1.02 on the liquidation block, for example through same-block
+    // price ordering. No repay landed, so the position is the real one, which was liquidated.
+    const noisy: PositionPath = {
+      ...path,
+      points: points.map((p) => (p.block >= 6 ? { ...p, capacity: 6120 } : p)),
+    };
+    const outcome = simulate(noisy, { ...params, delaySec: 120 });
+    assert.equal(outcome.saved, false);
+    assert.equal(outcome.reason, 'too_slow');
+  });
+
   it('wins by one second less', () => {
     assert.equal(simulate(path, { ...params, delaySec: 119 }).saved, true);
   });

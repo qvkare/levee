@@ -117,7 +117,9 @@ export function simulate(path: PositionPath, params: Params): Outcome {
 
     if (atOrAfterLiquidation) {
       minHf = Math.min(minHf, hf);
-      if (hf < 1) {
+      // With nothing landed the position is the real one, and the real one was liquidated,
+      // whatever the frozen numbers say about that block.
+      if (hf < 1 || landed === 0) {
         failedAt = point;
         break;
       }
