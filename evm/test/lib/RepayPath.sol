@@ -156,7 +156,7 @@ abstract contract RepayPath is AaveFork {
         uint256 debtBefore = vDebtUsdc.balanceOf(borrower);
 
         vm.prank(rescuer);
-        vm.expectRevert();
+        vm.expectRevert(bytes("ERC20: transfer amount exceeds allowance"));
         pool.repay(address(usdc), REPAY, VARIABLE_RATE, borrower);
 
         assertEq(usdc.balanceOf(rescuer), REPAY, "funds moved on a reverted repay");
