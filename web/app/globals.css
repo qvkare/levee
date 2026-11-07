@@ -977,6 +977,49 @@ html:has([data-crisis="on"]) .head::before {
   color: var(--ink-2);
 }
 
+/* A live dry quote under a step. Four figures on one rule, like a row of the crisis page at text size. */
+.quote {
+  max-width: 40em;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1.5px solid var(--ink);
+}
+
+.quote > p {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.quote > p b {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.quote .quote-state {
+  margin-top: 8px;
+  font-size: 16.5px;
+  color: var(--ink);
+}
+
+.quote dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 36px;
+  margin-top: 10px;
+}
+
+.quote dt {
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.quote dd {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 500;
+  letter-spacing: -0.028em;
+}
+
 .formula {
   margin-top: 16px;
   font-size: 22px;

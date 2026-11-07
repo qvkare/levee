@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MeasuredTable } from "@/components/measured-table.tsx";
+import { RouteQuotePanel } from "@/components/route-quote.tsx";
 import { SiteHeader } from "@/components/site-header.tsx";
 import { TextTable, type Column } from "@/components/text-table.tsx";
 import { latencyTable, readRuns, tally } from "@/lib/evidence.ts";
@@ -20,6 +21,8 @@ interface Step {
   body: string;
   who: string;
   where: string;
+  /** A live dry quote for the reserve's route sits under this step. */
+  quote?: boolean;
 }
 
 const STEPS: Step[] = [
@@ -30,6 +33,13 @@ const STEPS: Step[] = [
   { title: "The MPC network signs", body: "The contract asks v1.signer to sign for the rescuer address derived for your position.", who: "MPC network", where: "NEAR" },
   { title: "The repay lands", body: "The keeper checks the recovered address and broadcasts. Aave applies the USDC to your debt. Your collateral stays where it is.", who: "Keeper, Aave Pool", where: "Base or Arbitrum" },
   { title: "The run is recorded", body: "The keeper reads health factor again and writes a record to evidence, whether the run worked or not.", who: "Keeper", where: "Evidence" },
+  {
+    title: "The reserve refills the rescuer",
+    body: "Not built yet. In the Reserve phase, USDC held off the lending chain goes back to the rescuer address through NEAR Intents, to pinned destinations only. It needs partner access. Until then the rescuer holds the USDC it repays with.",
+    who: "Reserve, NEAR Intents",
+    where: "To Base or Arbitrum",
+    quote: true,
+  },
 ];
 
 interface Actor {
@@ -177,7 +187,7 @@ export default function HowPage() {
           </p>
         </div>
 
-        <ol className="steps" aria-label="How a rescue runs, in order">
+        <ol className="steps" role="list" aria-label="How a rescue runs, in order">
           {STEPS.map((step, index) => (
             <li key={step.title} className="step">
               <p className="step-who">
@@ -188,6 +198,7 @@ export default function HowPage() {
                 <div>
                   <h3>{step.title}</h3>
                   <p>{step.body}</p>
+                  {step.quote && <RouteQuotePanel from="arbitrum" to="base" amount={20} />}
                 </div>
               </div>
             </li>

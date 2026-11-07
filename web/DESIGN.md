@@ -112,6 +112,7 @@ The first screen is one colour. Crisis red is a state of the page, set by `data-
 | Built | The home page's HTML. Replaced by a live read on load |
 | Example | The read failed: the earlier reading stays, and the line says `Example, not live` and why |
 | Simulation | `?fall=` on a report, or the simulator. Bold `Simulation.` and what was changed |
+| Dry quote | `/how`, under the refill step: a live NEAR Intents quote asked from the browser. Bold `Dry quote.`, that nothing moves and the reserve layer is not built, then amount out, time estimate, confidential or not, and the quote time. If the route fails it says the route is unavailable |
 | Last 5% | Red page, number fills the screen, two lines for the rest |
 | Cannot repay | Outline, ink band, struck repay, `What Levee does with the first row: nothing.` |
 | Not covered | Outline and `Not covered` beside the number and in the table |

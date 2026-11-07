@@ -28,7 +28,7 @@ Use `run` for `deploy`: `pnpm deploy` without it is a pnpm command of its own.
 |---|---|
 | `/` | The wall for one public address, read live in the browser over a reading from the build. Then what Levee does with the first row, the backtest by reserve size, the position simulator and a few public addresses. Prerendered |
 | `/a/[address]` | The wall for any address, then every figure in the same order, rendered in full on the server and read again in the browser every minute. `?target=1.75` sets the repay target. `?fall=11.1` marks the nearest Aave position's collateral down by that percentage and says it is a simulation |
-| `/how` | A rescue in seven numbered steps, the trust table, what a stolen key cannot do, failure conditions, the measured hops, limits, how to read the wall, and the API shape. Prerendered |
+| `/how` | A rescue in numbered steps, with a live dry quote from `/api/route` under the step where the reserve refills the rescuer, the trust table, what a stolen key cannot do, failure conditions, the measured hops, limits, how to read the wall, and the API shape. Prerendered |
 | `/proof` | Every file in `../evidence/runs`, failures included, with explorer links and p50 and p95 per hop. The signing test, the fork rehearsal under its own label, and the backtest with its misses and limits. Prerendered |
 
 The last 5% turns the page red: a reading or a simulation with a position inside it. The home page passes over a third party's address in that state, because the red page is for an address someone asked about.
