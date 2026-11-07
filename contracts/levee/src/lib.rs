@@ -56,6 +56,7 @@ pub const ERR_DEPOSIT_TOO_LOW: &str = "attached deposit does not cover storage";
 pub const ERR_NO_POSITION: &str = "position not found";
 pub const ERR_NOT_OWNER: &str = "caller is not the owner";
 pub const ERR_NOT_KEEPER: &str = "caller is not the keeper";
+pub const ERR_NOT_KEEPER_OR_OWNER: &str = "caller is neither the keeper nor the owner";
 pub const ERR_GAS_TOO_LOW: &str = "not enough gas attached to reach the signer";
 
 /// What `on_signed` needs to know about the signature it is waiting for.
@@ -306,6 +307,27 @@ impl Levee {
         LeveeEvent::Resumed { id }.emit();
     }
 
+    /// Signs `USDC.approve(Pool, amount)` from the rescuer. An amount of zero revokes
+    /// the allowance, and an owner can do that while paused.
+    pub fn prepare_allowance(&mut self, id: u64, amount: U128, fees: Fees) -> Promise {
+        let caller = env::predecessor_account_id();
+        let position = self.position(id);
+        let is_owner = caller == position.owner;
+        require!(
+            is_owner || caller == position.keeper,
+            ERR_NOT_KEEPER_OR_OWNER
+        );
+        require!(is_owner || !position.paused, policy::ERR_PAUSED);
+        require!(
+            amount.0 <= policy::max_allowance(position),
+            policy::ERR_OVER_MAX_ALLOWANCE
+        );
+        let chain = self.chain(position);
+        or_panic(policy::check_fees(chain, &fees));
+        let tx = txs::approve_tx(chain, amount.0, &fees);
+        self.request_signature(SignKind::Allowance, id, &tx, None)
+    }
+
     /// Signs `Pool.repay(USDC, amount, 2, borrower)` within the position's caps.
     pub fn rescue(&mut self, id: u64, amount: U128, fees: Fees) -> Promise {
         let position = self.position(id);
@@ -338,6 +360,24 @@ impl Levee {
         }
         .emit();
         promise
+    }
+
+    /// Signs `USDC.transfer(borrower, amount)`. The destination is fixed.
+    pub fn withdraw_float(&mut self, id: u64, amount: U128, fees: Fees) -> Promise {
+        let position = self.owned_position(id);
+        let chain = self.chain(position);
+        or_panic(policy::check_fees(chain, &fees));
+        let tx = txs::transfer_tx(chain, position, amount.0, &fees);
+        self.request_signature(SignKind::WithdrawFloat, id, &tx, None)
+    }
+
+    /// Signs a value transfer to the borrower. The destination is fixed.
+    pub fn sweep_gas(&mut self, id: u64, amount_wei: U128, fees: Fees) -> Promise {
+        let position = self.owned_position(id);
+        let chain = self.chain(position);
+        or_panic(policy::check_fees(chain, &fees));
+        let tx = txs::sweep_tx(chain, position, amount_wei.0, &fees);
+        self.request_signature(SignKind::SweepGas, id, &tx, None)
     }
 
     /// Receives the MPC result, and returns everything needed to broadcast, or `null`
@@ -434,6 +474,12 @@ impl Levee {
         self.positions
             .get(&id)
             .unwrap_or_else(|| env::panic_str(ERR_NO_POSITION))
+    }
+
+    fn owned_position(&self, id: u64) -> &Position {
+        let position = self.position(id);
+        require!(env::predecessor_account_id() == position.owner, ERR_NOT_OWNER);
+        position
     }
 
     fn owned_position_mut(&mut self, id: u64) -> &mut Position {

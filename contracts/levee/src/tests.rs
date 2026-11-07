@@ -10,7 +10,7 @@ use near_sdk::{test_vm_config, testing_env, NearToken, PromiseResult, RuntimeFee
 use super::*;
 use crate::policy::{
     ERR_COOLDOWN, ERR_LOOSEN_NOT_READY, ERR_MAX_FEE_CEILING, ERR_NO_PENDING_LOOSEN,
-    ERR_OVER_DAILY_BUDGET, ERR_OVER_MAX_PER_RESCUE, ERR_PAUSED,
+    ERR_OVER_DAILY_BUDGET, ERR_OVER_MAX_ALLOWANCE, ERR_OVER_MAX_PER_RESCUE, ERR_PAUSED,
     ERR_PRIORITY_FEE_CEILING, ERR_PRIORITY_OVER_MAX_FEE, ERR_TIGHTEN_COOLDOWN,
     ERR_TIGHTEN_MAX_PER_DAY, ERR_TIGHTEN_MAX_PER_RESCUE, ERR_ZERO_AMOUNT, NANOS_PER_DAY,
     NANOS_PER_SEC,
@@ -572,6 +572,22 @@ mod owner_only {
         act_as(KEEPER, NOON);
         contract.resume(id);
     }
+
+    #[test]
+    #[should_panic(expected = "caller is not the owner")]
+    fn withdraw_float() {
+        let (mut contract, id) = setup();
+        act_as(KEEPER, NOON);
+        let _ = contract.withdraw_float(id, U128(1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "caller is not the owner")]
+    fn sweep_gas() {
+        let (mut contract, id) = setup();
+        act_as(KEEPER, NOON);
+        let _ = contract.sweep_gas(id, U128(1), fees());
+    }
 }
 
 mod unknown_position {
@@ -791,6 +807,7 @@ mod rescue_rules {
             ERR_PRIORITY_FEE_CEILING,
             "max_priority_fee_per_gas exceeds the chain ceiling"
         );
+        assert_eq!(ERR_OVER_MAX_ALLOWANCE, "amount exceeds 30 times max_per_day");
     }
 }
 
@@ -912,6 +929,14 @@ mod signing {
         let short = Gas::from_gas(MIN_SIGNING_GAS.as_gas() - 1);
         testing_env!(context(KEEPER, NOON).prepaid_gas(short).build());
         let _ = contract.rescue(id, U128(1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "not enough gas attached to reach the signer")]
+    fn every_signing_method_checks_gas() {
+        let (mut contract, id) = setup();
+        testing_env!(context(OWNER, NOON).prepaid_gas(Gas::from_tgas(1)).build());
+        let _ = contract.withdraw_float(id, U128(1), fees());
     }
 }
 
@@ -1056,6 +1081,243 @@ mod callback {
         assert_eq!(result, None);
         assert_eq!(spent(&contract, id), 40);
         assert_eq!(last_event()["data"]["reason"], "malformed_response");
+    }
+
+    fn sign_kind(contract: &mut Levee, id: u64, kind: SignKind) -> PendingSignature {
+        act_as(OWNER, NOON);
+        let _ = match kind {
+            SignKind::Allowance => contract.prepare_allowance(id, U128(1), fees()),
+            SignKind::WithdrawFloat => contract.withdraw_float(id, U128(1), fees()),
+            SignKind::SweepGas => contract.sweep_gas(id, U128(1), fees()),
+            SignKind::Rescue => unreachable!(),
+        };
+        pending()
+    }
+
+    #[test]
+    fn each_kind_logs_its_own_event() {
+        let (mut contract, id) = setup();
+        for (kind, event) in [
+            (SignKind::Allowance, "allowance_signed"),
+            (SignKind::WithdrawFloat, "float_withdrawn"),
+            (SignKind::SweepGas, "gas_swept"),
+        ] {
+            let pending = sign_kind(&mut contract, id, kind);
+            assert_eq!(pending.kind, kind);
+            let signed = deliver(
+                &mut contract,
+                pending,
+                PromiseResult::Successful(real_signature()),
+                NOON,
+            )
+            .unwrap();
+            assert_eq!(signed.kind, kind);
+            assert_eq!(last_event()["event"], event);
+        }
+    }
+
+    #[test]
+    fn other_kinds_hold_no_budget_and_log_sign_failed() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, 40, NOON);
+        for kind in [
+            SignKind::Allowance,
+            SignKind::WithdrawFloat,
+            SignKind::SweepGas,
+        ] {
+            let pending = sign_kind(&mut contract, id, kind);
+            assert_eq!(pending.reservation, None);
+            assert_eq!(
+                deliver(&mut contract, pending, PromiseResult::Failed, NOON),
+                None
+            );
+            let event = last_event();
+            assert_eq!(event["event"], "sign_failed");
+            assert_eq!(event["data"]["released"], "0");
+            assert_eq!(spent(&contract, id), 40);
+        }
+    }
+}
+
+mod allowance {
+    use super::*;
+
+    const MAX: u128 = 30 * MAX_PER_DAY;
+
+    #[test]
+    fn the_keeper_can_prepare_it() {
+        let (mut contract, id) = setup();
+        act_as(KEEPER, NOON);
+        let _ = contract.prepare_allowance(id, U128(MAX), fees());
+        assert_eq!(pending().kind, SignKind::Allowance);
+    }
+
+    #[test]
+    fn the_owner_can_prepare_it() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        let _ = contract.prepare_allowance(id, U128(MAX), fees());
+        assert_eq!(pending().kind, SignKind::Allowance);
+    }
+
+    #[test]
+    #[should_panic(expected = "caller is neither the keeper nor the owner")]
+    fn a_stranger_cannot() {
+        let (mut contract, id) = setup();
+        act_as(STRANGER, NOON);
+        let _ = contract.prepare_allowance(id, U128(1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "amount exceeds 30 times max_per_day")]
+    fn one_over_the_limit_is_rejected() {
+        let (mut contract, id) = setup();
+        act_as(KEEPER, NOON);
+        let _ = contract.prepare_allowance(id, U128(MAX + 1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "amount exceeds 30 times max_per_day")]
+    fn the_limit_follows_a_tightened_budget() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        contract.tighten(id, U128(MAX_PER_RESCUE), U128(10), COOLDOWN_SECS);
+        act_as(KEEPER, NOON);
+        let _ = contract.prepare_allowance(id, U128(301), fees());
+    }
+
+    #[test]
+    fn zero_revokes_the_allowance() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        let _ = contract.prepare_allowance(id, U128(0), fees());
+        assert_eq!(pending().kind, SignKind::Allowance);
+    }
+
+    #[test]
+    fn it_only_ever_approves_the_pool_on_usdc() {
+        let (mut contract, id) = setup();
+        act_as(KEEPER, NOON);
+        let _ = contract.prepare_allowance(id, U128(5), fees());
+        let chain = contract.get_chain(8453).unwrap();
+        let expected = hex_of(&txs::approve_tx(&chain, 5, &fees()).unsigned_bytes());
+        assert_eq!(pending().unsigned_tx, expected);
+    }
+
+    #[test]
+    #[should_panic(expected = "position is paused")]
+    fn a_keeper_cannot_while_paused() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        contract.pause(id);
+        act_as(KEEPER, NOON);
+        let _ = contract.prepare_allowance(id, U128(1), fees());
+    }
+
+    #[test]
+    fn an_owner_can_revoke_while_paused() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        contract.pause(id);
+        let _ = contract.prepare_allowance(id, U128(0), fees());
+        assert_eq!(pending().kind, SignKind::Allowance);
+    }
+
+    #[test]
+    #[should_panic(expected = "max_fee_per_gas exceeds the chain ceiling")]
+    fn fee_ceilings_apply() {
+        let (mut contract, id) = setup();
+        act_as(KEEPER, NOON);
+        let mut high = fees();
+        high.max_fee_per_gas = U128(MAX_FEE_CEILING + 1);
+        let _ = contract.prepare_allowance(id, U128(1), high);
+    }
+
+    #[test]
+    fn it_uses_no_daily_budget() {
+        let (mut contract, id) = setup();
+        act_as(KEEPER, NOON);
+        let _ = contract.prepare_allowance(id, U128(MAX), fees());
+        assert_eq!(spent(&contract, id), 0);
+    }
+}
+
+mod exits {
+    use super::*;
+
+    #[test]
+    fn withdraw_float_only_ever_pays_the_borrower() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        let _ = contract.withdraw_float(id, U128(9), fees());
+        let chain = contract.get_chain(8453).unwrap();
+        let position = contract.get_position(id).unwrap();
+        let expected = hex_of(&txs::transfer_tx(&chain, &position, 9, &fees()).unsigned_bytes());
+        let pending = pending();
+        assert_eq!(pending.unsigned_tx, expected);
+        assert_eq!(pending.kind, SignKind::WithdrawFloat);
+    }
+
+    #[test]
+    fn sweep_gas_only_ever_pays_the_borrower() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        let _ = contract.sweep_gas(id, U128(9), fees());
+        let chain = contract.get_chain(8453).unwrap();
+        let position = contract.get_position(id).unwrap();
+        let expected = hex_of(&txs::sweep_tx(&chain, &position, 9, &fees()).unsigned_bytes());
+        let pending = pending();
+        assert_eq!(pending.unsigned_tx, expected);
+        assert_eq!(pending.kind, SignKind::SweepGas);
+    }
+
+    #[test]
+    fn both_work_while_paused_so_an_owner_can_always_leave() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        contract.pause(id);
+        let _ = contract.withdraw_float(id, U128(1), fees());
+        assert_eq!(pending().kind, SignKind::WithdrawFloat);
+        act_as(OWNER, NOON);
+        let _ = contract.sweep_gas(id, U128(1), fees());
+        assert_eq!(pending().kind, SignKind::SweepGas);
+    }
+
+    #[test]
+    fn a_zero_sweep_can_replace_a_stuck_nonce() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        let _ = contract.sweep_gas(id, U128(0), fees());
+        assert_eq!(pending().kind, SignKind::SweepGas);
+    }
+
+    #[test]
+    #[should_panic(expected = "max_fee_per_gas exceeds the chain ceiling")]
+    fn withdraw_float_respects_fee_ceilings() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        let mut high = fees();
+        high.max_fee_per_gas = U128(MAX_FEE_CEILING + 1);
+        let _ = contract.withdraw_float(id, U128(1), high);
+    }
+
+    #[test]
+    #[should_panic(expected = "max_priority_fee_per_gas exceeds the chain ceiling")]
+    fn sweep_gas_respects_fee_ceilings() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        let mut high = fees();
+        high.max_priority_fee_per_gas = U128(PRIORITY_CEILING + 1);
+        let _ = contract.sweep_gas(id, U128(1), high);
+    }
+
+    #[test]
+    fn neither_touches_the_daily_budget() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        let _ = contract.withdraw_float(id, U128(1_000_000), fees());
+        let _ = contract.sweep_gas(id, U128(1_000_000), fees());
+        assert_eq!(spent(&contract, id), 0);
     }
 }
 

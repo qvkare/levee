@@ -108,13 +108,13 @@ EVM addresses are `0x` followed by exactly 40 hex characters, and are stored low
 | `tighten(id, max_per_rescue, max_per_day, cooldown_secs)` | owner | Immediate. Each value may only get stricter or stay the same. Cancels any queued loosening |
 | `queue_loosen(id, max_per_rescue, max_per_day, cooldown_secs)`, `apply_loosen(id)` | owner | Loosening takes effect after 24 hours. Each value may only get looser or stay the same, and at least one must change. Queueing again replaces the queue and restarts the delay |
 | `pause(id)`, `resume(id)` | owner | A paused position cannot rescue |
-| `prepare_allowance(id, amount, fees)` | keeper or owner | Signs `USDC.approve(Pool, amount)` from the rescuer. `amount` is at most `30 * max_per_day` |
+| `prepare_allowance(id, amount, fees)` | keeper or owner | Signs `USDC.approve(Pool, amount)` from the rescuer. `amount` is at most `30 * max_per_day`, and zero revokes. A paused position refuses the keeper but not the owner, who may need to revoke |
 | `rescue(id, amount, fees)` | keeper | Signs `Pool.repay(USDC, amount, 2, borrower)`. See below |
-| `withdraw_float(id, amount, fees)` | owner | Signs `USDC.transfer(borrower, amount)`. The destination is fixed |
-| `sweep_gas(id, amount_wei, fees)` | owner | Signs a value transfer to `borrower`, with `gas_limit_transfer`. A flat 21000 would not do: on Arbitrum the gas limit has to cover L1 data cost |
+| `withdraw_float(id, amount, fees)` | owner | Signs `USDC.transfer(borrower, amount)`. The destination is fixed. Works while paused, so an owner can always leave |
+| `sweep_gas(id, amount_wei, fees)` | owner | Signs a value transfer to `borrower`, with `gas_limit_transfer`. A flat 21000 would not do: on Arbitrum the gas limit has to cover L1 data cost. Works while paused. An amount of zero can replace a stuck nonce |
 | `get_position(id)`, `rescuer_path(id)`, `preview_rescue(id, amount, fees)`, `get_chain(chain_id)`, `get_mpc_contract()` | view | `get_position` reports the current UTC day: `spent_today` reads 0 if the stored bucket is from an earlier day. `preview_rescue` returns the unsigned tx hex and hash, and fails as `rescue` would under rules 2 to 6. A view has no caller, so it cannot check rule 1. `get_chain` and `get_mpc_contract` let anyone audit the immutable config |
 
-`fees` is `{ nonce: u64, max_fee_per_gas: U128, max_priority_fee_per_gas: U128 }`.
+`fees` is `{ nonce: u64, max_fee_per_gas: U128, max_priority_fee_per_gas: U128 }`. Rule 6 below applies to every method that signs, not only `rescue`, or a stolen keeper key could burn rescuer gas above the ceiling through `prepare_allowance`.
 
 ### `rescue` rules
 
