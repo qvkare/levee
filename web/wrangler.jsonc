@@ -14,6 +14,8 @@
     // OpenNext calls back into its own Worker. The service name must match the Worker name.
     { "binding": "WORKER_SELF_REFERENCE", "service": "levee" }
   ],
+  // Reads per address per minute. Free on every plan. Counted per Cloudflare location, so it slows a burst and is not an exact quota.
+  "ratelimits": [{ "name": "RISK_LIMIT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }],
   "workers_dev": false,
   "routes": [{ "pattern": "levee.qvkare.com", "custom_domain": true }]
 }
