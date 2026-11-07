@@ -87,7 +87,7 @@ function missTable(cell: Cell): string {
     ['Outcome', 'Positions', 'Share', 'Meaning'],
     [
       row('saved', cell.reasons.saved, 'Repay landed first, and HF stayed at or above 1 to the end of the window'),
-      row('no_warning', cell.reasons.no_warning, 'HF never showed below T in any observation before the liquidation block'),
+      row('no_warning', cell.reasons.no_warning, 'No observation showed HF below T before the liquidation block'),
       row('too_slow', cell.reasons.too_slow, 'HF crossed T, but a liquidator won the race'),
       row('reserve_empty', cell.reasons.reserve_empty, 'Repays landed, the reserve ran out, and HF still fell below 1'),
       row('usdc_debt_exhausted', cell.reasons.usdc_debt_exhausted, 'Repays landed, all USDC debt was gone, and HF still fell below 1'),

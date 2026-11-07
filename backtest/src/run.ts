@@ -56,7 +56,7 @@ function validationRows(file: ValidationFile, provenance: ProvenanceRow[], cross
   });
   rows.push({
     check: 'Same check over the last two hours, worst point per position',
-    result: `median ${percent(p.frozenVsDirectRunUpWorstPerPosition['median'])}, p95 ${percent(p.frozenVsDirectRunUpWorstPerPosition['p95'])}, ${percent(p.runUpWithin0_5Pct, 1)} of positions within 0.5%. Larger gaps are mostly borrowers acting in the run-up`,
+    result: `median ${percent(p.frozenVsDirectRunUpWorstPerPosition['median'])}, p95 ${percent(p.frozenVsDirectRunUpWorstPerPosition['p95'])}, ${percent(p.runUpWithin0_5Pct, 1)} of positions within 0.5%. A larger gap means the portfolio changed in the run-up`,
   });
   rows.push({
     check: 'Frozen HF below 1 at the liquidation block (Aave requires it)',
