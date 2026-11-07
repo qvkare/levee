@@ -85,6 +85,14 @@ pub struct Position {
     pub spent_today: U128,
     pub day: u64,
     pub last_rescue_at: u64,              // nanoseconds
+    pub pending_loosen: Option<PendingLoosen>,
+}
+
+pub struct PendingLoosen {
+    pub max_per_rescue: U128,
+    pub max_per_day: U128,
+    pub cooldown_secs: u32,
+    pub ready_at: u64,                    // nanoseconds
 }
 ```
 
@@ -97,8 +105,8 @@ EVM addresses are `0x` followed by exactly 40 hex characters, and are stored low
 | `new(mpc_contract, chains)` | init | Stores immutable config. Rejects duplicate chain ids |
 | `register(chain_id, borrower, keeper, max_per_rescue, max_per_day, cooldown_secs) -> u64` | anyone, payable | Creates a position owned by the caller. Attached deposit covers storage |
 | `set_keeper(id, keeper)` | owner | Replaces the keeper |
-| `tighten(id, max_per_rescue, max_per_day, cooldown_secs)` | owner | Immediate. Each value may only get stricter |
-| `queue_loosen(id, ...)`, `apply_loosen(id)` | owner | Loosening takes effect after 24 hours |
+| `tighten(id, max_per_rescue, max_per_day, cooldown_secs)` | owner | Immediate. Each value may only get stricter or stay the same. Cancels any queued loosening |
+| `queue_loosen(id, max_per_rescue, max_per_day, cooldown_secs)`, `apply_loosen(id)` | owner | Loosening takes effect after 24 hours. Each value may only get looser or stay the same, and at least one must change. Queueing again replaces the queue and restarts the delay |
 | `pause(id)`, `resume(id)` | owner | A paused position cannot rescue |
 | `prepare_allowance(id, amount, fees)` | keeper or owner | Signs `USDC.approve(Pool, amount)` from the rescuer. `amount` is at most `30 * max_per_day` |
 | `rescue(id, amount, fees)` | keeper | Signs `Pool.repay(USDC, amount, 2, borrower)`. See below |
@@ -117,13 +125,19 @@ Reject unless all of these hold:
 3. `0 < amount <= max_per_rescue`.
 4. `spent_today + amount <= max_per_day`, using a UTC day bucket from `env::block_timestamp`.
 5. `now - last_rescue_at >= cooldown_secs`.
-6. Both fee values are at or below the chain's ceilings.
+6. Both fee values are at or below the chain's ceilings, and the priority fee is at or below the max fee. A transaction that breaks the last part can never be included, so signing it would only burn budget.
 
 The contract then builds an EIP-1559 transaction itself: chain id, nonce, fees, gas limit, `to = Pool`, value 0, the `repay` calldata and an empty access list. It hashes `keccak256(0x02 || rlp(fields))` and calls MPC with path `rescuer_path(id)`.
 
 The keeper never supplies calldata, a target or a payload. It supplies only the position id, the amount and `fees`. The EVM nonce is not tracked on chain because the contract cannot see Base. A wrong nonce wastes budget but cannot move value anywhere else.
 
-The budget is reserved before the MPC call and released if the MPC call fails.
+The budget and the cooldown slot are reserved before the MPC call and released if the MPC call fails, so a keeper can retry straight after an MPC failure. A release only gives back what the reservation still holds: a charge to an earlier UTC day is not taken off the current day, and a cooldown taken by a later rescue stays.
+
+A timed-out MPC request does not prove that no signature exists, since a node's late `respond` is public. The release assumes none will be used. The exposure is bounded: such a signature can only repay the borrower's debt from the rescuer.
+
+### Loosening
+
+A tighten cancels a queued loosening. Otherwise a loosening queued before the tighten could undo it in less than 24 hours. For the same reason, queueing again restarts the delay. A tighten with unchanged values is how an owner cancels a queued loosening.
 
 The callback returns `{ kind, id, unsigned_tx, tx_hash, big_r, s, recovery_id }`, and logs the same as an event, so anyone can assemble and broadcast the signed transaction.
 
