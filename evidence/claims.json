@@ -87,6 +87,16 @@
         "path": "keeper/test/e2e.fork.test.ts",
         "name": "records a real revert on the fork, with the hash and block"
       }
+    },
+    {
+      "id": "live-rescue-base-sepolia",
+      "claim": "A keeper holding a rescue-only key repaid real Aave debt on Base Sepolia through the Levee contract on NEAR testnet and Chain Signatures.",
+      "run": "2026-11-07T19-23-34Z-base-sepolia-1"
+    },
+    {
+      "id": "live-rescue-from-the-loop",
+      "claim": "The keeper loop detected a health factor below its trigger and completed the rescue with no manual step.",
+      "run": "2026-11-07T19-27-57Z-base-sepolia-1"
     }
   ]
 }
