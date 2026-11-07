@@ -1,4 +1,8 @@
 // The committed data set. `derive` writes it, `pnpm backtest` reads it.
+//
+// Columns are delta-coded integers, which gzip far better than repeated large numbers.
+// Paths after a liquidation are not stored: they are rebuilt from each position's portfolio
+// and the asset price series, which keeps the files small and the numbers auditable.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
@@ -7,6 +11,7 @@ import { DERIVED_DIR } from './paths.ts';
 import type { ScopeClass } from './scope.ts';
 
 export const POSITIONS_FILE = join(DERIVED_DIR, 'positions.jsonl.gz');
+export const PRICES_FILE = join(DERIVED_DIR, 'prices.json.gz');
 export const VALIDATION_FILE = join(DERIVED_DIR, 'validation.json');
 
 export interface DerivedEvent {
@@ -22,6 +27,20 @@ export interface DerivedEvent {
 
 /** block, unix seconds, capacity USD, debt USD. */
 export type CompactPoint = [block: number, t: number, capacity: number, debt: number];
+
+/** Delta-coded. `hf` is HF × 1e5 and `debt` is cents, so capacity is hf × debt. */
+export interface ObservedColumns {
+  block: number[];
+  t: number[];
+  hf: number[];
+  debt: number[];
+}
+
+/** Indices point into the window's price series. Amounts are in whole tokens. */
+export interface Portfolio {
+  collateral: Array<[asset: number, amount: number, thresholdBps: number]>;
+  debt: Array<[asset: number, amount: number]>;
+}
 
 export interface DerivedPosition {
   id: string;
@@ -39,9 +58,62 @@ export interface DerivedPosition {
   liquidationBlock: number;
   liquidationTime: number;
   events: DerivedEvent[];
-  /** In-scope positions only. Observed points, then frozen points from `frozenFrom` on. */
-  points?: CompactPoint[];
-  frozenFrom?: number;
+  /** In-scope positions only. */
+  observed?: ObservedColumns;
+  portfolio?: Portfolio;
+}
+
+/** One asset's AaveOracle price, stored only where it changed. */
+export interface PriceSeries {
+  symbol: string;
+  asset: string;
+  /** Delta-coded indices into the window's block and time columns. */
+  at: number[];
+  /** Delta-coded 8-decimal USD prices. */
+  price: number[];
+}
+
+export interface WindowPrices {
+  chain: ChainKey;
+  window: string;
+  /** Delta-coded, one entry per block with a price row. */
+  block: number[];
+  t: number[];
+  series: PriceSeries[];
+}
+
+export function deltaEncode(values: number[]): number[] {
+  return values.map((value, i) => (i === 0 ? value : value - values[i - 1]!));
+}
+
+export function deltaDecode(deltas: number[]): number[] {
+  const values: number[] = [];
+  let total = 0;
+  for (const delta of deltas) {
+    total += delta;
+    values.push(total);
+  }
+  return values;
+}
+
+export function encodeObserved(points: CompactPoint[]): ObservedColumns {
+  return {
+    block: deltaEncode(points.map((p) => p[0])),
+    t: deltaEncode(points.map((p) => p[1])),
+    hf: deltaEncode(points.map((p) => (p[3] > 0 ? Math.round((p[2] / p[3]) * 1e5) : 0))),
+    debt: deltaEncode(points.map((p) => Math.round(p[3] * 100))),
+  };
+}
+
+export function decodeObserved(columns: ObservedColumns): CompactPoint[] {
+  const block = deltaDecode(columns.block);
+  const t = deltaDecode(columns.t);
+  const hf = deltaDecode(columns.hf);
+  const debt = deltaDecode(columns.debt);
+  return block.map((b, i) => {
+    const debtUsd = debt[i]! / 100;
+    return [b, t[i]!, (hf[i]! / 1e5) * debtUsd, debtUsd];
+  });
 }
 
 export function writePositions(positions: DerivedPosition[]): void {
@@ -55,4 +127,12 @@ export function readPositions(): DerivedPosition[] {
     .split('\n')
     .filter(Boolean)
     .map((line) => JSON.parse(line) as DerivedPosition);
+}
+
+export function writePrices(prices: WindowPrices[]): void {
+  writeFileSync(PRICES_FILE, gzipSync(JSON.stringify(prices), { level: 9 }));
+}
+
+export function readPrices(): WindowPrices[] {
+  return JSON.parse(gunzipSync(readFileSync(PRICES_FILE)).toString('utf8')) as WindowPrices[];
 }

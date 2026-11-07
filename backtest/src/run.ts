@@ -2,7 +2,7 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CHAINS, type ChainKey } from './config.ts';
-import { readPositions, VALIDATION_FILE, type DerivedPosition } from './data.ts';
+import { readPositions, readPrices, VALIDATION_FILE, type DerivedPosition } from './data.ts';
 import type { MarketSnapshot } from './fetch/reserves.ts';
 import { runHyperliquid } from './hyperliquid.ts';
 import { DERIVED_DIR, existsSync, readJson, RESULTS_DIR, writeJson } from './paths.ts';
@@ -89,7 +89,7 @@ export function run(): void {
     readJson<ProvenanceRow[]>(join(DERIVED_DIR, 'liquidations.provenance.json')),
     existsSync(crossCheckFile) ? readJson(crossCheckFile) : null,
   );
-  const summary = buildSummary(positions, usdcThreshold, validation);
+  const summary = buildSummary(positions, readPrices(), usdcThreshold, validation);
   writeJson(join(RESULTS_DIR, 'summary.json'), summary);
   writeFileSync(join(RESULTS_DIR, 'summary.md'), renderSummary(summary));
   const { cell } = summary.headline;

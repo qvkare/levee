@@ -2,7 +2,18 @@
 // method. Reads data/raw only; no network.
 import type { ChainKey } from './config.ts';
 import { CHAINS } from './config.ts';
-import { VALIDATION_FILE, writePositions, type CompactPoint, type DerivedEvent, type DerivedPosition } from './data.ts';
+import {
+  deltaEncode,
+  encodeObserved,
+  VALIDATION_FILE,
+  writePositions,
+  writePrices,
+  type CompactPoint,
+  type DerivedEvent,
+  type DerivedPosition,
+  type Portfolio,
+  type WindowPrices,
+} from './data.ts';
 import { BLOCKS_FILE, type BlockRange } from './fetch/blocks.ts';
 import type { Liquidation } from './fetch/liquidations.ts';
 import { readOracleUpdates } from './fetch/oracle.ts';
@@ -15,7 +26,7 @@ import { readTimes } from './fetch/times.ts';
 import { GRID } from './grid.ts';
 import { readJson, writeJson } from './paths.ts';
 import { classify } from './scope.ts';
-import { thinFrozen, thinObserved } from './thin.ts';
+import { thinObserved } from './thin.ts';
 
 class PricePath {
   private readonly blocks: number[];
@@ -109,6 +120,34 @@ function eventRecord(event: Liquidation, market: MarketSnapshot, snapshot: Snaps
 
 const round2 = (x: number): number => Math.round(x * 100) / 100;
 const round6 = (x: number): number => Math.round(x * 1e6) / 1e6;
+const significant = (x: number): number => Number(x.toPrecision(10));
+
+function compactPortfolio(holdings: { collateral: Holding[]; debt: Holding[] }): Portfolio {
+  return {
+    collateral: holdings.collateral.map((h) => [h.index, significant(h.amount), h.threshold]),
+    debt: holdings.debt.map((h) => [h.index, significant(h.amount)]),
+  };
+}
+
+/** Only rows where a price moved, so a stable asset costs almost nothing. */
+function compactPrices(chain: ChainKey, window: string, market: MarketSnapshot, rows: Map<number, number[]>, blockTime: (block: number) => number): WindowPrices {
+  const blocks = [...rows.keys()].sort((a, b) => a - b);
+  const series = market.reserves.map((reserve, assetIndex) => {
+    const at: number[] = [];
+    const price: number[] = [];
+    let last = -1;
+    blocks.forEach((block, row) => {
+      const value = rows.get(block)![assetIndex]!;
+      if (value !== last) {
+        at.push(row);
+        price.push(value);
+        last = value;
+      }
+    });
+    return { symbol: reserve.symbol, asset: reserve.asset, at: deltaEncode(at), price: deltaEncode(price) };
+  });
+  return { chain, window, block: deltaEncode(blocks), t: deltaEncode(blocks.map(blockTime)), series };
+}
 
 function usdcPriceAt(market: MarketSnapshot, chain: ChainKey, prices: number[]): number {
   const index = market.reserves.findIndex((r) => r.asset === CHAINS[chain].usdc.toLowerCase());
@@ -137,11 +176,12 @@ function observedPoints(samples: Sample[], blockTime: (block: number) => number)
   return points;
 }
 
-async function deriveWindow(range: BlockRange, markets: MarketSnapshot[], all: PositionKey[]): Promise<{ positions: DerivedPosition[]; validation: Validation }> {
+export async function deriveWindow(range: BlockRange, markets: MarketSnapshot[], all: PositionKey[]): Promise<{ positions: DerivedPosition[]; validation: Validation; prices: WindowPrices }> {
   const { chain, window } = range;
   const market = marketAt(markets, chain, window);
   const snapshots = await readSnapshots(chain, window);
-  const prices = new PricePath(await readPrices(chain, window));
+  const priceRows = await readPrices(chain, window);
+  const prices = new PricePath(priceRows);
   const times = await readTimes(chain);
   const updates = readOracleUpdates(chain, window, range);
   const paths = await readPaths(chain, window);
@@ -154,12 +194,6 @@ async function deriveWindow(range: BlockRange, markets: MarketSnapshot[], all: P
     if (t === undefined) throw new Error(`no timestamp for ${chain} block ${block}`);
     return t;
   };
-  const updatesByFeed = new Map<string, Array<{ block: number; t: number }>>();
-  for (const update of updates) {
-    const list = updatesByFeed.get(update.aggregator) ?? [];
-    list.push({ block: update.block, t: update.t });
-    updatesByFeed.set(update.aggregator, list);
-  }
 
   const validation: Validation = {
     chain,
@@ -227,28 +261,14 @@ async function deriveWindow(range: BlockRange, markets: MarketSnapshot[], all: P
       if (atLiquidation.capacity / atLiquidation.debt < 1) validation.hfAtLiquidationBelow1++;
       else validation.hfAtLiquidationAbove1++;
 
-      const observed = thinObserved(observedPoints(samples, blockTime), { triggers: GRID.triggers, ceiling: FINE_CEILING });
-
-      // From the liquidation on, the portfolio stays frozen against every update of its feeds.
-      const feeds = new Set(snapshot.reserves.flatMap(([asset]) => market.reserves.find((r) => r.asset === asset)?.feeds ?? []));
-      const frozenBlocks = new Map<number, number>();
-      for (const feed of feeds) {
-        for (const update of updatesByFeed.get(feed) ?? []) {
-          if (update.block > firstBlock) frozenBlocks.set(update.block, update.t);
-        }
-      }
-      const frozenRaw: CompactPoint[] = [[firstBlock, liquidationTime, round2(atLiquidation.capacity), round2(atLiquidation.debt)]];
-      for (const block of [...frozenBlocks.keys()].sort((a, b) => a - b)) {
-        const value = frozenAt(holdings, prices.at(block));
-        frozenRaw.push([block, frozenBlocks.get(block)!, round2(value.capacity), round2(value.debt)]);
-      }
-      const frozen = thinFrozen(frozenRaw);
-      record.points = [...observed, ...frozen];
-      record.frozenFrom = observed.length;
+      record.observed = encodeObserved(thinObserved(observedPoints(samples, blockTime), { triggers: GRID.triggers, ceiling: FINE_CEILING }));
+      record.portfolio = compactPortfolio(holdings);
     }
     positions.push(record);
   }
-  return { positions, validation };
+  // Price rows sit on oracle updates and liquidation blocks, so every row has a timestamp.
+  const windowPrices = compactPrices(chain, window, market, priceRows, (block) => (block === range.toBlock ? range.toTimestamp : blockTime(block)));
+  return { positions, validation, prices: windowPrices };
 }
 
 function summarize(values: number[]): Record<string, number> {
@@ -268,11 +288,13 @@ export async function derive(): Promise<void> {
   const markets = readJson<MarketSnapshot[]>(MARKETS_FILE);
   const all = loadPositions();
   const positions: DerivedPosition[] = [];
+  const windowPrices: WindowPrices[] = [];
   const reports: unknown[] = [];
   const pooled = { errorAtSnapshot: [] as number[], errorRunUp: [] as number[], bonus: [] as number[], below: 0, above: 0 };
   for (const range of ranges) {
-    const { positions: part, validation } = await deriveWindow(range, markets, all);
+    const { positions: part, validation, prices } = await deriveWindow(range, markets, all);
     positions.push(...part);
+    windowPrices.push(prices);
     pooled.errorAtSnapshot.push(...validation.errorAtSnapshot);
     pooled.errorRunUp.push(...validation.errorRunUp);
     pooled.bonus.push(...validation.bonusRatioError);
@@ -292,6 +314,7 @@ export async function derive(): Promise<void> {
     console.log(JSON.stringify(reports[reports.length - 1]));
   }
   writePositions(positions);
+  writePrices(windowPrices);
   writeJson(VALIDATION_FILE, {
     perWindow: reports,
     pooled: {

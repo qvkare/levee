@@ -1,5 +1,6 @@
 // Builds the object written to results/summary.json.
-import type { DerivedPosition } from '../data.ts';
+import type { DerivedPosition, WindowPrices } from '../data.ts';
+import { PriceBook } from '../frozen.ts';
 import { healthFactor, simulate } from '../sim/simulate.ts';
 import {
   byGroup,
@@ -94,8 +95,11 @@ function pickExamples(items: Prepared[]): Example[] {
   return out;
 }
 
-export function buildSummary(positions: DerivedPosition[], usdcThreshold: (p: DerivedPosition) => number, validation: ValidationRow[]): Summary {
-  const items = positions.filter((p) => p.scope !== 'no_usdc_debt').map((p) => prepare(p, usdcThreshold(p)));
+export function buildSummary(positions: DerivedPosition[], prices: WindowPrices[], usdcThreshold: (p: DerivedPosition) => number, validation: ValidationRow[]): Summary {
+  const books = new Map(prices.map((p) => [`${p.chain}:${p.window}`, new PriceBook(p)]));
+  const items = positions
+    .filter((p) => p.scope !== 'no_usdc_debt')
+    .map((p) => prepare(p, usdcThreshold(p), books.get(`${p.chain}:${p.window}`)!.frozenPath(p.portfolio!, p.liquidationBlock, p.liquidationTime)));
   const grid = runGrid(items);
   const fair = fairComparison(items, HEADLINE);
   const params = paramsOf(HEADLINE);

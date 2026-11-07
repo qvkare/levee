@@ -1,6 +1,6 @@
 // Turns per-position outcomes into the published numbers. No I/O.
 import { CHAINS, type ChainKey } from '../config.ts';
-import type { DerivedPosition } from '../data.ts';
+import { decodeObserved, type CompactPoint, type DerivedPosition } from '../data.ts';
 import { COOLDOWN_SEC, GRID } from '../grid.ts';
 import { holdAsCollateral, repayAtArming } from '../sim/baselines.ts';
 import { healthFactor, simulate, type Outcome, type Params, type PositionPath, type Reason } from '../sim/simulate.ts';
@@ -32,12 +32,13 @@ export function firstEpisodeBonus(position: DerivedPosition): number {
   return total;
 }
 
-export function prepare(position: DerivedPosition, usdcThreshold: number): Prepared {
-  if (!position.points) throw new Error(`${position.id} has no path`);
+/** `frozen` starts at the liquidation block. See `PriceBook.frozenPath`. */
+export function prepare(position: DerivedPosition, usdcThreshold: number, frozen: CompactPoint[]): Prepared {
+  if (!position.observed) throw new Error(`${position.id} has no path`);
   return {
     position,
     path: {
-      points: position.points.map(([block, t, capacity, debt]) => ({ block, t, capacity, debt })),
+      points: [...decodeObserved(position.observed), ...frozen].map(([block, t, capacity, debt]) => ({ block, t, capacity, debt })),
       liquidationBlock: position.liquidationBlock,
       liquidationTime: position.liquidationTime,
       usdcShare: position.usdcShare,
@@ -167,6 +168,8 @@ export function finalDescentGap(path: PositionPath, trigger: number): number | '
 export interface WarningRow {
   trigger: number;
   positions: number;
+  /** Positions with a final descent through T, which the gap statistics describe. */
+  withDescent: number;
   neverBelowBeforeLiquidation: number;
   belowSinceArming: number;
   medianGapSec: number | null;
@@ -189,6 +192,7 @@ export function warningTable(items: Prepared[]): WarningRow[] {
     return {
       trigger,
       positions: items.length,
+      withDescent: gaps.length,
       neverBelowBeforeLiquidation: never,
       belowSinceArming: since,
       medianGapSec: gaps.length ? gaps[Math.floor(gaps.length / 2)]! : null,

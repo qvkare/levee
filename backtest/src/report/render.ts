@@ -98,10 +98,10 @@ function missTable(cell: Cell): string {
 function warningRows(rows: WarningRow[]): string {
   const limits = ['10', '30', '60', '120', '300', '900', '3600'];
   return table(
-    ['T', 'Median gap', ...limits.map((l) => `≥ ${duration(Number(l))}`), 'Below T since arming', 'Never below T'],
+    ['T', 'Median gap (n)', ...limits.map((l) => `≥ ${duration(Number(l))}`), 'Below T since arming', 'Never below T'],
     rows.map((r) => [
       r.trigger.toFixed(2),
-      duration(r.medianGapSec),
+      `${duration(r.medianGapSec)} (${r.withDescent})`,
       ...limits.map((l) => pct(r.atLeast[l] ?? 0, r.positions)),
       pct(r.belowSinceArming, r.positions),
       pct(r.neverBelowBeforeLiquidation, r.positions),
