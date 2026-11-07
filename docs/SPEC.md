@@ -117,6 +117,8 @@ Reject unless all of these hold:
 5. `now - last_rescue_at >= cooldown_secs`.
 6. Both fee values are at or below the chain's ceilings.
 
+`rescue` takes no attached deposit. A function-call access key cannot attach one, so the contract pays the 1 yoctoNEAR for `sign` from its own balance.
+
 The contract then builds an EIP-1559 transaction itself: chain id, nonce, fees, gas limit, `to = Pool`, value 0, the `repay` calldata and an empty access list. It hashes `keccak256(0x02 || rlp(fields))` and calls MPC with path `rescuer_path(id)`.
 
 The keeper never supplies calldata, a target or a payload. It supplies only the position id, the amount and `fees`. The EVM nonce is not tracked on chain because the contract cannot see Base. A wrong nonce wastes budget but cannot move value anywhere else.
