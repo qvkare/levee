@@ -1,0 +1,22 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.key
+credentials/
+
+# build output
+target/
+node_modules/
+.next/
+out/
+cache/
+broadcast/
+dist/
+*.wasm
+!fixtures/**/*.wasm
+
+# local
+.DS_Store
+.vercel
+.turbo
