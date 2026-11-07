@@ -147,6 +147,32 @@ If no signature comes back, the callback returns `null` and logs `rescue_failed`
 
 `rescuer_path(id) = "levee/v1/{id}"`, with the Levee contract as predecessor and domain 0. Each position has its own rescuer address.
 
+### Gas
+
+A signing method takes at least 35 Tgas. Attach more, such as 100 Tgas: unused gas is refunded.
+
+| Constant | Value | Reason |
+|---|---|---|
+| `SIGN_GAS` | 20 Tgas, plus all unused gas | The live signer requires 15, and its own load testing attaches 20 |
+| `ON_SIGNED_GAS` | 10 Tgas, fixed | `on_signed` burns 1.7. The margin costs nothing, because unused gas is refunded, and this contract cannot be upgraded if protocol gas costs rise |
+| `MIN_SIGNING_GAS` | 35 Tgas | Those two, plus 5 for the method itself, which burns 2.6 |
+
+Unused gas goes to `sign` because the signer's requirement is its own config and a vote can raise it. With no upgrade path, the only answer to a rise is to attach more, so that has to work. A sandbox test proves it does.
+
+Measured on 2026-11-07:
+
+| Receipt | Burnt | Measured on |
+|---|---|---|
+| Transaction conversion | 0.31 Tgas | near-sandbox 2.14.0 |
+| `rescue` | 2.59 Tgas | near-sandbox 2.14.0 |
+| `sign` | 4.27 Tgas | `v1.signer-prod.testnet`, secp256k1 |
+| `return_signature_and_clean_state_on_success` | 3.45 Tgas of a fixed 7 | `v1.signer-prod.testnet`, secp256k1 |
+| `on_signed` | 1.72 Tgas, or 1.65 on failure | near-sandbox 2.14.0 |
+| Three refunds | 0.67 Tgas | near-sandbox 2.14.0 |
+| Whole rescue | 13.0 Tgas | Sum of the above |
+
+The sandbox figures transfer to mainnet: near-sandbox 2.14.0 is the nearcore commit mainnet runs, and its runtime config showed no differences from mainnet's at protocol 88. The test `gas_of_a_rescue` fails if the budget stops fitting.
+
 ### Events
 
 NEP-297, standard `levee`, version `1.0.0`: `position_registered`, `rescue_requested`, `rescue_signed`, `rescue_failed`, `allowance_signed`, `float_withdrawn`, `gas_swept`, `sign_failed`, `caps_tightened`, `caps_loosen_queued`, `caps_loosened`, `keeper_changed`, `paused`, `resumed`.
