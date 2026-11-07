@@ -117,7 +117,7 @@ const API_EXAMPLE = `{
           "note": "..."
         },
         "repay": { "target": 1.5, "usd": 0, "usdcDebtUsd": 0, "usdcCovers": false },
-        "reserves": { "collateral": [], "debt": [] },
+        "reserves": { "collateral": [], "debt": [], "liquidationBonus": 0.05 },
         "raw": { "healthFactor": "..." }   // exact contract outputs
       }
     },
@@ -176,7 +176,7 @@ export default function HowPage() {
         </div>
       </section>
 
-      <section className="page-section">
+      <section id="fails" className="page-section">
         <h2>When it fails</h2>
         <div className="prose">
           <p>A rescue is a race, and it can be lost. These are the conditions we know of.</p>
@@ -208,7 +208,7 @@ export default function HowPage() {
         <StackTable columns={[{ label: "Phase", cell: (row) => <span className="medium">{row.phase}</span> }, { label: "Scope", wide: true, cell: (row) => row.scope }]} rows={PHASES} rowKey={(row) => row.phase} />
       </section>
 
-      <section className="page-section">
+      <section id="api" className="page-section">
         <h2>The same data as JSON</h2>
         <div className="prose">
           <p>

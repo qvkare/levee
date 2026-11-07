@@ -1,6 +1,6 @@
 /* Tokens and roles are defined in web/DESIGN.md. Change that document first. */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --paper: #fcfdfc;
   --ink: #101a22;
   --ink-2: #44525d;
@@ -12,19 +12,8 @@
   --gutter: clamp(16px, 4vw, 48px);
   --column: 1180px;
   --edge: max(var(--gutter), calc((100vw - var(--column)) / 2));
+  --bar: 64px;
   --ease: cubic-bezier(0.2, 0, 0, 1);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0d161b;
-    --ink: #e6edef;
-    --ink-2: #a3b3bb;
-    --rule: #2e3c44;
-    --water: #17405a;
-    --land: #4b4126;
-    --flood: #ff8acd;
-  }
 }
 
 *,
@@ -36,6 +25,7 @@
 html {
   -webkit-text-size-adjust: 100%;
   background: var(--paper);
+  scroll-padding-top: calc(var(--bar) + 12px);
 }
 
 body {
@@ -68,24 +58,24 @@ figure {
 }
 
 h1,
-h2,
-h3 {
-  font-weight: 500;
-  line-height: 1.15;
-}
-
-h1 {
-  font-size: clamp(28px, 3.6vw, 42px);
-  max-width: 28em;
-  text-wrap: balance;
-}
-
 h2 {
-  font-size: clamp(23px, 2.4vw, 28px);
+  font-weight: 300;
+  line-height: 1.12;
 }
 
 h3 {
   font-size: 19px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: clamp(32px, 4vw, 48px);
+  max-width: 22em;
+}
+
+h2 {
+  font-size: clamp(25px, 2.7vw, 32px);
 }
 
 a {
@@ -130,11 +120,26 @@ code,
   font-size: 15px;
 }
 
+.medium {
+  font-weight: 500;
+}
+
+.flood-text {
+  color: var(--flood);
+  font-weight: 500;
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: 15px;
+  max-width: 68ch;
+}
+
 .skip {
   position: absolute;
   left: var(--edge);
   top: -60px;
-  z-index: 10;
+  z-index: 30;
   padding: 8px 12px;
   background: var(--paper);
   border: 1px solid var(--ink);
@@ -144,29 +149,97 @@ code,
   top: 8px;
 }
 
-/* Header and footer */
+/* The bar */
 
-.site-header {
+.site-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 24px;
-  padding-block: 18px;
+  align-items: center;
+  gap: 32px;
+  height: var(--bar);
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
 }
 
 .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 22px;
   font-weight: 500;
   text-decoration: none;
 }
 
+.wordmark img {
+  display: block;
+}
+
 .site-nav {
   display: flex;
+  align-items: center;
   gap: 24px;
+  flex: 1;
+}
+
+.site-nav a {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.site-nav a:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.site-nav a:nth-last-child(2) {
+  margin-left: auto;
+}
+
+.menu {
+  display: none;
+  margin-left: auto;
+}
+
+.menu summary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 500;
+}
+
+.menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu nav {
+  position: absolute;
+  top: var(--bar);
+  left: 0;
+  right: 0;
+  background: var(--paper);
+  border-bottom: 1px solid var(--ink);
+}
+
+.menu nav a {
+  display: block;
+  padding: 12px var(--edge);
+  border-top: 1px solid var(--rule);
+  text-decoration: none;
+}
+
+@media (max-width: 980px) {
+  .site-nav {
+    display: none;
+  }
+
+  .menu {
+    display: block;
+  }
 }
 
 .site-footer {
-  margin-top: 72px;
+  margin-top: 56px;
   padding-block: 20px 28px;
   border-top: 1px solid var(--rule);
   color: var(--ink-2);
@@ -177,35 +250,27 @@ code,
   max-width: 68ch;
 }
 
-/* The tool */
+/* The one badge */
 
-.tool {
-  padding-block: 8px 28px;
-}
-
-.tool h1 {
-  margin-bottom: 20px;
-}
-
-.address-form {
-  max-width: 720px;
-}
-
-.address-form label {
-  display: block;
+.state-tag {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink-2);
+  font-size: 12px;
   font-weight: 500;
-  margin-bottom: 4px;
+  line-height: 18px;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
-.address-row {
-  display: flex;
-  gap: 8px;
+.state-tag[data-live="true"] {
+  border-color: var(--ink);
+  color: var(--ink);
 }
 
-.address-row input {
-  flex: 1;
-  min-width: 0;
-}
+/* Controls */
 
 input[type="text"] {
   height: 48px;
@@ -256,8 +321,229 @@ input[aria-invalid="true"] {
   cursor: progress;
 }
 
+.button[data-kind="secondary"] {
+  height: 38px;
+  padding-inline: 14px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.button[data-kind="secondary"]:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.segments {
+  display: inline-flex;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+}
+
+.segments button {
+  height: 36px;
+  padding-inline: 12px;
+  border: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.segments button + button {
+  border-left: 1px solid var(--ink);
+}
+
+.segments button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.slider-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.slider-head label {
+  color: var(--ink-2);
+}
+
+.slider-value {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.slider input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+}
+
+.slider input[type="range"]::-webkit-slider-runnable-track {
+  height: 1px;
+  background: var(--ink);
+}
+
+.slider input[type="range"]::-moz-range-track {
+  height: 1px;
+  background: var(--ink);
+}
+
+.slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -9px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.slider input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+/* Home */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 32px clamp(32px, 5vw, 64px);
+  padding-block: 36px 44px;
+}
+
+.claim {
+  font-size: clamp(38px, 4.9vw, 62px);
+  line-height: 1.06;
+  text-wrap: balance;
+}
+
+.lede {
+  margin-top: 16px;
+  color: var(--ink-2);
+  font-size: clamp(17px, 1.5vw, 19px);
+  line-height: 1.45;
+  max-width: 46ch;
+}
+
+.hero .address-form {
+  margin-top: 24px;
+}
+
+.examples {
+  margin-top: 18px;
+  font-size: 16px;
+}
+
+.examples p {
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.examples ul {
+  margin-top: 2px;
+  padding: 0;
+  list-style: none;
+}
+
+.examples li + li {
+  margin-top: 2px;
+}
+
+.band {
+  padding-block: 36px 40px;
+  border-top: 1px solid var(--rule);
+}
+
+.band-head {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 8px clamp(32px, 5vw, 64px);
+  align-items: baseline;
+  margin-bottom: 24px;
+}
+
+.band-head:last-child {
+  margin-bottom: 0;
+}
+
+.band-head p {
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+
+.band-head .state-tag {
+  margin-left: 8px;
+}
+
+.limits {
+  max-width: 68ch;
+  padding-left: 1.1em;
+}
+
+.limits li + li {
+  margin-top: 6px;
+}
+
+.refused {
+  font-weight: 500;
+}
+
+@media (max-width: 959px) {
+  .hero,
+  .band-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Address box */
+
+.tool {
+  padding-block: 24px 28px;
+}
+
+.tool h1 {
+  margin-bottom: 8px;
+  font-size: clamp(28px, 4vw, 48px);
+}
+
+.tool h1 .mono {
+  white-space: nowrap;
+}
+
+.address-form {
+  max-width: 720px;
+}
+
+.address-form label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.address-row {
+  display: flex;
+  gap: 8px;
+}
+
+.address-row input {
+  flex: 1;
+  min-width: 0;
+}
+
 .full-address {
-  margin: -10px 0 16px;
+  margin-bottom: 16px;
   color: var(--ink-2);
 }
 
@@ -284,17 +570,13 @@ input[aria-invalid="true"] {
   }
 }
 
-/* The section chart */
-
-.section {
-  margin-top: 8px;
-}
-
-.section-title {
-  padding-bottom: 12px;
-}
+/* The river section */
 
 .chart {
+  --chart-edge: var(--edge);
+  --staff: 88px;
+  --levee: clamp(96px, 24%, 340px);
+
   position: relative;
   height: clamp(340px, 46vh, 520px);
   overflow: hidden;
@@ -302,17 +584,23 @@ input[aria-invalid="true"] {
   background: var(--paper);
 }
 
+.chart[data-fit="column"] {
+  --chart-edge: 12px;
+  --levee: clamp(84px, 24%, 170px);
+
+  height: clamp(300px, 42vh, 372px);
+}
+
 .chart > * {
   position: absolute;
 }
 
 .chart-water {
-  left: 0;
-  right: 0;
-  bottom: 3%;
+  inset: 0;
   z-index: 1;
   background: var(--water);
   border-top: 2px solid var(--ink);
+  transition: transform 220ms var(--ease);
 }
 
 .chart-ground {
@@ -329,7 +617,7 @@ input[aria-invalid="true"] {
   top: 0;
   right: 0;
   z-index: 2;
-  width: clamp(96px, 24%, 340px);
+  width: var(--levee);
   height: 100%;
 }
 
@@ -341,18 +629,18 @@ input[aria-invalid="true"] {
 }
 
 .chart-levee-name {
-  right: 12px;
-  bottom: calc(3% + 10px);
+  right: 10px;
+  bottom: calc(3% + 8px);
   z-index: 3;
-  color: var(--ink);
   font-weight: 500;
 }
 
+/* Over flood stage the levee is under water, so only its outline is left. */
 .chart[data-state="over"] .chart-water {
   z-index: 3;
+  border-top-color: var(--flood);
 }
 
-/* Over flood stage the levee is under water, so only its outline is left. */
 .chart[data-state="over"] .chart-levee {
   z-index: 4;
 }
@@ -362,7 +650,8 @@ input[aria-invalid="true"] {
   stroke-dasharray: 6 5;
 }
 
-.chart[data-state="over"] .chart-levee-name {
+.chart[data-state="over"] .chart-levee-name,
+.chart[data-state="over"] .chart-ground {
   z-index: 4;
 }
 
@@ -381,7 +670,7 @@ input[aria-invalid="true"] {
 .chart-flood span {
   position: absolute;
   top: 2px;
-  left: calc(var(--edge) + 104px);
+  left: calc(var(--chart-edge) + var(--staff) + 16px);
   color: var(--flood);
   font-weight: 500;
   font-size: 15px;
@@ -391,9 +680,9 @@ input[aria-invalid="true"] {
 .chart-staff {
   top: 3%;
   bottom: 3%;
-  left: var(--edge);
+  left: var(--chart-edge);
   z-index: 5;
-  width: 88px;
+  width: var(--staff);
   background: var(--paper);
   border-inline: 1px solid var(--ink);
   border-top: 1px solid var(--ink);
@@ -427,6 +716,7 @@ input[aria-invalid="true"] {
   transform: translateY(-50%);
   font-family: var(--font-figures), var(--font-text), sans-serif;
   font-size: 13px;
+  font-weight: 500;
   line-height: 1;
   background: var(--paper);
   padding-block: 1px;
@@ -445,6 +735,7 @@ input[aria-invalid="true"] {
   top: 2px;
   font-family: var(--font-figures), var(--font-text), sans-serif;
   font-size: 13px;
+  font-weight: 500;
   line-height: 1.2;
   color: var(--ink-2);
 }
@@ -460,7 +751,7 @@ input[aria-invalid="true"] {
 .chart-leaders {
   top: 0;
   z-index: 4;
-  left: calc(var(--edge) + 88px);
+  left: calc(var(--chart-edge) + var(--staff));
   width: 16px;
   height: 100%;
 }
@@ -479,8 +770,8 @@ input[aria-invalid="true"] {
 }
 
 .chart-mark {
-  left: calc(var(--edge) + 108px);
-  right: clamp(100px, 25%, 350px);
+  left: calc(var(--chart-edge) + var(--staff) + 20px);
+  right: calc(var(--levee) + 8px);
   z-index: 4;
   margin-top: 3px;
   font-size: clamp(17px, 2vw, 21px);
@@ -492,6 +783,24 @@ input[aria-invalid="true"] {
   right: var(--gutter);
 }
 
+/* The moving reading of the drill and the simulator. */
+.chart-reading {
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  transition: transform 220ms var(--ease);
+}
+
+.chart-reading p {
+  position: absolute;
+  top: 4px;
+  left: calc(var(--chart-edge) + var(--staff) + 14px);
+  font-size: 19px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+/* A level stops at the bank: the line sits under the levee and its label above it. */
 .chart-target,
 .chart-target-label {
   inset: 0;
@@ -514,22 +823,24 @@ input[aria-invalid="true"] {
 .chart-target i {
   position: absolute;
   top: 0;
-  left: calc(var(--edge) + 88px);
+  left: calc(var(--chart-edge) + var(--staff));
   right: 0;
   border-top: 2px dashed var(--ink);
 }
 
 .chart-target-label span {
   position: absolute;
-  right: clamp(104px, 26%, 360px);
-  top: 3px;
+  right: calc(var(--levee) + 16px);
+  top: 0;
+  transform: translateY(calc(-100% - 1px));
   font-size: 17px;
+  line-height: 1.15;
   white-space: nowrap;
 }
 
 .chart-empty {
-  left: calc(var(--edge) + 108px);
-  right: clamp(100px, 25%, 350px);
+  left: calc(var(--chart-edge) + var(--staff) + 20px);
+  right: calc(var(--levee) + 8px);
   top: 42%;
   z-index: 4;
   max-width: 34ch;
@@ -551,30 +862,21 @@ input[aria-invalid="true"] {
 }
 
 @media (max-width: 640px) {
-  .chart-staff {
-    width: 68px;
+  .chart {
+    --staff: 68px;
+    --levee: 92px;
   }
 
-  .chart-leaders {
-    left: calc(var(--edge) + 68px);
+  .chart[data-fit="column"] {
+    --chart-edge: 0px;
+    --levee: 92px;
+
+    height: 340px;
   }
 
   .chart-mark,
   .chart-empty {
-    left: calc(var(--edge) + 88px);
     right: 72px;
-  }
-
-  .chart-flood span {
-    left: calc(var(--edge) + 84px);
-  }
-
-  .chart-target i {
-    left: calc(var(--edge) + 68px);
-  }
-
-  .chart-levee {
-    width: 92px;
   }
 
   /* The water is narrow here, so the label sits on the bank, clear of the readings. */
@@ -583,22 +885,225 @@ input[aria-invalid="true"] {
   }
 }
 
+/* The flood drill */
+
+.drill-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.drill-mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding-top: 10px;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.drill-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 8px;
+  border-block: 1px solid var(--rule);
+}
+
+.drill-figures div {
+  padding: 6px 12px 8px;
+}
+
+.drill-figures div:first-child {
+  padding-left: 0;
+}
+
+.drill-figures div + div {
+  border-left: 1px solid var(--rule);
+}
+
+.drill-figures dt {
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.drill-figures dd {
+  font-family: var(--font-figures), var(--font-text), sans-serif;
+  font-size: clamp(27px, 3.1vw, 38px);
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.drill-caption {
+  min-height: 3em;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+
+.hops {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 8px;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--rule);
+}
+
+.hops li {
+  position: relative;
+  padding: 8px 12px 0 18px;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.hops li + li {
+  border-left: 1px solid var(--rule);
+  padding-left: 30px;
+}
+
+.hop-mark {
+  position: absolute;
+  left: 0;
+  top: 11px;
+  width: 11px;
+  height: 11px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+}
+
+.hops li + li .hop-mark {
+  left: 12px;
+}
+
+.hop-mark::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  background: var(--ink);
+  opacity: 0;
+  transition: opacity 220ms var(--ease);
+}
+
+.hops li[data-on="true"] .hop-mark::after {
+  opacity: 1;
+}
+
+.hops[data-branch="without"] .hop-mark {
+  border-color: var(--flood);
+}
+
+.hops[data-branch="without"] .hop-mark::after {
+  background: var(--flood);
+}
+
+.hop-name {
+  display: block;
+  font-weight: 500;
+}
+
+.hop-detail {
+  display: block;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.drill-foot {
+  margin-top: 12px;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.drill-states {
+  display: none;
+  margin-top: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drill-states {
+    display: block;
+  }
+
+  .drill-play {
+    display: none;
+  }
+}
+
+/* Try a position */
+
+.simulator {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 24px clamp(32px, 5vw, 64px);
+}
+
+.sim-controls {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.readout {
+  margin-top: 8px;
+}
+
+.readout-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.readout-row dt {
+  color: var(--ink-2);
+}
+
+.readout-row dd {
+  font-weight: 500;
+  text-align: right;
+}
+
+.readout-row.flood-text dt {
+  color: var(--flood);
+}
+
+.sim-stage {
+  margin-top: 10px;
+  font-size: 19px;
+}
+
+.readout + .note,
+.band table + .note {
+  margin-top: 12px;
+}
+
+@media (max-width: 959px) {
+  .simulator {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Report */
 
 .verdict {
   font-size: clamp(21px, 2.3vw, 26px);
+  font-weight: 300;
   line-height: 1.25;
   max-width: 34em;
 }
 
 .verdict[data-stage="flood"] {
   color: var(--flood);
+  font-weight: 400;
 }
 
 .report-head {
-  padding-block: 8px 20px;
+  padding-block: 20px;
   border-top: 1px solid var(--rule);
-  padding-top: 20px;
 }
 
 .report-head > * + * {
@@ -617,28 +1122,8 @@ input[aria-invalid="true"] {
 }
 
 .target-control {
-  display: grid;
-  grid-template-columns: minmax(0, 340px) auto;
-  gap: 4px 20px;
-  align-items: center;
+  max-width: 420px;
   padding-block: 18px 6px;
-}
-
-.target-control label {
-  grid-column: 1 / -1;
-  font-weight: 500;
-}
-
-.target-control input[type="range"] {
-  width: 100%;
-  height: 28px;
-  margin: 0;
-  accent-color: var(--ink);
-}
-
-.target-value {
-  font-size: 24px;
-  line-height: 1;
 }
 
 .repay-output {
@@ -646,20 +1131,6 @@ input[aria-invalid="true"] {
   font-size: clamp(18px, 2vw, 21px);
   font-weight: 500;
   max-width: 44em;
-}
-
-.hl-body {
-  display: grid;
-  gap: 18px;
-  margin-top: 14px;
-}
-
-.examples {
-  padding-left: 1.1em;
-}
-
-.examples li + li {
-  margin-top: 4px;
 }
 
 .station {
@@ -693,6 +1164,12 @@ input[aria-invalid="true"] {
   margin-top: 6px;
 }
 
+.hl-body {
+  display: grid;
+  gap: 18px;
+  margin-top: 14px;
+}
+
 .out-of-service {
   position: relative;
   margin-top: 14px;
@@ -716,15 +1193,6 @@ input[aria-invalid="true"] {
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
   padding: 2px 6px;
-}
-
-.flood-text {
-  color: var(--flood);
-  font-weight: 500;
-}
-
-.medium {
-  font-weight: 500;
 }
 
 /* Tables */
@@ -803,19 +1271,19 @@ td:last-child {
     border-bottom: 1px solid var(--rule);
   }
 
-  .stack td {
-    display: block;
-    padding: 0;
-    border: 0;
-    text-align: left;
-  }
-
   .stack-3 tr {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .stack td[data-wide="true"] {
     grid-column: 1 / -1;
+  }
+
+  .stack td {
+    display: block;
+    padding: 0;
+    border: 0;
+    text-align: left;
   }
 
   .stack td::before {
@@ -833,7 +1301,7 @@ td:last-child {
 /* Long-form pages */
 
 .page-head {
-  padding-block: 12px 28px;
+  padding-block: 28px 28px;
 }
 
 .page-head h1 {

@@ -10,6 +10,8 @@ import type { AaveMarket, RiskReport } from "@/lib/types.ts";
 import { AaveStation } from "./aave-station.tsx";
 import { HyperliquidStation } from "./hyperliquid-station.tsx";
 import { SectionChart } from "./section-chart.tsx";
+import { Slider } from "./slider.tsx";
+import { StateTag } from "./state-tag.tsx";
 
 function repaySentence(markets: AaveMarket[], target: number): string {
   const figures = markets
@@ -47,6 +49,11 @@ export function Report({ report: initial }: { report: RiskReport }) {
         <p className="verdict" data-stage={answer.stage ?? undefined}>
           {answer.text}
         </p>
+        {report.status !== "unavailable" && (
+          <p className="muted small">
+            <StateTag state="Live" /> Read from Aave and Hyperliquid. This page reads, and it does not protect anything.
+          </p>
+        )}
         {report.failures.length > 0 && (
           <div className="failures">
             <p className="medium">Some figures are missing, and they are not zero:</p>
@@ -65,20 +72,18 @@ export function Report({ report: initial }: { report: RiskReport }) {
         {hasRepay && (
           <>
             <form className="target-control" method="get">
-              <label htmlFor="target">Target health factor</label>
-              <input
+              <Slider
                 id="target"
                 name="target"
-                type="range"
+                label="Target health factor"
+                value={target}
                 min={MIN_TARGET}
                 max={MAX_TARGET}
                 step={0.05}
-                value={target}
-                onChange={(event) => choose(Number(event.target.value))}
-                aria-valuetext={target.toFixed(2)}
-                aria-describedby="repay-output"
+                display={target.toFixed(2)}
+                describedBy="repay-output"
+                onChange={choose}
               />
-              <span className="target-value water-label">{target.toFixed(2)}</span>
               <noscript>
                 <button className="button" type="submit">
                   Set target
@@ -103,7 +108,7 @@ export function Report({ report: initial }: { report: RiskReport }) {
         <section className="station">
           <h2>Check this yourself</h2>
           <p className="station-meta">
-            This page reads. It does not protect anything. The same data is at{" "}
+            The same data is at{" "}
             <a href={`/api/risk?address=${report.address}&target=${target.toFixed(2)}`}>/api/risk</a> as JSON, with the exact contract outputs and the block number, so any figure here can be repeated
             with a direct call.
           </p>
