@@ -56,7 +56,9 @@ export interface Cell {
   positions: number;
   saved: number;
   notSaved: number;
-  /** Saved, but HF was already below the trigger when armed: an upfront repay, not a rescue. */
+  /** HF was already below the trigger when armed, so the repay fires at once. */
+  armedBelowTrigger: number;
+  /** Of those, saved. That is an upfront repay, not a rescue. */
   savedArmedBelowTrigger: number;
   reasons: Record<Reason, number>;
   /** Among misses, those that beat the real liquidation and failed later in the window. */
@@ -86,6 +88,7 @@ export function aggregate(rows: Array<{ item: Prepared; outcome: Outcome }>, par
     positions: rows.length,
     saved: 0,
     notSaved: 0,
+    armedBelowTrigger: 0,
     savedArmedBelowTrigger: 0,
     reasons: emptyReasons(),
     failedLaterInWindow: 0,
@@ -99,6 +102,7 @@ export function aggregate(rows: Array<{ item: Prepared; outcome: Outcome }>, par
     cell.bonusAtRiskUsd += item.firstEpisodeBonusUsd;
     cell.reserveHeldUsd += outcome.reserve;
     cell.reasons[outcome.reason]++;
+    if (outcome.armedBelowTrigger) cell.armedBelowTrigger++;
     if (outcome.saved) {
       cell.saved++;
       cell.bonusAvoidedUsd += item.firstEpisodeBonusUsd;
@@ -203,22 +207,51 @@ export interface FairRow {
   leveeOnly: number;
   collateralOnly: number;
   neither: number;
+  bonusAvoidedLeveeUsd: number;
+  bonusAvoidedCollateralUsd: number;
+  bonusAvoidedRepayAtArmingUsd: number;
 }
 
 function fairRow(items: Prepared[], params: Params): FairRow {
   const { reserveShare } = params;
-  const row: FairRow = { reserveShare, positions: items.length, levee: 0, holdAsCollateral: 0, repayAtArming: 0, both: 0, leveeOnly: 0, collateralOnly: 0, neither: 0 };
+  const row: FairRow = {
+    reserveShare,
+    positions: items.length,
+    levee: 0,
+    holdAsCollateral: 0,
+    repayAtArming: 0,
+    both: 0,
+    leveeOnly: 0,
+    collateralOnly: 0,
+    neither: 0,
+    bonusAvoidedLeveeUsd: 0,
+    bonusAvoidedCollateralUsd: 0,
+    bonusAvoidedRepayAtArmingUsd: 0,
+  };
   for (const item of items) {
     const levee = simulate(item.path, params).saved;
     const collateral = holdAsCollateral(item.path, reserveShare, item.usdcThreshold).survived;
-    if (repayAtArming(item.path, reserveShare).survived) row.repayAtArming++;
-    if (levee) row.levee++;
-    if (collateral) row.holdAsCollateral++;
+    const bonus = item.firstEpisodeBonusUsd;
+    if (repayAtArming(item.path, reserveShare).survived) {
+      row.repayAtArming++;
+      row.bonusAvoidedRepayAtArmingUsd += bonus;
+    }
+    if (levee) {
+      row.levee++;
+      row.bonusAvoidedLeveeUsd += bonus;
+    }
+    if (collateral) {
+      row.holdAsCollateral++;
+      row.bonusAvoidedCollateralUsd += bonus;
+    }
     if (levee && collateral) row.both++;
     else if (levee) row.leveeOnly++;
     else if (collateral) row.collateralOnly++;
     else row.neither++;
   }
+  row.bonusAvoidedLeveeUsd = Math.round(row.bonusAvoidedLeveeUsd);
+  row.bonusAvoidedCollateralUsd = Math.round(row.bonusAvoidedCollateralUsd);
+  row.bonusAvoidedRepayAtArmingUsd = Math.round(row.bonusAvoidedRepayAtArmingUsd);
   return row;
 }
 

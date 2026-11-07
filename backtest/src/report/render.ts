@@ -66,7 +66,8 @@ function savedPivot(cells: Cell[], target: number, delaySec: number): string {
       trigger.toFixed(2),
       ...GRID.reserveShares.map((r) => {
         const cell = find(cells, trigger, target, r, delaySec);
-        return `${cell.saved} (${pct(cell.saved, cell.positions)})`;
+        const above = cell.positions - cell.armedBelowTrigger;
+        return `${pct(cell.saved, cell.positions)} / ${pct(cell.saved - cell.savedArmedBelowTrigger, above)}`;
       }),
     ]);
   return table(['T \\ R', ...GRID.reserveShares.map(share)], rows);
@@ -110,7 +111,7 @@ function warningRows(rows: WarningRow[]): string {
 
 function fairTable(rows: FairRow[]): string {
   return table(
-    ['R', 'Levee', 'Same USDC as collateral', 'Same USDC repaid at arming', 'Both survive', 'Levee only', 'Collateral only', 'Neither'],
+    ['R', 'Levee', 'Same USDC as collateral', 'Same USDC repaid at arming', 'Both survive', 'Levee only', 'Collateral only', 'Neither', 'Bonus avoided: Levee', 'Collateral', 'Repaid at arming'],
     rows.map((r) => [
       share(r.reserveShare),
       `${r.levee} (${pct(r.levee, r.positions)})`,
@@ -120,6 +121,9 @@ function fairTable(rows: FairRow[]): string {
       r.leveeOnly,
       r.collateralOnly,
       r.neither,
+      usd(r.bonusAvoidedLeveeUsd),
+      usd(r.bonusAvoidedCollateralUsd),
+      usd(r.bonusAvoidedRepayAtArmingUsd),
     ]),
   );
 }
@@ -191,10 +195,14 @@ export function renderSummary(summary: Summary): string {
   out.push('');
   out.push(`## Headline: T ${HEADLINE.trigger.toFixed(2)}, G ${HEADLINE.target.toFixed(2)}, R ${share(HEADLINE.reserveShare)} of debt, D ${HEADLINE.delaySec} s`);
   out.push('');
+  const armedAbove = main.positions - main.armedBelowTrigger;
+  const savedAbove = main.saved - main.savedArmedBelowTrigger;
   out.push(`Of **${main.positions}** in-scope positions, **${main.saved} (${pct(main.saved, main.positions)})** were saved and **${main.notSaved} (${pct(main.notSaved, main.positions)})** were not.`);
-  out.push(`${main.savedArmedBelowTrigger} of the saved positions were already below the trigger when armed, so the repay fired at arming and not during the crash. That is an upfront repay, not a rescue. Without them, ${main.saved - main.savedArmedBelowTrigger} (${pct(main.saved - main.savedArmedBelowTrigger, main.positions)}).`);
+  out.push('');
+  out.push(`That count flatters the race. ${main.armedBelowTrigger} positions were already below the trigger at arming, so their repay fired at once and not during the crash. That is an upfront repay, not a rescue. **Among the ${armedAbove} positions armed above the trigger, ${savedAbove} (${pct(savedAbove, armedAbove)}) were saved.**`);
+  out.push('');
   out.push(`Gross liquidation bonus avoided on saved positions: **${usd(main.bonusAvoidedUsd)}** of ${usd(main.bonusAtRiskUsd)} at risk (first episode only). Reserve used on saved positions: ${usd(main.reserveUsedOnSavedUsd)}, from ${usd(main.reserveHeldUsd)} held across all in-scope positions.`);
-  out.push(`Holding the same USDC as Aave collateral from the start, with no keeper at all: **${headline.fair.holdAsCollateral}** survive (${pct(headline.fair.holdAsCollateral, headline.fair.positions)}). Levee only: ${headline.fair.leveeOnly}. Collateral only: ${headline.fair.collateralOnly}.`);
+  out.push(`Holding the same USDC as Aave collateral from the start, with no keeper at all: **${headline.fair.holdAsCollateral}** survive (${pct(headline.fair.holdAsCollateral, headline.fair.positions)}), avoiding ${usd(headline.fair.bonusAvoidedCollateralUsd)}. Saved by Levee only: ${headline.fair.leveeOnly}. Saved by collateral only: ${headline.fair.collateralOnly}.`);
   out.push('');
   out.push('## Population');
   out.push('');
@@ -215,6 +223,8 @@ export function renderSummary(summary: Summary): string {
   out.push(warningRows(summary.warning));
   out.push('');
   out.push(`## Saved positions by T, R and D, G ${HEADLINE.target.toFixed(2)}`);
+  out.push('');
+  out.push('Each cell reads: share of all in-scope positions saved / share saved among positions armed above T. The second figure is the race. The first includes repays that fired at arming.');
   for (const delay of GRID.delaysSec) {
     out.push('');
     out.push(`D = ${delay} s`);
