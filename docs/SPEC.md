@@ -182,9 +182,18 @@ The trigger, target and RPC list live off chain. No LLM is involved.
   "timestamps_ms": { "detected": 0, "near_included": 0, "signed": 0, "broadcast": 0, "included": 0 },
   "near_tx": "...",
   "evm_tx": "0x...",
-  "evm_block": 0
+  "evm_block": 0,
+  "near_contract": "levee.near",
+  "near_sender": "keeper.near",
+  "trace": {}
 }
 ```
+
+- `near_sender` and `near_contract` are required. NEAR RPC cannot resolve a hash without its sender, and the rescuer's derivation depends on the contract.
+- `outcome` is `aborted` when the keeper refused and nothing reached the lending chain, and `failed` when an attempt was made and did not land.
+- A step the run did not reach is `null`.
+- `trace` is optional. It holds the inputs and results of each step, so that `keeper replay` can repeat the run with no keys and no network.
+- `network` is `simulated` for a run on a local fork with a local key standing in for the MPC. A simulated run is never proof of anything.
 
 Failures are recorded, not deleted. `evidence/claims.json` maps every public claim to a test or a run.
 
