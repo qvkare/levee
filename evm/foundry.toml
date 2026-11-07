@@ -1,0 +1,17 @@
+[profile.default]
+src = "src"
+test = "test"
+libs = ["lib"]
+out = "out"
+cache_path = "cache"
+solc = "0.8.30"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+# Fork tests read real state, and a repeat run should not refetch it.
+no_storage_caching = false
+verbosity = 2
+
+[profile.default.rpc_storage_caching]
+chains = "all"
+endpoints = "all"
