@@ -1,0 +1,290 @@
+{
+ "note": "Live read of a public account on 2026-11-07 (standard).",
+ "abstraction": "disabled",
+ "spot": {
+  "balances": [
+   {
+    "coin": "USDC",
+    "token": 0,
+    "total": "173051.77081888",
+    "hold": "0.0",
+    "entryNtl": "0.0"
+   },
+   {
+    "coin": "HYPE",
+    "token": 150,
+    "total": "9.0",
+    "hold": "0.0",
+    "entryNtl": "719.46771111"
+   }
+  ]
+ },
+ "dexes": [
+  {
+   "dex": "",
+   "collateralToken": 0,
+   "state": {
+    "marginSummary": {
+     "accountValue": "475274.42766",
+     "totalNtlPos": "134.64",
+     "totalRawUsd": "475409.06766",
+     "totalMarginUsed": "13.464"
+    },
+    "crossMarginSummary": {
+     "accountValue": "475274.42766",
+     "totalNtlPos": "134.64",
+     "totalRawUsd": "475409.06766",
+     "totalMarginUsed": "13.464"
+    },
+    "crossMaintenanceMarginUsed": "6.732",
+    "withdrawable": "475260.96366",
+    "assetPositions": [
+     {
+      "type": "oneWay",
+      "position": {
+       "coin": "WLD",
+       "szi": "-400.0",
+       "leverage": {
+        "type": "cross",
+        "value": 10
+       },
+       "entryPx": "0.53214",
+       "positionValue": "134.64",
+       "unrealizedPnl": "78.218",
+       "returnOnEquity": "3.6746563437",
+       "liquidationPx": "1131.9263515714",
+       "marginUsed": "13.464",
+       "maxLeverage": 10,
+       "cumFunding": {
+        "allTime": "-1.012917",
+        "sinceOpen": "-1.012917",
+        "sinceChange": "-1.010247"
+       }
+      }
+     }
+    ],
+    "time": 1794045764122
+   }
+  },
+  {
+   "dex": "xyz",
+   "collateralToken": 0,
+   "state": {
+    "marginSummary": {
+     "accountValue": "0.999199",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.999199",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMarginSummary": {
+     "accountValue": "0.999199",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.999199",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMaintenanceMarginUsed": "0.0",
+    "withdrawable": "0.999199",
+    "assetPositions": [],
+    "time": 1794045765084
+   }
+  },
+  {
+   "dex": "flx",
+   "collateralToken": 360,
+   "state": {
+    "marginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMarginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMaintenanceMarginUsed": "0.0",
+    "withdrawable": "0.0",
+    "assetPositions": [],
+    "time": 1794045765084
+   }
+  },
+  {
+   "dex": "vntl",
+   "collateralToken": 360,
+   "state": {
+    "marginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMarginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMaintenanceMarginUsed": "0.0",
+    "withdrawable": "0.0",
+    "assetPositions": [],
+    "time": 1794045765084
+   }
+  },
+  {
+   "dex": "hyna",
+   "collateralToken": 235,
+   "state": {
+    "marginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMarginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMaintenanceMarginUsed": "0.0",
+    "withdrawable": "0.0",
+    "assetPositions": [],
+    "time": 1794045765084
+   }
+  },
+  {
+   "dex": "km",
+   "collateralToken": 360,
+   "state": {
+    "marginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMarginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMaintenanceMarginUsed": "0.0",
+    "withdrawable": "0.0",
+    "assetPositions": [],
+    "time": 1794045765084
+   }
+  },
+  {
+   "dex": "abcd",
+   "collateralToken": 0,
+   "state": {
+    "marginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMarginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMaintenanceMarginUsed": "0.0",
+    "withdrawable": "0.0",
+    "assetPositions": [],
+    "time": 1794045765084
+   }
+  },
+  {
+   "dex": "cash",
+   "collateralToken": 268,
+   "state": {
+    "marginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMarginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMaintenanceMarginUsed": "0.0",
+    "withdrawable": "0.0",
+    "assetPositions": [],
+    "time": 1794045765084
+   }
+  },
+  {
+   "dex": "para",
+   "collateralToken": 0,
+   "state": {
+    "marginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMarginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMaintenanceMarginUsed": "0.0",
+    "withdrawable": "0.0",
+    "assetPositions": [],
+    "time": 1794045765084
+   }
+  },
+  {
+   "dex": "mkts",
+   "collateralToken": 0,
+   "state": {
+    "marginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMarginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMaintenanceMarginUsed": "0.0",
+    "withdrawable": "0.0",
+    "assetPositions": [],
+    "time": 1794045765084
+   }
+  },
+  {
+   "dex": "io",
+   "collateralToken": 0,
+   "state": {
+    "marginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMarginSummary": {
+     "accountValue": "0.0",
+     "totalNtlPos": "0.0",
+     "totalRawUsd": "0.0",
+     "totalMarginUsed": "0.0"
+    },
+    "crossMaintenanceMarginUsed": "0.0",
+    "withdrawable": "0.0",
+    "assetPositions": [],
+    "time": 1794045765084
+   }
+  }
+ ]
+}

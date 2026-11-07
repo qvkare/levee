@@ -1,0 +1,19 @@
+// The public site at levee.qvkare.com: the Next.js app and /api/risk on Cloudflare Workers, built by OpenNext.
+// Deploy with `pnpm --filter web run deploy` (needs `wrangler login`). `pnpm deploy` alone is a pnpm command.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "levee",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    // OpenNext calls back into its own Worker. The service name must match the Worker name.
+    { "binding": "WORKER_SELF_REFERENCE", "service": "levee" }
+  ],
+  "workers_dev": false,
+  "routes": [{ "pattern": "levee.qvkare.com", "custom_domain": true }]
+}
