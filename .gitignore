@@ -24,3 +24,4 @@ dist/
 # local tool state
 .claude/
 CLAUDE.md
+skills-lock.json
