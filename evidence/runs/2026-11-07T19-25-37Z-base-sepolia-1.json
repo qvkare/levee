@@ -1,0 +1,114 @@
+{
+  "run_id": "2026-11-07T19-25-37Z-base-sepolia-1",
+  "network": "testnet",
+  "position_id": 1,
+  "chain_id": 84532,
+  "borrower": "0x1BA01ceF25983F71e508f139Ecb10030b0403331",
+  "rescuer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971",
+  "amount": "7850001",
+  "outcome": "success",
+  "failure_reason": null,
+  "health_factor_before": "1.060926",
+  "health_factor_after": "1.5",
+  "timestamps_ms": {
+    "detected": 1794079537484,
+    "near_included": 1794079538938,
+    "signed": 1794079544462,
+    "broadcast": 1794079544467,
+    "included": 1794079544829
+  },
+  "near_tx": "DkEpqdb13gkSPVr6T1vmB7jGvBaJpQs4LoaagwP7zw7A",
+  "evm_tx": "0x4af7fc5047b4cb428f109bae353a2470a056e60a9a5025d486ac7834d485e2d6",
+  "evm_block": 55788380,
+  "near_contract": "levee-core-1503.testnet",
+  "near_sender": "levee-keeper-1503.testnet",
+  "trace": {
+    "trigger": "1.20",
+    "target": "1.50",
+    "manual_amount": null,
+    "quorum": {
+      "now_ms": 1794079537484,
+      "samples": [
+        {
+          "rpc": "https://sepolia.base.org",
+          "chain_id": 84532,
+          "block_number": "55788342",
+          "block_timestamp": "1794079537",
+          "health_factor": "1060926787354506663",
+          "total_collateral_base": "3346467104",
+          "total_debt_base": "2681143574",
+          "liquidation_threshold_bps": "8500",
+          "usdc_price_base": "99976097",
+          "usdc_debt": "26817846",
+          "rescuer_usdc": "16285310",
+          "rescuer_allowance": "960742561"
+        },
+        {
+          "rpc": "https://base-sepolia-rpc.publicnode.com",
+          "chain_id": 84532,
+          "block_number": "55788342",
+          "block_timestamp": "1794079537",
+          "health_factor": "1060926787354506663",
+          "total_collateral_base": "3346467104",
+          "total_debt_base": "2681143574",
+          "liquidation_threshold_bps": "8500",
+          "usdc_price_base": "99976097",
+          "usdc_debt": "26817846",
+          "rescuer_usdc": "16285310",
+          "rescuer_allowance": "960742561"
+        }
+      ],
+      "failures": [],
+      "refused": null
+    },
+    "caps": {
+      "max_per_rescue": "100000000",
+      "remaining_today": "342742561",
+      "rescuer_balance": "16285310",
+      "rescuer_allowance": "960742561",
+      "cooldown_remaining_secs": 0,
+      "paused": false
+    },
+    "decision": {
+      "action": "repay",
+      "reason": null,
+      "amount": "7850001",
+      "needed": "7850001",
+      "limited_by": "target",
+      "projected_health_factor": "1500000194533537667"
+    },
+    "fees": {
+      "nonce": 6,
+      "max_fee_per_gas": "11000000",
+      "max_priority_fee_per_gas": "1000000"
+    },
+    "rescue_result": {
+      "kind": "rescue",
+      "id": 1,
+      "unsigned_tx": "0x02f8ae83014a3406830f424083a7d8c0830493e0948bab6d1b75f19e9ed9fce8b9bd338844ff79ae2780b884573ade81000000000000000000000000ba50cd2a20f6da35d788639e581bca8d0b5d4d5f000000000000000000000000000000000000000000000000000000000077c81100000000000000000000000000000000000000000000000000000000000000020000000000000000000000001ba01cef25983f71e508f139ecb10030b0403331c0",
+      "tx_hash": "0xae1fec3889c88b4cae2086b4c3d47b6939bff336b00619ed9c1850438cc00d2e",
+      "big_r": "0x025abadf32452a5b1401ece464fc49caed4223ff1db0ef78d6753234543691f7e1",
+      "s": "0x4ba0628d0d79ed820089519b05b89cfb1862ed223a8b74f017c01303557e41d6",
+      "recovery_id": 0
+    },
+    "signed_tx": "0x02f8f183014a3406830f424083a7d8c0830493e0948bab6d1b75f19e9ed9fce8b9bd338844ff79ae2780b884573ade81000000000000000000000000ba50cd2a20f6da35d788639e581bca8d0b5d4d5f000000000000000000000000000000000000000000000000000000000077c81100000000000000000000000000000000000000000000000000000000000000020000000000000000000000001ba01cef25983f71e508f139ecb10030b0403331c080a05abadf32452a5b1401ece464fc49caed4223ff1db0ef78d6753234543691f7e1a04ba0628d0d79ed820089519b05b89cfb1862ed223a8b74f017c01303557e41d6",
+    "broadcast": [
+      {
+        "rpc": "https://sepolia.base.org",
+        "ok": true,
+        "error": null
+      },
+      {
+        "rpc": "https://base-sepolia-rpc.publicnode.com",
+        "ok": true,
+        "error": null
+      }
+    ],
+    "receipt": {
+      "success": true,
+      "block_number": "55788380",
+      "gas_used": "158600",
+      "effective_gas_price": "6000000"
+    }
+  }
+}

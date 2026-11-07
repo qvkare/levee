@@ -1,0 +1,75 @@
+{
+  "run_id": "2026-11-07T19-26-34Z-base-sepolia-1",
+  "network": "testnet",
+  "position_id": 1,
+  "chain_id": 84532,
+  "borrower": "0x1BA01ceF25983F71e508f139Ecb10030b0403331",
+  "rescuer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971",
+  "amount": "0",
+  "outcome": "aborted",
+  "failure_reason": "quorum_disagreement: rescuerUsdc differs by more than 50 bps: https://sepolia.base.org=24135306 https://base-sepolia-rpc.publicnode.com=16285306",
+  "health_factor_before": null,
+  "health_factor_after": null,
+  "timestamps_ms": {
+    "detected": 1794079594438,
+    "near_included": null,
+    "signed": null,
+    "broadcast": null,
+    "included": null
+  },
+  "near_tx": null,
+  "evm_tx": null,
+  "evm_block": null,
+  "near_contract": "levee-core-1503.testnet",
+  "near_sender": null,
+  "trace": {
+    "trigger": "1.20",
+    "target": "1.50",
+    "manual_amount": null,
+    "quorum": {
+      "now_ms": 1794079594438,
+      "samples": [
+        {
+          "rpc": "https://sepolia.base.org",
+          "chain_id": 84532,
+          "block_number": "55788627",
+          "block_timestamp": "1794079594",
+          "health_factor": "1060926789949414698",
+          "total_collateral_base": "3346467237",
+          "total_debt_base": "2681143674",
+          "liquidation_threshold_bps": "8500",
+          "usdc_price_base": "99976097",
+          "usdc_debt": "26817847",
+          "rescuer_usdc": "24135306",
+          "rescuer_allowance": "937192557"
+        },
+        {
+          "rpc": "https://base-sepolia-rpc.publicnode.com",
+          "chain_id": 84532,
+          "block_number": "55788626",
+          "block_timestamp": "1794079594",
+          "health_factor": "1060926789949414698",
+          "total_collateral_base": "3346467237",
+          "total_debt_base": "2681143674",
+          "liquidation_threshold_bps": "8500",
+          "usdc_price_base": "99976097",
+          "usdc_debt": "26817847",
+          "rescuer_usdc": "16285306",
+          "rescuer_allowance": "937192557"
+        }
+      ],
+      "failures": [],
+      "refused": {
+        "reason": "disagreement",
+        "detail": "rescuerUsdc differs by more than 50 bps: https://sepolia.base.org=24135306 https://base-sepolia-rpc.publicnode.com=16285306"
+      }
+    },
+    "caps": null,
+    "decision": null,
+    "fees": null,
+    "rescue_result": null,
+    "signed_tx": null,
+    "broadcast": null,
+    "receipt": null
+  }
+}
