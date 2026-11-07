@@ -20,7 +20,15 @@ export const CHAINS: Record<ChainKey, ChainConfig> = {
     chainId: 8453,
     pool: '0xA238Dd80C259a72e81d7e4664a9801593F98d1c5',
     usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-    archiveRpcs: ['https://mainnet.base.org', 'https://base.drpc.org', 'https://base.gateway.tenderly.co'],
+    archiveRpcs: [
+      'https://mainnet.base.org',
+      'https://base.gateway.tenderly.co',
+      'https://rpc.sentio.xyz/base',
+      'https://8453.rpc.thirdweb.com',
+      'https://base.merkle.io',
+      'https://base-public.nodies.app',
+      'https://base.drpc.org',
+    ],
     logRpcs: [
       { url: 'https://gateway.tenderly.co/public/base', chunk: 1_000 },
       { url: 'https://base.api.pocket.network', chunk: 500 },
@@ -31,7 +39,14 @@ export const CHAINS: Record<ChainKey, ChainConfig> = {
     chainId: 42161,
     pool: '0x794a61358D6845594F94dc1DB02A252b5b4814aD',
     usdc: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
-    archiveRpcs: ['https://arbitrum-one.public.blastapi.io', 'https://arb-one.api.pocket.network', 'https://arbitrum.gateway.tenderly.co'],
+    archiveRpcs: [
+      'https://arbitrum-one.public.blastapi.io',
+      'https://arb-one.api.pocket.network',
+      'https://arbitrum.gateway.tenderly.co',
+      'https://rpc.sentio.xyz/arbitrum-one',
+      'https://42161.rpc.thirdweb.com',
+      'https://arb-pokt.nodies.app',
+    ],
     logRpcs: [
       { url: 'https://gateway.tenderly.co/public/arbitrum', chunk: 20_000 },
       { url: 'https://arb1.arbitrum.io/rpc', chunk: 20_000 },
