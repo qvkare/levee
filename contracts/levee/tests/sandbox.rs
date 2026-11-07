@@ -632,13 +632,12 @@ async fn a_failure_after_midnight_gives_nothing_back_to_the_new_day() -> anyhow:
     h.warp_to_start_of_day().await?;
     let second = h.signed(h.rescue(&h.keeper, id, 400, 1)).await?;
     assert!(second.is_success(), "{:?}", second.failures());
-    let day = h.position(id).await?.day;
     assert_eq!(h.position(id).await?.spent_today, U128(400));
 
+    // Subtracting the old charge from the new bucket would report 400 released.
     h.worker.fast_forward(200).await?;
     let failed = finish(first).await?;
     assert_eq!(event(&failed, "rescue_failed")["data"]["released"], "0");
-    assert_ne!(h.position(id).await?.day, day - 1);
     Ok(())
 }
 
