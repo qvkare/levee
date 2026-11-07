@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import "./globals.css";
 
@@ -32,7 +33,26 @@ export const viewport: Viewport = { themeColor: "#ffffff", colorScheme: "light" 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${text.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <a className="skip" href="#main">
+          Skip to content
+        </a>
+        {children}
+        <footer className="foot">
+          <p>Levee is unaudited. Do not use it with funds you cannot lose. Its live runs are on testnet. This site reads public data, holds no funds and asks for no wallet.</p>
+          <nav aria-label="Footer">
+            <Link href="/how" prefetch={false}>
+              How a rescue runs
+            </Link>
+            <Link href="/how#limits" prefetch={false}>
+              Limits
+            </Link>
+            <Link href="/proof" prefetch={false}>
+              Proof
+            </Link>
+          </nav>
+        </footer>
+      </body>
     </html>
   );
 }
