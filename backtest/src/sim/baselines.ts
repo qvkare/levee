@@ -17,6 +17,19 @@ function survive(path: PositionPath, hfAt: (capacity: number, debt: number) => n
   return { survived: minHf >= 1, minHfFromLiquidation: minHf };
 }
 
+/**
+ * The smallest reserve, as a share of debt at arming, that repaid before the real liquidation
+ * keeps HF at or above 1 to the end of the window. Ignores delay and any cap on USDC debt, so
+ * it is a lower bound. As USDC collateral the same position needs this divided by the threshold.
+ */
+export function reserveNeeded(path: PositionPath): number {
+  let worst = 0;
+  for (const point of path.points) {
+    if (point.block >= path.liquidationBlock) worst = Math.max(worst, point.debt - point.capacity);
+  }
+  return worst / armingPoint(path).debt;
+}
+
 /** The reserve is supplied as USDC collateral at arming. It adds `reserve × LT` of capacity. */
 export function holdAsCollateral(path: PositionPath, reserveShare: number, usdcThreshold: number): BaselineOutcome {
   const reserve = reserveShare * armingPoint(path).debt;

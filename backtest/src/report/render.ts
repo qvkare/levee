@@ -1,7 +1,7 @@
 // Markdown for results/summary.md. Wording follows docs/SPEC.md section 8.
 import { WINDOWS } from '../config.ts';
 import { GRID } from '../grid.ts';
-import { HEADLINE, SIZE_BUCKETS, type Cell, type DelayRow, type Exclusion, type FairRow, type GroupRow, type Population, type WarningRow } from './aggregate.ts';
+import { HEADLINE, SIZE_BUCKETS, type Cell, type DelayGroupRow, type DelayRow, type Exclusion, type FairRow, type GroupRow, type NeededRow, type Population, type WarningRow } from './aggregate.ts';
 import type { Example, Summary } from './summary.ts';
 
 const usd = (x: number): string => {
@@ -12,6 +12,7 @@ const usd = (x: number): string => {
 };
 const pct = (part: number, whole: number): string => (whole === 0 ? 'n/a' : `${((part / whole) * 100).toFixed(1)}%`);
 const share = (x: number): string => `${(x * 100).toFixed(0)}%`;
+const share1 = (x: number): string => `${(x * 100).toFixed(1)}%`;
 const duration = (sec: number | null): string => {
   if (sec === null) return 'n/a';
   if (sec < 120) return `${sec} s`;
@@ -145,8 +146,32 @@ function delayTable(rows: DelayRow[]): string {
 
 function groupTable(rows: GroupRow[], first: string): string {
   return table(
-    [first, 'Positions', 'Saved', 'Saved %', 'Bonus avoided', 'Bonus at risk', 'Reserve used on saved'],
-    rows.map((r) => [r.group, r.positions, r.saved, pct(r.saved, r.positions), usd(r.bonusAvoidedUsd), usd(r.bonusAtRiskUsd), usd(r.reserveUsedOnSavedUsd)]),
+    [first, 'Positions', 'Saved', 'Saved %', 'Armed above T', 'Saved of those', 'Bonus avoided', 'Bonus at risk', 'Reserve used on saved'],
+    rows.map((r) => {
+      const above = r.positions - r.armedBelowTrigger;
+      const savedAbove = r.saved - r.savedArmedBelowTrigger;
+      return [r.group, r.positions, r.saved, pct(r.saved, r.positions), above, `${savedAbove} (${pct(savedAbove, above)})`, usd(r.bonusAvoidedUsd), usd(r.bonusAtRiskUsd), usd(r.reserveUsedOnSavedUsd)];
+    }),
+  );
+}
+
+function neededTable(rows: NeededRow[]): string {
+  return table(
+    ['Group', 'Positions', 'p25', 'Median', 'p75', 'p90', 'Need over 30%', 'Need over 50%'],
+    rows.map((r) => [r.group, r.positions, share1(r.p25), share1(r.p50), share1(r.p75), share1(r.p90), pct(r.above30Pct, 1), pct(r.above50Pct, 1)]),
+  );
+}
+
+function delayGroupTable(rows: DelayGroupRow[]): string {
+  return table(
+    ['Group', 'Armed above T', ...GRID.delaysSec.map((d) => `${d} s`), 'Lost the race at 10 s', 'At 300 s'],
+    rows.map((r) => [
+      r.group,
+      r.armedAbove,
+      ...GRID.delaysSec.map((d) => pct(r.savedArmedAbove[String(d)] ?? 0, r.armedAbove)),
+      r.tooSlow['10'] ?? 0,
+      r.tooSlow['300'] ?? 0,
+    ]),
   );
 }
 
@@ -274,6 +299,18 @@ export function renderSummary(summary: Summary): string {
   out.push(delayTable(summary.fairByDelay));
   out.push('');
   out.push(summary.fairNote);
+  out.push('');
+  out.push('## Reserve needed to survive');
+  out.push('');
+  out.push('The smallest reserve, as a share of debt at arming, that repaid at once keeps HF at or above 1 from the real liquidation to the end of the window. It ignores delay and the USDC cap, so it is a lower bound for Levee. As USDC collateral, divide by the threshold: the same position needs about 1.28 times as much.');
+  out.push('');
+  out.push(neededTable(summary.reserveNeeded));
+  out.push('');
+  out.push('## Does delay matter?');
+  out.push('');
+  out.push(`Share saved among positions armed above T, where a race actually happens, at T ${HEADLINE.trigger.toFixed(2)}, G ${HEADLINE.target.toFixed(2)}, R ${share(HEADLINE.reserveShare)}. "Lost the race" counts \`too_slow\` and \`no_warning\` among those positions.`);
+  out.push('');
+  out.push(delayGroupTable(summary.delayByWindow));
   out.push('');
   out.push('## Headline cell by window, chain and size');
   out.push('');

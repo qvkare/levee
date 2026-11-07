@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { holdAsCollateral, repayAtArming } from '../src/sim/baselines.ts';
+import { holdAsCollateral, repayAtArming, reserveNeeded } from '../src/sim/baselines.ts';
 import { healthFactor, repayToTarget, simulate, type Params, type PathPoint, type PositionPath } from '../src/sim/simulate.ts';
 
 // The hand-worked position. Debt is $6,000 of USDC. Capacity is collateral × threshold.
@@ -209,5 +209,18 @@ describe('baselines', () => {
 
   it('caps a repay at the USDC share of debt', () => {
     assert.equal(repayAtArming({ ...path, usdcShare: 0.05 }, 0.3).survived, false);
+  });
+
+  it('finds the smallest reserve that survives', () => {
+    // The worst point from the liquidation on is t=310: debt 6,000 less capacity 5,400 is
+    // 600, which is 10% of debt at arming.
+    close(reserveNeeded(path), 0.1);
+    assert.equal(repayAtArming(path, 0.1).survived, true);
+    assert.equal(repayAtArming(path, 0.0999).survived, false);
+  });
+
+  it('ignores a low before the real liquidation', () => {
+    const early: PositionPath = { ...path, points: [{ t: 50, block: 1, capacity: 1000, debt: 6000 }, ...points.slice(1)] };
+    close(reserveNeeded(early), 0.1);
   });
 });

@@ -2,7 +2,7 @@
 import { CHAINS, type ChainKey } from '../config.ts';
 import { decodeObserved, type CompactPoint, type DerivedPosition } from '../data.ts';
 import { COOLDOWN_SEC, COOLDOWN_SENSITIVITY_SEC, GRID } from '../grid.ts';
-import { holdAsCollateral, repayAtArming } from '../sim/baselines.ts';
+import { holdAsCollateral, repayAtArming, reserveNeeded } from '../sim/baselines.ts';
 import { healthFactor, simulate, type Outcome, type Params, type PositionPath, type Reason } from '../sim/simulate.ts';
 
 /** The cell the headline quotes. The grid shows the rest. */
@@ -272,6 +272,61 @@ export function fairByDelay(items: Prepared[], base: { trigger: number; target: 
   return GRID.delaysSec.map((delaySec) => ({ delaySec, ...fairRow(items, paramsOf({ ...base, delaySec })) }));
 }
 
+export interface NeededRow {
+  group: string;
+  positions: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+  /** Share of positions a reserve of this size would not cover, even repaid at once. */
+  above30Pct: number;
+  above50Pct: number;
+}
+
+function neededRow(group: string, list: Prepared[]): NeededRow {
+  const needed = list.map((item) => reserveNeeded(item.path)).sort((a, b) => a - b);
+  const at = (q: number): number => needed[Math.min(needed.length - 1, Math.floor(q * needed.length))]!;
+  const above = (limit: number): number => needed.filter((n) => n > limit).length / needed.length;
+  return { group, positions: list.length, p25: at(0.25), p50: at(0.5), p75: at(0.75), p90: at(0.9), above30Pct: above(0.3), above50Pct: above(0.5) };
+}
+
+export function reserveNeededTable(items: Prepared[], labelOf: (item: Prepared) => string): NeededRow[] {
+  const groups = new Map<string, Prepared[]>();
+  for (const item of items) groups.set(labelOf(item), [...(groups.get(labelOf(item)) ?? []), item]);
+  const rows = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([group, list]) => neededRow(group, list));
+  return [...rows, neededRow('All', items)];
+}
+
+export interface DelayGroupRow {
+  group: string;
+  positions: number;
+  armedAbove: number;
+  /** Saved among positions armed above T, by delay. */
+  savedArmedAbove: Record<string, number>;
+  /** Liquidator won the race, by delay. */
+  tooSlow: Record<string, number>;
+}
+
+/** Delay shown per group, among positions armed above T, where a race actually happens. */
+export function delayByGroup(items: Prepared[], base: { trigger: number; target: number; reserveShare: number }, labelOf: (item: Prepared) => string): DelayGroupRow[] {
+  const groups = new Map<string, Prepared[]>();
+  for (const item of items) groups.set(labelOf(item), [...(groups.get(labelOf(item)) ?? []), item]);
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([group, list]) => {
+      const row: DelayGroupRow = { group, positions: list.length, armedAbove: 0, savedArmedAbove: {}, tooSlow: {} };
+      for (const delaySec of GRID.delaysSec) {
+        const outcomes = list.map((item) => simulate(item.path, paramsOf({ ...base, delaySec })));
+        const above = outcomes.filter((o) => !o.armedBelowTrigger);
+        row.armedAbove = above.length;
+        row.savedArmedAbove[String(delaySec)] = above.filter((o) => o.saved).length;
+        row.tooSlow[String(delaySec)] = above.filter((o) => o.reason === 'too_slow' || o.reason === 'no_warning').length;
+      }
+      return row;
+    });
+}
+
 export interface CooldownRow {
   cooldownSec: number;
   saved: number;
@@ -290,7 +345,8 @@ export function cooldownSensitivity(items: Prepared[], params: Params): Cooldown
 }
 
 export const SIZE_BUCKETS: Array<{ label: string; min: number; max: number }> = [
-  { label: 'under $1k', min: 0, max: 1_000 },
+  { label: 'under $100', min: 0, max: 100 },
+  { label: '$100 to $1k', min: 100, max: 1_000 },
   { label: '$1k to $10k', min: 1_000, max: 10_000 },
   { label: '$10k to $100k', min: 10_000, max: 100_000 },
   { label: '$100k and up', min: 100_000, max: Infinity },

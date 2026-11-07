@@ -5,6 +5,7 @@ import { healthFactor, simulate } from '../sim/simulate.ts';
 import {
   byGroup,
   cooldownSensitivity,
+  delayByGroup,
   exclusions,
   fairByDelay,
   fairComparison,
@@ -12,15 +13,18 @@ import {
   paramsOf,
   population,
   prepare,
+  reserveNeededTable,
   runGrid,
   SIZE_BUCKETS,
   warningTable,
   type Cell,
   type CooldownRow,
+  type DelayGroupRow,
   type DelayRow,
   type Exclusion,
   type FairRow,
   type GroupRow,
+  type NeededRow,
   type Population,
   type Prepared,
   type WarningRow,
@@ -54,6 +58,8 @@ export interface Summary {
   fair: FairRow[];
   fairByDelay: DelayRow[];
   fairNote: string;
+  reserveNeeded: NeededRow[];
+  delayByWindow: DelayGroupRow[];
   cooldown: CooldownRow[];
   byWindow: GroupRow[];
   byChain: GroupRow[];
@@ -124,8 +130,11 @@ export function buildSummary(positions: DerivedPosition[], prices: WindowPrices[
     fairNote:
       `A dollar repaid offsets a dollar of debt. A dollar of USDC collateral adds only its liquidation threshold (${threshold.toFixed(2)}) of capacity, so a repay that lands is worth ${(1 / threshold).toFixed(2)} times as much at the point of liquidation. ` +
       'That is the only survival edge Levee has over plain collateral, and it exists only if the repay lands first. ' +
+      'Do not quote the gap at one reserve size. Needed reserves cluster (see the next section), so the gap swings with R. It reverses at the largest R, mostly because mixed debt runs out of USDC to repay, which does not limit collateral. ' +
       '"Both survive" and "Neither" are where Levee adds no survival benefit. "Collateral only" is where Levee does worse because its repay was late. ' +
       'The upside of keeping the reserve off the venue, such as yield or sharing it across positions, is not measured here.',
+    reserveNeeded: reserveNeededTable(items, (item) => `${item.position.window} ${item.position.chain}`),
+    delayByWindow: delayByGroup(items, HEADLINE, (item) => `${item.position.window} ${item.position.chain}`),
     cooldown: cooldownSensitivity(items, params),
     byWindow: byGroup(items, params, (item) => item.position.window),
     byChain: byGroup(items, params, (item) => item.position.chain),
