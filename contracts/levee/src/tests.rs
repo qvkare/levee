@@ -870,6 +870,14 @@ mod signing {
         assert_eq!(calls()[0].args["request"]["path"], "levee/v1/2");
     }
 
+    /// Unused gas normally lifts `sign` well above `SIGN_GAS`, so a sandbox run cannot
+    /// see this constant. It is the floor if a method's own burn ever eats that surplus,
+    /// so on its own it has to meet what both live signers require.
+    #[test]
+    fn the_static_gas_alone_meets_the_live_signers_requirement() {
+        assert!(SIGN_GAS >= Gas::from_tgas(15));
+    }
+
     /// Only the boundary of the check. Whether the minimum really reaches the signer
     /// is measured against the real VM in `tests/sandbox.rs`.
     #[test]
