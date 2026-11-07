@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { assessAssumption, bonusFromBps, bonusFromConfiguration, buildPosition, rayMul, repayFigure, type AccountData } from "./aave-model.ts";
+import { assessAssumption, bonusFromBps, bonusFromConfiguration, buildPosition, inEModeCategory, rayMul, repayFigure, type AccountData } from "./aave-model.ts";
 import type { ReserveLine, Reserves } from "./types.ts";
 
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
@@ -23,6 +23,16 @@ test("the liquidation bonus comes out of the reserve's configuration word", () =
   assert.equal(bonusFromConfiguration(10500n << 32n), 0.05);
   assert.equal(bonusFromBps(10100), 0.01);
   assert.equal(bonusFromBps(0), 0); // A reserve that cannot be used as collateral has no bonus.
+});
+
+test("e-mode's bonus applies only to collateral inside the category", () => {
+  // Base, 2026-11-07. Category 10's bitmap is 64: cbBTC, reserve 6, and not WETH, reserve 0.
+  assert.equal(inEModeCategory(64n, 6), true);
+  assert.equal(inEModeCategory(64n, 0), false);
+  // Category 8's bitmap is 8: wstETH, reserve 3.
+  assert.equal(inEModeCategory(8n, 3), true);
+  // The bitmap is 128 bits wide, past what a Number shift can hold.
+  assert.equal(inEModeCategory(1n << 100n, 100), true);
 });
 
 test("no collateral and no debt is no position", () => {

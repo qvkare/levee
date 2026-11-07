@@ -1,7 +1,7 @@
 /** Reads one Aave market. Every call runs at one pinned block, so the read can be repeated exactly. */
 import { createPublicClient, fallback, formatUnits, http, parseAbi, type Address, type PublicClient } from "viem";
 import { arbitrum, base } from "viem/chains";
-import { bonusFromBps, bonusFromConfiguration, buildPosition, rayMul, type AccountData } from "./aave-model.ts";
+import { bonusFromBps, bonusFromConfiguration, buildPosition, inEModeCategory, rayMul, type AccountData } from "./aave-model.ts";
 import { CHAINS, rpcUrls, type ChainConfig } from "./chains.ts";
 import type { AaveMarket, ChainKey, Failure, ReserveLine, Reserves } from "./types.ts";
 
@@ -9,7 +9,10 @@ const POOL_ABI = parseAbi([
   "struct ReserveConfigurationMap { uint256 data; }",
   "struct CollateralConfig { uint16 ltv; uint16 liquidationThreshold; uint16 liquidationBonus; }",
   "function getConfiguration(address asset) view returns (ReserveConfigurationMap)",
+  "struct ReserveDataLegacy { ReserveConfigurationMap configuration; uint128 liquidityIndex; uint128 currentLiquidityRate; uint128 variableBorrowIndex; uint128 currentVariableBorrowRate; uint128 currentStableBorrowRate; uint40 lastUpdateTimestamp; uint16 id; address aTokenAddress; address stableDebtTokenAddress; address variableDebtTokenAddress; address interestRateStrategyAddress; uint128 accruedToTreasury; uint128 unbacked; uint128 isolationModeTotalDebt; }",
   "function getEModeCategoryCollateralConfig(uint8 id) view returns (CollateralConfig)",
+  "function getEModeCategoryCollateralBitmap(uint8 id) view returns (uint128)",
+  "function getReserveData(address asset) view returns (ReserveDataLegacy)",
   "function getUserAccountData(address user) view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)",
   "function getReserveNormalizedIncome(address asset) view returns (uint256)",
   "function getReserveNormalizedVariableDebt(address asset) view returns (uint256)",
@@ -89,11 +92,21 @@ async function readReserves(client: PublicClient, chain: ChainConfig, blockNumbe
   collateral.sort(byValue);
   debt.sort(byValue);
 
-  // In e-mode the category's bonus replaces the reserve's for collateral inside the category.
-  let liquidationBonus = collateral[0] ? (bonuses.get(collateral[0].asset) ?? null) : null;
-  if (eModeCategory > 0) {
-    const config = await client.readContract({ address: chain.pool, abi: POOL_ABI, functionName: "getEModeCategoryCollateralConfig", args: [eModeCategory], blockNumber });
-    liquidationBonus = bonusFromBps(config.liquidationBonus);
+  const largest = collateral[0];
+  let liquidationBonus = largest ? (bonuses.get(largest.asset) ?? null) : null;
+  // The category's bonus replaces the reserve's only for collateral inside the category.
+  if (eModeCategory > 0 && largest) {
+    const [config, bitmap, reserve] = await client.multicall({
+      contracts: [
+        { address: chain.pool, abi: POOL_ABI, functionName: "getEModeCategoryCollateralConfig", args: [eModeCategory] },
+        { address: chain.pool, abi: POOL_ABI, functionName: "getEModeCategoryCollateralBitmap", args: [eModeCategory] },
+        { address: chain.pool, abi: POOL_ABI, functionName: "getReserveData", args: [largest.asset as Address] },
+      ],
+      allowFailure: false,
+      blockNumber,
+      batchSize: 0,
+    });
+    if (inEModeCategory(bitmap, reserve.id)) liquidationBonus = bonusFromBps(config.liquidationBonus);
   }
   return { collateral, debt, eModeCategory, liquidationBonus };
 }

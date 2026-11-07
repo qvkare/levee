@@ -23,6 +23,11 @@ export function bonusFromBps(bps: number): number {
   return bps > 10_000 ? (bps - 10_000) / 10_000 : 0;
 }
 
+/** Whether a reserve belongs to an e-mode category's collateral: one bit per reserve id. */
+export function inEModeCategory(collateralBitmap: bigint, reserveId: number): boolean {
+  return ((collateralBitmap >> BigInt(reserveId)) & 1n) === 1n;
+}
+
 export const ASSUMPTION = "All collateral falls together and the debt holds its value.";
 
 const sum = (lines: ReserveLine[]) => lines.reduce((total, line) => total + line.usd, 0);
