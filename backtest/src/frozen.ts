@@ -5,8 +5,6 @@
 import { deltaDecode, type CompactPoint, type Portfolio, type WindowPrices } from './data.ts';
 import { thinFrozen } from './thin.ts';
 
-const round2 = (x: number): number => Math.round(x * 100) / 100;
-
 /** Decoded prices for one window, with merged update lists cached per asset set. */
 export class PriceBook {
   private readonly blocks: number[];
@@ -79,7 +77,7 @@ export class PriceBook {
       let owed = 0;
       for (const c of collateral) capacity += c.value * prices[c.slot]!;
       for (const d of debt) owed += d.value * prices[d.slot]!;
-      return [block, t, round2(capacity), round2(owed)];
+      return [block, t, capacity, owed];
     };
 
     const points: CompactPoint[] = [point(fromBlock, fromTime)];

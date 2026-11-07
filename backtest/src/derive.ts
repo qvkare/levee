@@ -171,7 +171,7 @@ function observedPoints(samples: Sample[], blockTime: (block: number) => number)
   for (const sample of samples) {
     const debt = sample.debt / 1e8;
     const capacity = sample.hf === null ? ((sample.collateral / 1e8) * sample.threshold) / 1e4 : sample.hf * debt;
-    points.push([sample.block, blockTime(sample.block), round2(capacity), round2(debt)]);
+    points.push([sample.block, blockTime(sample.block), capacity, debt]);
   }
   return points;
 }

@@ -28,12 +28,17 @@ export interface DerivedEvent {
 /** block, unix seconds, capacity USD, debt USD. */
 export type CompactPoint = [block: number, t: number, capacity: number, debt: number];
 
-/** Delta-coded. `hf` is HF × 1e5 and `debt` is cents, so capacity is hf × debt. */
+/**
+ * Delta-coded. `hf` is HF × 1e4, and capacity is rebuilt as hf × debt. `debt` counts multiples
+ * of `debtUnit`, which keeps six significant digits of the position's largest debt: enough for
+ * the simulation, and it drops the interest noise that gzip cannot compress.
+ */
 export interface ObservedColumns {
   block: number[];
   t: number[];
   hf: number[];
   debt: number[];
+  debtUnit: number;
 }
 
 /** Indices point into the window's price series. Amounts are in whole tokens. */
@@ -97,11 +102,14 @@ export function deltaDecode(deltas: number[]): number[] {
 }
 
 export function encodeObserved(points: CompactPoint[]): ObservedColumns {
+  const largest = Math.max(0, ...points.map((p) => p[3]));
+  const debtUnit = largest > 0 ? 10 ** (Math.floor(Math.log10(largest)) - 5) : 1;
   return {
     block: deltaEncode(points.map((p) => p[0])),
     t: deltaEncode(points.map((p) => p[1])),
-    hf: deltaEncode(points.map((p) => (p[3] > 0 ? Math.round((p[2] / p[3]) * 1e5) : 0))),
-    debt: deltaEncode(points.map((p) => Math.round(p[3] * 100))),
+    hf: deltaEncode(points.map((p) => (p[3] > 0 ? Math.round((p[2] / p[3]) * 1e4) : 0))),
+    debt: deltaEncode(points.map((p) => Math.round(p[3] / debtUnit))),
+    debtUnit,
   };
 }
 
@@ -111,8 +119,8 @@ export function decodeObserved(columns: ObservedColumns): CompactPoint[] {
   const hf = deltaDecode(columns.hf);
   const debt = deltaDecode(columns.debt);
   return block.map((b, i) => {
-    const debtUsd = debt[i]! / 100;
-    return [b, t[i]!, (hf[i]! / 1e5) * debtUsd, debtUsd];
+    const debtUsd = debt[i]! * columns.debtUnit;
+    return [b, t[i]!, (hf[i]! / 1e4) * debtUsd, debtUsd];
   });
 }
 
