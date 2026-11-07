@@ -1,0 +1,92 @@
+{
+  "claims": [
+    {
+      "id": "repay-leaves-collateral",
+      "claim": "A third-party repay with an explicit amount reduces the borrower's debt and does not move their collateral.",
+      "test": {
+        "path": "evm/test/lib/RepayPath.sol",
+        "name": "test_thirdPartyRepay_explicitAmount_collateralDoesNotMove"
+      }
+    },
+    {
+      "id": "repay-needs-explicit-amount",
+      "claim": "Aave rejects type(uint256).max from a caller repaying on behalf of another account.",
+      "test": {
+        "path": "evm/test/lib/RepayPath.sol",
+        "name": "test_maxUintOnBehalf_reverts"
+      }
+    },
+    {
+      "id": "repay-above-debt-is-clamped",
+      "claim": "A repay above the debt charges the rescuer only the debt.",
+      "test": {
+        "path": "evm/test/lib/RepayPath.sol",
+        "name": "test_amountAboveDebt_chargesOnlyTheDebt"
+      }
+    },
+    {
+      "id": "repay-formula-reaches-target",
+      "claim": "The repay formula carries a live Aave position to its target health factor on Base and Arbitrum forks.",
+      "test": {
+        "path": "evm/test/lib/RepayPath.sol",
+        "name": "test_repayFormula_reachesTarget"
+      }
+    },
+    {
+      "id": "rescue-avoids-liquidation",
+      "claim": "In a forced price crash on a Base fork, a position rescued at its trigger is not liquidatable, and the same position left alone is liquidated and pays the bonus.",
+      "test": {
+        "path": "evm/test/BaseCrash.t.sol",
+        "name": "test_crash_printsTheDifference"
+      }
+    },
+    {
+      "id": "keeper-checks-signer",
+      "claim": "The keeper does not broadcast a transaction unless its signature recovers to the derived rescuer.",
+      "test": {
+        "path": "keeper/test/e2e.fork.test.ts",
+        "name": "broadcasts nothing when the signature is from another key"
+      }
+    },
+    {
+      "id": "keeper-checks-intent",
+      "claim": "The keeper refuses a correctly signed transaction that is not the repay it asked for.",
+      "test": {
+        "path": "keeper/test/signature.test.ts",
+        "name": "refuses a USDC transfer, the call that would move funds elsewhere"
+      }
+    },
+    {
+      "id": "quorum-refuses-disagreement",
+      "claim": "The keeper does not act when its RPC endpoints differ by more than 0.5%.",
+      "test": {
+        "path": "keeper/test/quorum.test.ts",
+        "name": "refuses a gap just over 0.5%"
+      }
+    },
+    {
+      "id": "quorum-refuses-stale-reads",
+      "claim": "The keeper does not act on reads 30 seconds old or older.",
+      "test": {
+        "path": "keeper/test/quorum.test.ts",
+        "name": "refuses 30 seconds, the spec says less than"
+      }
+    },
+    {
+      "id": "derivation-matches-mpc",
+      "claim": "Rescuer addresses derived locally match derived_public_key on v1.signer and v1.signer-prod.testnet.",
+      "test": {
+        "path": "keeper/test/derive.live.test.ts",
+        "name": "derives the same keys as the live contract"
+      }
+    },
+    {
+      "id": "failures-are-recorded",
+      "claim": "A rescue that reverts leaves a run record with its hash and block.",
+      "test": {
+        "path": "keeper/test/e2e.fork.test.ts",
+        "name": "records a real revert on the fork, with the hash and block"
+      }
+    }
+  ]
+}

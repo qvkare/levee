@@ -195,9 +195,19 @@ The trigger, target and RPC list live off chain. No LLM is involved.
 - `trace` is optional. It holds the inputs and results of each step, so that `keeper replay` can repeat the run with no keys and no network.
 - `network` is `simulated` for a run on a local fork with a local key standing in for the MPC. A simulated run is never proof of anything.
 
-Failures are recorded, not deleted. `evidence/claims.json` maps every public claim to a test or a run.
+Failures are recorded, not deleted. `evidence/claims.json` maps every public claim to a test or a run. It holds `{ "claims": [...] }`, and each claim has an `id`, the `claim` text, and exactly one of `test` (`{ "path", "name" }`) or `run` (a run id).
 
-`make verify` resolves each hash and checks: the NEAR receipt succeeded, the EVM `from` equals the derived rescuer, `to` equals the Pool, the selector is `0x573ade81`, the asset is USDC, `onBehalfOf` is the borrower and the amount is within caps.
+`make verify` resolves each hash and checks: the NEAR receipt succeeded, the EVM `from` equals the derived rescuer, `to` equals the Pool, the selector is `0x573ade81`, the asset is USDC, `onBehalfOf` is the borrower and the amount is within caps. It also checks that the EVM transaction's signing hash equals the `tx_hash` the contract returned, which ties the NEAR receipt to that transaction.
+
+It prints one verdict per claim:
+
+| Verdict | Meaning |
+|---|---|
+| `PASS` | Every check ran and held, on a real network, for a successful run |
+| `FAIL` | A check did not hold or could not be made |
+| `RECORDED` | On file but not proven by this tool: a test it did not run, a simulated run, or a failed run kept for the record |
+
+A failed run may hold a hash that never landed, such as a rejected broadcast. That agrees with the record and is `RECORDED`, not `FAIL`.
 
 ## 7. Public risk tool
 
