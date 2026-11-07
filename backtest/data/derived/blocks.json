@@ -1,0 +1,34 @@
+[
+  {
+    "chain": "base",
+    "window": "2025-10",
+    "fromBlock": 36632527,
+    "toBlock": 36718926,
+    "fromTimestamp": 1760054401,
+    "toTimestamp": 1760227199
+  },
+  {
+    "chain": "base",
+    "window": "2026-02",
+    "fromBlock": 41514127,
+    "toBlock": 41816526,
+    "fromTimestamp": 1769817601,
+    "toTimestamp": 1770422399
+  },
+  {
+    "chain": "arbitrum",
+    "window": "2025-10",
+    "fromBlock": 387876437,
+    "toBlock": 388569086,
+    "fromTimestamp": 1760054400,
+    "toTimestamp": 1760227199
+  },
+  {
+    "chain": "arbitrum",
+    "window": "2026-02",
+    "fromBlock": 426968127,
+    "toBlock": 429398897,
+    "fromTimestamp": 1769817600,
+    "toTimestamp": 1770422399
+  }
+]

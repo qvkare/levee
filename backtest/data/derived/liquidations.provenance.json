@@ -1,0 +1,52 @@
+[
+  {
+    "chain": "base",
+    "window": "2025-10",
+    "fromBlock": 36632527,
+    "toBlock": 36718926,
+    "counts": {
+      "gateway.tenderly.co": 470,
+      "base.api.pocket.network": 462,
+      "rpc.sentio.xyz": 470
+    },
+    "union": 470,
+    "confirmedByReceipt": 8
+  },
+  {
+    "chain": "base",
+    "window": "2026-02",
+    "fromBlock": 41514127,
+    "toBlock": 41816526,
+    "counts": {
+      "gateway.tenderly.co": 2755,
+      "base.api.pocket.network": 2442,
+      "rpc.sentio.xyz": 2755
+    },
+    "union": 2755,
+    "confirmedByReceipt": 313
+  },
+  {
+    "chain": "arbitrum",
+    "window": "2025-10",
+    "fromBlock": 387876437,
+    "toBlock": 388569086,
+    "counts": {
+      "gateway.tenderly.co": 938,
+      "arb1.arbitrum.io": 938
+    },
+    "union": 938,
+    "confirmedByReceipt": 0
+  },
+  {
+    "chain": "arbitrum",
+    "window": "2026-02",
+    "fromBlock": 426968127,
+    "toBlock": 429398897,
+    "counts": {
+      "gateway.tenderly.co": 3332,
+      "arb1.arbitrum.io": 3332
+    },
+    "union": 3332,
+    "confirmedByReceipt": 0
+  }
+]
