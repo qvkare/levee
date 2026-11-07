@@ -1,11 +1,15 @@
 /** Reads one Aave market. Every call runs at one pinned block, so the read can be repeated exactly. */
 import { createPublicClient, fallback, formatUnits, http, parseAbi, type Address, type PublicClient } from "viem";
 import { arbitrum, base } from "viem/chains";
-import { buildPosition, rayMul, type AccountData } from "./aave-model.ts";
+import { bonusFromBps, bonusFromConfiguration, buildPosition, rayMul, type AccountData } from "./aave-model.ts";
 import { CHAINS, rpcUrls, type ChainConfig } from "./chains.ts";
 import type { AaveMarket, ChainKey, Failure, ReserveLine, Reserves } from "./types.ts";
 
 const POOL_ABI = parseAbi([
+  "struct ReserveConfigurationMap { uint256 data; }",
+  "struct CollateralConfig { uint16 ltv; uint16 liquidationThreshold; uint16 liquidationBonus; }",
+  "function getConfiguration(address asset) view returns (ReserveConfigurationMap)",
+  "function getEModeCategoryCollateralConfig(uint8 id) view returns (CollateralConfig)",
   "function getUserAccountData(address user) view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)",
   "function getReserveNormalizedIncome(address asset) view returns (uint256)",
   "function getReserveNormalizedVariableDebt(address asset) view returns (uint256)",
@@ -21,6 +25,8 @@ const MULTICALL_ABI = parseAbi(["function getCurrentBlockTimestamp() view return
 const VIEM_CHAINS = { base, arbitrum } as const;
 const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
 const REQUEST_TIMEOUT_MS = 4000;
+/** Reserve reads below run in groups of this many per asset. */
+const READS_PER_ASSET = 6;
 
 /** A client per read: viem shares in-flight promises inside a client, which Workers requests must not. */
 function clientFor(chain: ChainConfig): PublicClient {
@@ -39,7 +45,7 @@ async function readReserves(client: PublicClient, chain: ChainConfig, blockNumbe
   const held = lines.filter(
     (line) => (line.scaledATokenBalance > 0n && line.usageAsCollateralEnabledOnUser) || line.scaledVariableDebt > 0n,
   );
-  if (held.length === 0) return { collateral: [], debt: [], eModeCategory };
+  if (held.length === 0) return { collateral: [], debt: [], eModeCategory, liquidationBonus: null };
 
   const reads = held.flatMap((line) => {
     const asset = line.underlyingAsset;
@@ -49,18 +55,21 @@ async function readReserves(client: PublicClient, chain: ChainConfig, blockNumbe
       { address: chain.oracle, abi: ORACLE_ABI, functionName: "getAssetPrice", args: [asset] },
       { address: asset, abi: ERC20_ABI, functionName: "decimals" },
       { address: asset, abi: ERC20_ABI, functionName: "symbol" },
+      { address: chain.pool, abi: POOL_ABI, functionName: "getConfiguration", args: [asset] },
     ] as const;
   });
   const results = await client.multicall({ contracts: reads, allowFailure: true, blockNumber, batchSize: 0 });
 
   const collateral: ReserveLine[] = [];
   const debt: ReserveLine[] = [];
+  const bonuses = new Map<string, number>();
   held.forEach((line, i) => {
-    const [income, variableDebt, oraclePrice, decimals, symbol] = results.slice(i * 5, i * 5 + 5);
+    const [income, variableDebt, oraclePrice, decimals, symbol, configuration] = results.slice(i * READS_PER_ASSET, (i + 1) * READS_PER_ASSET);
     if (!income || income.status !== "success" || !variableDebt || variableDebt.status !== "success") throw new Error("reserve index read failed");
     if (!oraclePrice || oraclePrice.status !== "success" || !decimals || decimals.status !== "success") throw new Error("reserve price read failed");
     const asset = line.underlyingAsset;
     const label = symbol?.status === "success" ? String(symbol.result) : `${asset.slice(0, 6)}…`;
+    if (configuration?.status === "success") bonuses.set(asset, bonusFromConfiguration((configuration.result as { data: bigint }).data));
     const entry = (raw: bigint): ReserveLine => {
       const amount = Number(formatUnits(raw, Number(decimals.result)));
       return {
@@ -77,7 +86,16 @@ async function readReserves(client: PublicClient, chain: ChainConfig, blockNumbe
     if (line.scaledVariableDebt > 0n) debt.push(entry(rayMul(line.scaledVariableDebt, variableDebt.result as bigint)));
   });
   const byValue = (a: ReserveLine, b: ReserveLine) => b.usd - a.usd;
-  return { collateral: collateral.sort(byValue), debt: debt.sort(byValue), eModeCategory };
+  collateral.sort(byValue);
+  debt.sort(byValue);
+
+  // In e-mode the category's bonus replaces the reserve's for collateral inside the category.
+  let liquidationBonus = collateral[0] ? (bonuses.get(collateral[0].asset) ?? null) : null;
+  if (eModeCategory > 0) {
+    const config = await client.readContract({ address: chain.pool, abi: POOL_ABI, functionName: "getEModeCategoryCollateralConfig", args: [eModeCategory], blockNumber });
+    liquidationBonus = bonusFromBps(config.liquidationBonus);
+  }
+  return { collateral, debt, eModeCategory, liquidationBonus };
 }
 
 export function emptyMarket(key: ChainKey): AaveMarket {

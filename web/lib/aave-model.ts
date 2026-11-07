@@ -14,6 +14,15 @@ export function rayMul(value: bigint, ray: bigint): bigint {
   return (value * ray + HALF_RAY) / RAY;
 }
 
+/** Bits 32 to 47 of a reserve's configuration word hold the bonus in basis points: 10500 is 5%. */
+export function bonusFromConfiguration(data: bigint): number {
+  return bonusFromBps(Number((data >> 32n) & 0xffffn));
+}
+
+export function bonusFromBps(bps: number): number {
+  return bps > 10_000 ? (bps - 10_000) / 10_000 : 0;
+}
+
 export const ASSUMPTION = "All collateral falls together and the debt holds its value.";
 
 const sum = (lines: ReserveLine[]) => lines.reduce((total, line) => total + line.usd, 0);

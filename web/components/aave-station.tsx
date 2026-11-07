@@ -54,6 +54,12 @@ function Figures({ position }: { position: AavePosition }) {
               <td>{percent(dropToLiquidation.fraction)}</td>
             </tr>
           )}
+          {reserves?.liquidationBonus != null && (
+            <tr>
+              <th scope="row">Liquidation bonus</th>
+              <td>{share(reserves.liquidationBonus)}</td>
+            </tr>
+          )}
           {repay && (
             <tr>
               <th scope="row">Repay to reach {repay.target.toFixed(2)}</th>

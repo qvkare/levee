@@ -31,6 +31,8 @@ export interface Reserves {
   collateral: ReserveLine[];
   debt: ReserveLine[];
   eModeCategory: number;
+  /** Extra collateral a liquidator takes, on the largest collateral: 0.05 means 5%. Null if unread. */
+  liquidationBonus: number | null;
 }
 
 /** Approximate fall in collateral value, relative to debt, that brings health factor to 1.00. */
