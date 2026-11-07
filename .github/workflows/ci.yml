@@ -1,0 +1,39 @@
+name: ci
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 4 * * *"
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --silent --filter keeper test
+      - run: pnpm --silent --filter web test
+      - run: pnpm --silent --filter backtest test
+      - run: make verify
+
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.96.1
+        with: { targets: wasm32-unknown-unknown }
+      - run: cargo install --locked cargo-near --version 0.23.0
+      - run: contracts/build.sh
+      - run: cargo test --manifest-path contracts/Cargo.toml --workspace
+
+  evm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: cd evm && forge test
