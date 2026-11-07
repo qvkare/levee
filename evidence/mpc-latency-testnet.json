@@ -1,0 +1,152 @@
+{
+  "network": "testnet",
+  "contract": "levee-core-1503.testnet",
+  "mpc": "v1.signer-prod.testnet",
+  "position_id": 1,
+  "rescuer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971",
+  "measured_at": "2026-11-07T12:07:17.338Z",
+  "note": "Signature only. Nothing was broadcast. Time from the keeper sending rescue to holding a verified signature.",
+  "runs": 15,
+  "signed": 15,
+  "failed": 0,
+  "p50_ms": 6592,
+  "p95_ms": 7104,
+  "max_ms": 7104,
+  "samples": [
+    {
+      "run": 0,
+      "outcome": "signed",
+      "elapsed_ms": 6067,
+      "included_ms": 1104,
+      "near_tx": "DUcSRpbS6uPYRDgLcaPfteG4hRmoVZQJFhmSDo4AJ3P4",
+      "evm_tx_hash": "0xcbc9cab37785a0b51dd0b4fdcc30267fa0edf018d9897e90289a166f367ea572",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 1,
+      "outcome": "signed",
+      "elapsed_ms": 6411,
+      "included_ms": 1169,
+      "near_tx": "CmNw7GVkz4m82zkB3SmvMsV6ghEQSZCwKRULyaRWjfG",
+      "evm_tx_hash": "0x3c5b14f7112dbb6d92585721d0f5626e6ecfc62147d780bc85d598ca9dc08298",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 2,
+      "outcome": "signed",
+      "elapsed_ms": 6577,
+      "included_ms": 1774,
+      "near_tx": "HpjNQq4Qn3SkuN1o1CuBTCVGvMgx4c5wnYLEQxU5ux5Y",
+      "evm_tx_hash": "0xbef71d7de26b0727755f455dde9efab82b29e5b90c3de18d13fd2818f07adf6e",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 3,
+      "outcome": "signed",
+      "elapsed_ms": 6634,
+      "included_ms": 1168,
+      "near_tx": "DjMGnyKMfAGwafW8p1k3o9EXGeEVLgX9HYqak58Lj58a",
+      "evm_tx_hash": "0x379409ec02c8a6acb3a858b8fd451e403786a206a8cfe6e5759e662fd9a94b77",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 4,
+      "outcome": "signed",
+      "elapsed_ms": 6822,
+      "included_ms": 1086,
+      "near_tx": "5mgyZJGMVgvrUfnuRGBL46c4fVhnDJt2zoYe2vpfFHPL",
+      "evm_tx_hash": "0xad495a7ff766baa87ab5b5fece6f582d4b60cd0b4d5e7de524feb48f4e7cc35f",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 5,
+      "outcome": "signed",
+      "elapsed_ms": 7104,
+      "included_ms": 1568,
+      "near_tx": "AD7igJSaMcTLeV5UBQ8mT5n3Fyu1xTvjVwMnzM4Qzx1Q",
+      "evm_tx_hash": "0x3ee81a159344a9c5954097b509883653ad64aad94d867ae21e27d609a1d47c02",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 6,
+      "outcome": "signed",
+      "elapsed_ms": 6116,
+      "included_ms": 1191,
+      "near_tx": "6pvLdx8Zh8g7UGwry6W4854kVwi81KjCMZhptyYvbx5f",
+      "evm_tx_hash": "0x92d73b5811c43e82921c6535ee6cb860762580d63c34bf231ccc4b69b1c27f0e",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 7,
+      "outcome": "signed",
+      "elapsed_ms": 6788,
+      "included_ms": 1137,
+      "near_tx": "3SqrhZZF33dzQYxvHRabL6PjqYwkUbTnNW1Egoe9P8Tq",
+      "evm_tx_hash": "0x33fc5eb4c06246ec3d9449eb7a39acfd8fff65d315cd35f621722ddfd8d5ce7d",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 8,
+      "outcome": "signed",
+      "elapsed_ms": 6447,
+      "included_ms": 1262,
+      "near_tx": "7F2ZGYCZj1igV41w6VPvMJkwQJBKqPEKiyxGBMTqk7er",
+      "evm_tx_hash": "0x788a60ef2ac3cc345be95685abe6ee4996857ae4eb426fd0262c712794ca74f2",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 9,
+      "outcome": "signed",
+      "elapsed_ms": 7067,
+      "included_ms": 1543,
+      "near_tx": "5JPsL6LFjWGNLEYz7DaJtPuXQVtjm6RQTS7WSLzDRiJJ",
+      "evm_tx_hash": "0xa963293376c286c2a17b33b7ac96564af2b33ab5ed82aecc6d503a061485a9c5",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 10,
+      "outcome": "signed",
+      "elapsed_ms": 5945,
+      "included_ms": 926,
+      "near_tx": "CuvpPBjwGfHtFdaHJcNuhmFxEhhPjBGkGSvTYZvcDxeS",
+      "evm_tx_hash": "0x2e78225443be6df94f14f0623c1a6ec4b77d456c9174114a0616c4294f401674",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 11,
+      "outcome": "signed",
+      "elapsed_ms": 6035,
+      "included_ms": 1001,
+      "near_tx": "88bUvvt1nbcMc3gNToUnhavCcQHjzq7xHxRrzbJWsXTY",
+      "evm_tx_hash": "0x47d54b4b6c443423c9ad59b06914befcaf4ef4232506333d625989555450bec3",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 12,
+      "outcome": "signed",
+      "elapsed_ms": 6651,
+      "included_ms": 1174,
+      "near_tx": "HnAfFNfYFzNY6topLue15myvNegpQKy3aZp7XN9Ft3dp",
+      "evm_tx_hash": "0x85917933a03da1179de75e6a504450e7c78d83685d2e9fe2c561b9e576d0191c",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 13,
+      "outcome": "signed",
+      "elapsed_ms": 6677,
+      "included_ms": 1224,
+      "near_tx": "9KPcBzsMHikxjsHHEtS5GF9woYpESWxZCXkhY37YkdnY",
+      "evm_tx_hash": "0x323c93f9c9ff4f7dc08fdafb1ab1ba85d70eebcda277c9ec5e9393d4c0928b24",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    },
+    {
+      "run": 14,
+      "outcome": "signed",
+      "elapsed_ms": 6592,
+      "included_ms": 1191,
+      "near_tx": "GjLBFamLKYHwRTLnJmcu2uq2vGVckb3NV9kreK8PQCXS",
+      "evm_tx_hash": "0x500bc3c0b05261b0d14837a0a11651ce0f860ad7440cc071eb8e925984e2229e",
+      "recovered_signer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971"
+    }
+  ]
+}
