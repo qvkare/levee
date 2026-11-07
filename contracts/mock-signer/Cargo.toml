@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 near-sdk = { workspace = true }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 near-sdk = { workspace = true, features = ["unit-testing"] }
