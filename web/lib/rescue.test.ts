@@ -45,7 +45,7 @@ test("no fall: nothing fires", () => {
   assert.equal(result.repaidUsd, 0);
   near(result.healthAfter as number, 1.6);
   near(result.fallToTrigger as number, 0.25);
-  near(result.fallToFlood as number, 0.375);
+  near(result.fallToLiquidation as number, 0.375);
 });
 
 test("a fall past the trigger fires, and the repay reaches the target", () => {
@@ -90,5 +90,5 @@ test("no debt has no health and nothing to do", () => {
   assert.equal(result.healthBefore, null);
   assert.equal(result.triggered, false);
   assert.equal(result.healthAfter, null);
-  assert.equal(result.fallToFlood, null);
+  assert.equal(result.fallToLiquidation, null);
 });

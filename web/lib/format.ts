@@ -1,5 +1,4 @@
 /** Display formats. One fixed locale and UTC only, so server and browser print the same text. */
-import type { Stage } from "./types.ts";
 
 const whole = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const cents = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -17,7 +16,7 @@ function floorTo(value: number, digits: number): string {
 }
 
 /** A health factor or margin ratio. */
-export function stageValue(value: number): string {
+export function ratio(value: number): string {
   if (value >= 1000) return whole.format(Math.floor(value));
   return value >= 100 ? floorTo(value, 1) : floorTo(value, 3);
 }
@@ -53,11 +52,3 @@ export function utcTime(iso: string | number): string {
   const date = new Date(iso);
   return `${date.toISOString().slice(0, 10)} ${date.toISOString().slice(11, 19)} UTC`;
 }
-
-export const STAGE_NAMES: Record<Stage, string> = {
-  dry: "Dry",
-  normal: "Normal",
-  watch: "Watch",
-  action: "Action stage",
-  flood: "Flood stage",
-};

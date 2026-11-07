@@ -49,17 +49,17 @@ A null is a missing figure, not zero. `failures` says what is missing and why. `
 
 | Field | Meaning |
 |---|---|
-| `schema` | `levee.risk.v1` |
+| `schema` | `levee.risk.v2` |
 | `address` | EIP-55 |
 | `generatedAt` | ISO 8601, UTC |
 | `status` | `ok`, `partial` or `unavailable` |
 | `target` | Health factor used for the repay figures |
 | `failures[]` | `source` (`aave.base`, `aave.arbitrum`, `hyperliquid`) and `message` |
-| `nearest` | The reading closest to liquidation: `venue`, `label`, `stage`, `fall`. Null when nothing can be liquidated |
+| `nearest` | The reading closest to liquidation: `venue`, `label`, `standing`, `fall`. Null when nothing can be liquidated |
 | `aave.base`, `aave.arbitrum` | One market each, below |
 | `hyperliquid` | The account, below |
 
-Stage is `dry`, `normal`, `watch`, `action` or `flood`. Flood is below 1.00. The others are Levee's reading aid: action under a 20% fall, watch under 33%.
+`standing` says where a position stands against liquidation: `none` (nothing can be liquidated), `open` (more than 5% away), `close` (inside the last 5%) or `liquidatable` (at or past the line). Version 2 replaces the `stage` field of version 1 with it, and drops the 20% and 33% bands.
 
 Market:
 
@@ -69,7 +69,7 @@ Market:
 | `blockNumber`, `blockTimestamp` | Every figure in the market was read at this block |
 | `position` | Null when the address has no position here |
 | `position.healthFactor` | Null with no debt |
-| `position.stage` | As above |
+| `position.standing` | As above |
 | `position.collateralUsd`, `debtUsd` | At Aave oracle prices |
 | `position.liquidationThreshold`, `ltv` | 0 to 1, weighted, e-mode included |
 | `position.dropToLiquidation` | `fraction`, `formula` (`1 - 1/HF`), `assumption`, `assumptionHolds` and `note`. An approximation. `assumptionHolds` is false when the position is not volatile collateral against stable debt |
@@ -84,7 +84,7 @@ Hyperliquid:
 | `status`, `readAt` | Whether it answered, and the server time in milliseconds |
 | `mode`, `rawMode` | `standard`, `unified`, `portfolio`, `dex-abstraction` or `unknown`, and the `userAbstraction` value as returned |
 | `marginRatio` | Equity over maintenance margin, lowest pool. Liquidation is at 1.00. Null for portfolio accounts and with no cross position |
-| `stage` | As above |
+| `standing` | As above |
 | `pools[]` | `id`, `label`, `equityUsd`, `maintenanceUsd`, `marginRatio` |
 | `positions[]` | `market`, `dex`, `side`, `size`, `entryPrice`, `markPrice`, `notionalUsd`, `unrealizedPnlUsd`, `margin` (`cross` or `isolated`), `leverage`, `marginUsedUsd`, `liquidationPrice`, `distance`, `covered`, `coverageNote`. Nearest to liquidation first |
 | `notes[]` | What to know about this account's mode |

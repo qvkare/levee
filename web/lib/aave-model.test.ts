@@ -41,16 +41,16 @@ test("no collateral and no debt is no position", () => {
 
 test("collateral without debt is dry, with nothing to repay", () => {
   const position = buildPosition([100_000_000_000n, 0n, 0n, 8000n, 7500n, NO_DEBT], null, USDC, 1.5);
-  assert.equal(position?.stage, "dry");
+  assert.equal(position?.standing, "none");
   assert.equal(position?.healthFactor, null);
   assert.equal(position?.dropToLiquidation, null);
   assert.equal(position?.repay, null);
 });
 
-test("a borrower gets stage, fall and repay from the account data", () => {
+test("a borrower gets standing, fall and repay from the account data", () => {
   const position = buildPosition(account, reserves([line("WETH", 1000, false)], [line("USDC", 600, true, USDC)]), USDC, 1.5);
   assert.ok(position);
-  assert.equal(position.stage, "watch");
+  assert.equal(position.standing, "open");
   assert.ok(Math.abs((position.healthFactor as number) - 1.3333) < 0.001);
   assert.equal(position.collateralUsd, 1000);
   assert.equal(position.liquidationThreshold, 0.8);

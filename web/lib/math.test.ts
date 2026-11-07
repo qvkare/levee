@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ADDRESS_ERRORS, parseAddress, shapeError } from "./address.ts";
-import { percent, stageValue, usd } from "./format.ts";
-import { approxFall, healthAfterRepay, parseTarget, repayToTarget, stageForFall, stageForHealth } from "./math.ts";
+import { percent, ratio, usd } from "./format.ts";
+import { approxFall, healthAfterRepay, parseTarget, repayToTarget, standingForFall, standingForHealth } from "./math.ts";
 
 const position = { collateralUsd: 1000, liquidationThreshold: 0.8, debtUsd: 600 };
 
-test("approxFall follows 1 - 1/HF and stops at flood stage", () => {
+test("approxFall follows 1 - 1/HF and stops at 1.00", () => {
   assert.equal(approxFall(2), 0.5);
   assert.ok(Math.abs(approxFall(1.25) - 0.2) < 1e-12);
   assert.equal(approxFall(1), 0);
@@ -25,16 +25,15 @@ test("repayToTarget is zero above target and capped at the debt", () => {
   assert.equal(repayToTarget({ ...position, debtUsd: 0 }, 2), 0);
 });
 
-test("stage bands", () => {
-  assert.equal(stageForHealth(null), "dry");
-  assert.equal(stageForHealth(0.99), "flood");
-  assert.equal(stageForHealth(1), "action");
-  assert.equal(stageForHealth(1.2499), "action");
-  assert.equal(stageForHealth(1.25), "watch");
-  assert.equal(stageForHealth(1.4999), "watch");
-  assert.equal(stageForHealth(1.5), "normal");
-  assert.equal(stageForFall(0), "flood");
-  assert.equal(stageForFall(0.05), "action");
+test("standing turns on the last 5%", () => {
+  assert.equal(standingForHealth(null), "none");
+  assert.equal(standingForHealth(0.99), "liquidatable");
+  assert.equal(standingForHealth(1), "close");
+  assert.equal(standingForHealth(1.0526), "close");
+  assert.equal(standingForHealth(1.0527), "open");
+  assert.equal(standingForFall(0), "liquidatable");
+  assert.equal(standingForFall(0.0499), "close");
+  assert.equal(standingForFall(0.05), "open");
 });
 
 test("parseTarget accepts the allowed range and refuses the rest", () => {
@@ -60,8 +59,8 @@ test("parseAddress normalises and catches typos", () => {
 });
 
 test("printed readings round down, not up", () => {
-  assert.equal(stageValue(1.0999), "1.099");
-  assert.equal(stageValue(0.99996), "0.999");
+  assert.equal(ratio(1.0999), "1.099");
+  assert.equal(ratio(0.99996), "0.999");
   assert.equal(percent(0.19999), "19.9%");
   assert.equal(usd(1234.56), "$1,235");
   assert.equal(usd(12.3), "$12.30");
