@@ -15,27 +15,29 @@ export interface Column<Row> {
  */
 export function TextTable<Row>({ columns, rows, rowKey, label }: { columns: Column<Row>[]; rows: Row[]; rowKey: (row: Row) => string; label?: string }) {
   return (
-    <table className="prose-table stack" role="table" aria-label={label}>
-      <thead role="rowgroup">
-        <tr role="row">
-          {columns.map((column) => (
-            <th key={column.label} scope="col" role="columnheader">
-              {column.label}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody role="rowgroup">
-        {rows.map((row) => (
-          <tr key={rowKey(row)} role="row">
+    <div className="scroll">
+      <table className="prose-table stack" role="table" aria-label={label}>
+        <thead role="rowgroup">
+          <tr role="row">
             {columns.map((column) => (
-              <td key={column.label} role="cell" data-label={column.label} data-plain={column.plain || undefined} className={column.num ? "num" : undefined}>
-                {column.cell(row)}
-              </td>
+              <th key={column.label} scope="col" role="columnheader">
+                {column.label}
+              </th>
             ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody role="rowgroup">
+          {rows.map((row) => (
+            <tr key={rowKey(row)} role="row">
+              {columns.map((column) => (
+                <td key={column.label} role="cell" data-label={column.label} data-plain={column.plain || undefined} className={column.num ? "num" : undefined}>
+                  {column.cell(row)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

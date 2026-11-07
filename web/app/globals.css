@@ -1320,11 +1320,6 @@ input[type="range"]::-moz-range-thumb {
     width: calc(var(--a) - var(--left) - var(--wall) - 8px);
   }
 
-  .prose-table code {
-    overflow-wrap: anywhere;
-    white-space: normal;
-  }
-
   .prose-table .wide {
     display: none;
   }
@@ -1733,55 +1728,6 @@ input[type="range"]::-moz-range-thumb {
     letter-spacing: 0;
   }
 
-  .stack thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-
-  .stack,
-  .stack tbody,
-  .stack tr,
-  .stack td {
-    display: block;
-    width: 100%;
-  }
-
-  .stack tr {
-    padding: 11px 0;
-    border-bottom: 1px solid var(--rule);
-  }
-
-  .stack td {
-    display: grid;
-    grid-template-columns: 112px minmax(0, 1fr);
-    gap: 8px;
-    padding: 2px 0;
-    border: 0;
-    font-size: 15px;
-  }
-
-  .stack td:first-child {
-    display: block;
-    font-size: 16px;
-  }
-
-  .stack td:not(:first-child)::before {
-    content: attr(data-label);
-    color: var(--ink-2);
-  }
-
-  .stack td[data-plain]:not(:first-child) {
-    display: block;
-    padding-top: 4px;
-  }
-
-  .stack td[data-plain]:not(:first-child)::before {
-    display: block;
-  }
-
   .lead-block {
     padding: 22px var(--r) 26px var(--left);
   }
@@ -1933,5 +1879,130 @@ input[type="range"]::-moz-range-thumb {
 
   .sim-out {
     padding: 8px var(--r) 30px var(--left);
+  }
+}
+
+/* Tables of words stack at phone width. The run list stacks from tablet width, because its ids are long. */
+@media (max-width: 1180px) {
+  .stack-early thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .stack-early,
+  .stack-early tbody,
+  .stack-early tr,
+  .stack-early td {
+    display: block;
+    width: 100%;
+  }
+
+  .stack-early tr {
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  /* The label sits in its own column and the value flows as text, so figures split by <Num> stay whole. */
+  .stack-early td {
+    position: relative;
+    padding: 2px 0 2px 120px;
+    border: 0;
+    font-size: 15px;
+    white-space: normal;
+  }
+
+  .stack-early td:first-child {
+    padding-left: 0;
+    font-size: 16px;
+  }
+
+  .stack-early td:not(:first-child)::before {
+    content: attr(data-label);
+    position: absolute;
+    top: 2px;
+    left: 0;
+    width: 112px;
+    font-weight: 400;
+    color: var(--ink-2);
+  }
+
+  .stack-early td[data-plain]:not(:first-child) {
+    padding: 4px 0 2px;
+  }
+
+  .stack-early td[data-plain]:not(:first-child)::before {
+    position: static;
+    display: block;
+    width: auto;
+  }
+
+  .stack-early code {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 760px) {
+  .stack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .stack,
+  .stack tbody,
+  .stack tr,
+  .stack td {
+    display: block;
+    width: 100%;
+  }
+
+  .stack tr {
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  /* The label sits in its own column and the value flows as text, so figures split by <Num> stay whole. */
+  .stack td {
+    position: relative;
+    padding: 2px 0 2px 120px;
+    border: 0;
+    font-size: 15px;
+    white-space: normal;
+  }
+
+  .stack td:first-child {
+    padding-left: 0;
+    font-size: 16px;
+  }
+
+  .stack td:not(:first-child)::before {
+    content: attr(data-label);
+    position: absolute;
+    top: 2px;
+    left: 0;
+    width: 112px;
+    font-weight: 400;
+    color: var(--ink-2);
+  }
+
+  .stack td[data-plain]:not(:first-child) {
+    padding: 4px 0 2px;
+  }
+
+  .stack td[data-plain]:not(:first-child)::before {
+    position: static;
+    display: block;
+    width: auto;
+  }
+
+  .stack code {
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 }

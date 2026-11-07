@@ -8,14 +8,14 @@ function Row({ row, strong = false }: { row: LatencyRow; strong?: boolean }) {
   return (
     <tr>
       <td>{row.label}</td>
-      <td>{row.where}</td>
+      <td className="narrow-hide">{row.where}</td>
       <td className={strong ? "strong" : undefined}>
         <Num>{time(row.p50Ms)}</Num>
       </td>
       <td>
         <Num>{time(row.p95Ms)}</Num>
       </td>
-      <td>
+      <td className="narrow-hide">
         <Num>{time(row.slowestMs)}</Num>
       </td>
       <td>{row.samples}</td>
@@ -31,10 +31,14 @@ export function MeasuredTable({ hops, overall }: { hops: LatencyRow[]; overall: 
         <thead>
           <tr>
             <th scope="col">Hop</th>
-            <th scope="col">Where</th>
+            <th scope="col" className="narrow-hide">
+              Where
+            </th>
             <th scope="col">p50</th>
             <th scope="col">p95</th>
-            <th scope="col">Slowest</th>
+            <th scope="col" className="narrow-hide">
+              Slowest
+            </th>
             <th scope="col">Runs</th>
           </tr>
         </thead>

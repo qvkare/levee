@@ -55,48 +55,50 @@ function network(run: EvidenceRun): string {
 
 function RunsTable({ runs }: { runs: EvidenceRun[] }) {
   return (
-    <table className="prose-table stack" role="table" aria-label="Every recorded run, newest first">
-      <thead role="rowgroup">
-        <tr role="row">
-          {["Run", "Outcome", "Chain", "Repaid", "Health before and after", "Detection to inclusion", "NEAR", "Basescan"].map((label) => (
-            <th key={label} scope="col" role="columnheader" className={label === "Chain" ? "wide" : undefined}>
-              {label}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody role="rowgroup">
-        {runs.map((run) => (
-          <tr key={run.id} role="row">
-            <td role="cell" data-label="Run">
-              <code>{run.id}</code>
-            </td>
-            <td role="cell" data-label="Outcome">
-              {OUTCOME_NAMES[run.outcome]}
-              {run.failureReason && <small>{run.failureReason}</small>}
-            </td>
-            <td role="cell" data-label="Chain" className="wide">
-              {network(run)}
-            </td>
-            <td role="cell" data-label="Repaid" className="num">
-              <Num>{usdcAmount(run.amount)}</Num>
-            </td>
-            <td role="cell" data-label="Health before and after" className="num">
-              {run.healthBefore ? <Num>{`${run.healthBefore} to ${run.healthAfter ?? "not recorded"}`}</Num> : <span className="quiet">not read</span>}
-            </td>
-            <td role="cell" data-label="Detection to inclusion" className="num">
-              {run.latencyMs === null ? <span className="quiet">none</span> : <Num>{seconds(run.latencyMs)}</Num>}
-            </td>
-            <td role="cell" data-label="NEAR">
-              <RecordLink link={nearLink(run)} />
-            </td>
-            <td role="cell" data-label="Basescan">
-              <RecordLink link={evmLink(run)} />
-            </td>
+    <div className="scroll">
+      <table className="prose-table stack-early" role="table" aria-label="Every recorded run, newest first">
+        <thead role="rowgroup">
+          <tr role="row">
+            {["Run", "Outcome", "Chain", "Repaid", "Health before and after", "Detection to inclusion", "NEAR", "Basescan"].map((label) => (
+              <th key={label} scope="col" role="columnheader" className={label === "Chain" ? "wide" : undefined}>
+                {label}
+              </th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody role="rowgroup">
+          {runs.map((run) => (
+            <tr key={run.id} role="row">
+              <td role="cell" data-label="Run">
+                <code>{run.id}</code>
+              </td>
+              <td role="cell" data-label="Outcome">
+                {OUTCOME_NAMES[run.outcome]}
+                {run.failureReason && <small>{run.failureReason}</small>}
+              </td>
+              <td role="cell" data-label="Chain" className="wide">
+                {network(run)}
+              </td>
+              <td role="cell" data-label="Repaid" className="num">
+                <Num>{usdcAmount(run.amount)}</Num>
+              </td>
+              <td role="cell" data-label="Health before and after" className="num">
+                {run.healthBefore ? <Num>{`${run.healthBefore} to ${run.healthAfter ?? "not recorded"}`}</Num> : <span className="quiet">not read</span>}
+              </td>
+              <td role="cell" data-label="Detection to inclusion" className="num">
+                {run.latencyMs === null ? <span className="quiet">none</span> : <Num>{seconds(run.latencyMs)}</Num>}
+              </td>
+              <td role="cell" data-label="NEAR">
+                <RecordLink link={nearLink(run)} />
+              </td>
+              <td role="cell" data-label="Basescan">
+                <RecordLink link={evmLink(run)} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -257,35 +259,37 @@ function BacktestSection({ backtest }: { backtest: Backtest }) {
       <p className="prose">
         {integer(cell.notSaved)} of {integer(cell.positions)} were not saved. {integer(cell.failedLaterInWindow)} of those outlived the first real liquidation and fell below 1.00 later.
       </p>
-      <table className="prose-table stack" role="table" aria-label="Why positions were not saved">
-        <thead role="rowgroup">
-          <tr role="row">
-            {["Why", "Positions", "Share", "What happened"].map((label) => (
-              <th key={label} scope="col" role="columnheader">
-                {label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody role="rowgroup">
-          {reasons.map(({ reason, count }) => (
-            <tr key={reason} role="row">
-              <td role="cell" data-label="Why">
-                {MISS_NAMES[reason]}
-              </td>
-              <td role="cell" data-label="Positions" className="num">
-                <Num>{integer(count)}</Num>
-              </td>
-              <td role="cell" data-label="Share" className="num">
-                <Num>{share(count, cell.positions)}</Num>
-              </td>
-              <td role="cell" data-label="What happened" data-plain="true">
-                {MISS_MEANINGS[reason]}
-              </td>
+      <div className="scroll">
+        <table className="prose-table stack" role="table" aria-label="Why positions were not saved">
+          <thead role="rowgroup">
+            <tr role="row">
+              {["Why", "Positions", "Share", "What happened"].map((label) => (
+                <th key={label} scope="col" role="columnheader">
+                  {label}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody role="rowgroup">
+            {reasons.map(({ reason, count }) => (
+              <tr key={reason} role="row">
+                <td role="cell" data-label="Why">
+                  {MISS_NAMES[reason]}
+                </td>
+                <td role="cell" data-label="Positions" className="num">
+                  <Num>{integer(count)}</Num>
+                </td>
+                <td role="cell" data-label="Share" className="num">
+                  <Num>{share(count, cell.positions)}</Num>
+                </td>
+                <td role="cell" data-label="What happened" data-plain="true">
+                  {MISS_MEANINGS[reason]}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <h3>What it leaves out</h3>
       <ul className="prose-list">
