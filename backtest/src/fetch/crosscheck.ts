@@ -58,7 +58,7 @@ export async function crossCheck(): Promise<void> {
     }
     console.log(`${chain} ${window}: ${reads} reads so far, ${mismatches} mismatches`);
   }
-  writeJson(join(DERIVED_DIR, 'crosscheck.json'), { reads, mismatches, pairs: [...hosts].sort(), providerCallsThatFailed: failedProviders });
+  writeJson(join(DERIVED_DIR, 'crosscheck.json'), { reads, mismatches, providers: [...hosts].sort(), providerCallsThatFailed: failedProviders });
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) await crossCheck();

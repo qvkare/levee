@@ -32,7 +32,7 @@ interface ProvenanceRow {
 
 const percent = (x: number | undefined, digits = 3): string => `${((x ?? NaN) * 100).toFixed(digits)}%`;
 
-function validationRows(file: ValidationFile, provenance: ProvenanceRow[], crossCheck: { reads: number; mismatches: number; pairs: string[] } | null): ValidationRow[] {
+function validationRows(file: ValidationFile, provenance: ProvenanceRow[], crossCheck: { reads: number; mismatches: number; providers: string[]; providerCallsThatFailed: number } | null): ValidationRow[] {
   const p = file.pooled;
   const rows: ValidationRow[] = [];
   for (const row of provenance) {
@@ -46,8 +46,8 @@ function validationRows(file: ValidationFile, provenance: ProvenanceRow[], cross
   }
   if (crossCheck) {
     rows.push({
-      check: 'Archive reads re-read on a second provider',
-      result: `${crossCheck.reads} reads, ${crossCheck.mismatches} mismatches (${crossCheck.pairs.join('; ')})`,
+      check: 'Stored archive reads re-read on other providers',
+      result: `${crossCheck.reads} comparisons on ${crossCheck.providers.join(', ')}. ${crossCheck.mismatches} mismatches. ${crossCheck.providerCallsThatFailed} calls refused by a provider and not counted`,
     });
   }
   rows.push({
