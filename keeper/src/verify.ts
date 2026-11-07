@@ -114,6 +114,14 @@ export function signingHash(tx: EvmTransaction): Hex {
 const normaliseHash = (value: string): string =>
   (value.startsWith('0x') ? value : `0x${value}`).toLowerCase();
 
+/**
+ * A failed run can hold a hash that never landed: a rejected broadcast, a receipt
+ * timeout, a NEAR transaction that expired. That agrees with the record, and failed
+ * runs stay in the evidence, so it must not turn `verify` red for good. A hash found
+ * on chain is still checked in full.
+ */
+const neverLandingIsConsistent = (run: RunRecord): boolean => run.outcome !== 'success';
+
 class Checks {
   readonly list: Check[] = [];
 
@@ -152,7 +160,7 @@ async function checkNear(
   try {
     status = await lookup.transaction(run.near_tx, run.near_sender);
   } catch (error) {
-    checks.add('near_tx', false, describeError(error));
+    checks.add('near_tx', neverLandingIsConsistent(run), describeError(error));
     return null;
   }
 
@@ -228,11 +236,11 @@ async function checkEvm(
       lookup.receipt(run.evm_tx as Hex),
     ]);
   } catch (error) {
-    checks.add('evm_tx', false, describeError(error));
+    checks.add('evm_tx', neverLandingIsConsistent(run), describeError(error));
     return;
   }
   if (!tx) {
-    checks.add('evm_tx', false, `${run.evm_tx} does not resolve`);
+    checks.add('evm_tx', neverLandingIsConsistent(run), `${run.evm_tx} does not resolve`);
     return;
   }
 

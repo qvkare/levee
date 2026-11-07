@@ -4,8 +4,7 @@ import { join } from 'node:path';
 import type { Address, Hex } from 'viem';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CHAINS } from '../src/chains.js';
-import type { RunRecord } from '../src/evidence.js';
-import { runsDir, writeRun } from '../src/evidence.js';
+import { type RunRecord, runsDir, writeRun } from '../src/evidence.js';
 import type { EvmReceipt, EvmTransaction } from '../src/evm.js';
 import type { NearTxStatus } from '../src/near.js';
 import {
@@ -251,6 +250,42 @@ describe('verifyRun on a successful run', () => {
     const verdict = await verifyRun(successRun(), lookupsFor(world({ asOf: 'latest' })));
     expect(verdict.verdict).toBe('PASS');
     expect(verdict.checks.find((check) => check.name === 'caps_as_of')?.detail).toContain('latest');
+  });
+});
+
+describe('verifyRun on a failure whose hash never landed', () => {
+  const unresolved = { verdict: 'RECORDED', failed: [] };
+
+  it('records a broadcast that every endpoint rejected', async () => {
+    const run = successRun({
+      outcome: 'failed',
+      failure_reason: 'broadcast_rejected: insufficient funds',
+      evm_block: null,
+    });
+    expect(await failing(run, world({ tx: null, receipt: null }))).toEqual(unresolved);
+  });
+
+  it('records a transaction that never got a receipt', async () => {
+    const run = successRun({ outcome: 'failed', failure_reason: 'receipt_timeout', evm_block: null });
+    expect(await failing(run, world({ tx: null, receipt: null }))).toEqual(unresolved);
+  });
+
+  it('records a NEAR transaction that expired unexecuted', async () => {
+    const run = successRun({
+      outcome: 'failed',
+      failure_reason: 'near_timeout',
+      evm_tx: null,
+      evm_block: null,
+    });
+    expect(await failing(run, world({ nearError: new Error('unknown transaction') }))).toEqual(
+      unresolved,
+    );
+  });
+
+  it('still fails a claimed success on the same missing hash', async () => {
+    expect((await failing(successRun(), world({ tx: null }))).verdict).toBe('FAIL');
+    const near = await failing(successRun(), world({ nearError: new Error('unknown') }));
+    expect(near.verdict).toBe('FAIL');
   });
 });
 
