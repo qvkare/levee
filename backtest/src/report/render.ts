@@ -242,6 +242,18 @@ export function renderSummary(summary: Summary): string {
   out.push('');
   out.push(`${main.failedLaterInWindow} of the misses beat the first real liquidation and fell below 1 later, on the frozen portfolio.`);
   out.push('');
+  out.push('A larger first repay leaves less for a follow-up to do. Target sensitivity at the headline T, R and D:');
+  out.push('');
+  out.push(
+    table(
+      ['G', 'Saved', 'follow_up_too_slow', 'reserve_empty', 'Reserve used on saved'],
+      GRID.targets.map((target) => {
+        const cell = find(grid, HEADLINE.trigger, target, HEADLINE.reserveShare, HEADLINE.delaySec);
+        return [target.toFixed(2), cell.saved, cell.reasons.follow_up_too_slow, cell.reasons.reserve_empty, usd(cell.reserveUsedOnSavedUsd)];
+      }),
+    ),
+  );
+  out.push('');
   out.push('The spec leaves `cooldown_secs` to the owner, and the backtest assumes 60 s. Sensitivity at the headline cell:');
   out.push('');
   out.push(table(['Cooldown', 'Saved', 'follow_up_too_slow'], summary.cooldown.map((r) => [`${r.cooldownSec} s`, r.saved, r.followUpTooSlow])));
