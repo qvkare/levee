@@ -108,6 +108,8 @@ export function fakeNear(
     tamper?: (fields: Parameters<typeof unsignedTransaction>[0]) => void;
     nearTx?: string;
     borrower?: Address;
+    /** The clock to stamp with, for a caller on real time. */
+    now?: () => number;
   } = {},
 ): FakeNear {
   const requests: RescueRequest[] = [];
@@ -128,8 +130,8 @@ export function fakeNear(
       return {
         nearTx: behaviour.nearTx ?? 'SimulatedNearTxHash',
         nearSender: 'keeper.testnet',
-        includedAtMs: nowMs + 1_000,
-        signedAtMs: nowMs + 4_000,
+        includedAtMs: behaviour.now?.() ?? nowMs + 1_000,
+        signedAtMs: behaviour.now?.() ?? nowMs + 4_000,
         result: mpc.sign(unsignedTransaction(fields), request.id),
       };
     },

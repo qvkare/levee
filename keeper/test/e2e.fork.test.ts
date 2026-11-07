@@ -210,7 +210,7 @@ const contextFor = (borrower: Address, over: Partial<RescueContext> = {}): Rescu
   rescuer: mpc.address,
   nearContract: 'simulated-levee.testnet',
   clients,
-  near: fakeNear(mpc, { borrower, nearTx: 'SIMULATED-NOT-A-NEAR-HASH' }),
+  near: fakeNear(mpc, { borrower, nearTx: 'SIMULATED-NOT-A-NEAR-HASH', now: Date.now }),
   views: { getPosition: async () => openPosition({ borrower }) },
   ceilings: { maxFeePerGas: parseEther('0.0000001'), maxPriorityFeePerGas: 10n ** 10n },
   evidenceDir,
@@ -396,10 +396,10 @@ describe('SIMULATED MPC: keeper against a local Aave fork', () => {
     });
 
     it('records timestamps in the order things happened', () => {
-      const t = run.timestamps_ms;
-      expect(t.detected).toBeTypeOf('number');
-      expect(t.broadcast).toBeGreaterThanOrEqual(t.detected ?? 0);
-      expect(t.included).toBeGreaterThanOrEqual(t.broadcast ?? 0);
+      const { detected, near_included, signed, broadcast, included } = run.timestamps_ms;
+      const stamps = [detected, near_included, signed, broadcast, included] as number[];
+      expect(stamps.every((stamp) => typeof stamp === 'number')).toBe(true);
+      expect(stamps).toEqual(stamps.toSorted((a, b) => a - b));
     });
 
     it('replays with no network', async () => {
