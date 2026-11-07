@@ -92,7 +92,7 @@ pub struct Position {
     pub cooldown_secs: u32,
     pub paused: bool,
     pub spent_today: U128,
-    pub day: u64,
+    pub day: u64,                         // whole days since the Unix epoch, UTC
     pub last_rescue_at: u64,              // nanoseconds
 }
 ```
