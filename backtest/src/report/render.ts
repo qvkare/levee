@@ -242,6 +242,10 @@ export function renderSummary(summary: Summary): string {
   out.push('');
   out.push(`${main.failedLaterInWindow} of the misses beat the first real liquidation and fell below 1 later, on the frozen portfolio.`);
   out.push('');
+  out.push('The spec leaves `cooldown_secs` to the owner, and the backtest assumes 60 s. Sensitivity at the headline cell:');
+  out.push('');
+  out.push(table(['Cooldown', 'Saved', 'follow_up_too_slow'], summary.cooldown.map((r) => [`${r.cooldownSec} s`, r.saved, r.followUpTooSlow])));
+  out.push('');
   out.push('## The fair comparison');
   out.push('');
   out.push(`T ${HEADLINE.trigger.toFixed(2)}, G ${HEADLINE.target.toFixed(2)}, D ${HEADLINE.delaySec} s. "Same USDC as collateral" supplies the reserve to Aave at arming. "Repaid at arming" is the bound for any rescue of that size, with no delay and no trigger.`);

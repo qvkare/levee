@@ -1,7 +1,7 @@
 // Turns per-position outcomes into the published numbers. No I/O.
 import { CHAINS, type ChainKey } from '../config.ts';
 import { decodeObserved, type CompactPoint, type DerivedPosition } from '../data.ts';
-import { COOLDOWN_SEC, GRID } from '../grid.ts';
+import { COOLDOWN_SEC, COOLDOWN_SENSITIVITY_SEC, GRID } from '../grid.ts';
 import { holdAsCollateral, repayAtArming } from '../sim/baselines.ts';
 import { healthFactor, simulate, type Outcome, type Params, type PositionPath, type Reason } from '../sim/simulate.ts';
 
@@ -270,6 +270,23 @@ export interface DelayRow extends FairRow {
 /** The same comparison at one reserve size, across delays. */
 export function fairByDelay(items: Prepared[], base: { trigger: number; target: number; reserveShare: number }): DelayRow[] {
   return GRID.delaysSec.map((delaySec) => ({ delaySec, ...fairRow(items, paramsOf({ ...base, delaySec })) }));
+}
+
+export interface CooldownRow {
+  cooldownSec: number;
+  saved: number;
+  followUpTooSlow: number;
+}
+
+export function cooldownSensitivity(items: Prepared[], params: Params): CooldownRow[] {
+  return COOLDOWN_SENSITIVITY_SEC.map((cooldownSec) => {
+    const outcomes = items.map((item) => simulate(item.path, { ...params, cooldownSec }));
+    return {
+      cooldownSec,
+      saved: outcomes.filter((o) => o.saved).length,
+      followUpTooSlow: outcomes.filter((o) => o.reason === 'follow_up_too_slow').length,
+    };
+  });
 }
 
 export const SIZE_BUCKETS: Array<{ label: string; min: number; max: number }> = [

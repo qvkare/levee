@@ -4,6 +4,7 @@ import { PriceBook } from '../frozen.ts';
 import { healthFactor, simulate } from '../sim/simulate.ts';
 import {
   byGroup,
+  cooldownSensitivity,
   exclusions,
   fairByDelay,
   fairComparison,
@@ -15,6 +16,7 @@ import {
   SIZE_BUCKETS,
   warningTable,
   type Cell,
+  type CooldownRow,
   type DelayRow,
   type Exclusion,
   type FairRow,
@@ -52,6 +54,7 @@ export interface Summary {
   fair: FairRow[];
   fairByDelay: DelayRow[];
   fairNote: string;
+  cooldown: CooldownRow[];
   byWindow: GroupRow[];
   byChain: GroupRow[];
   byDebtScope: GroupRow[];
@@ -123,6 +126,7 @@ export function buildSummary(positions: DerivedPosition[], prices: WindowPrices[
       'That is the only survival edge Levee has over plain collateral, and it exists only if the repay lands first. ' +
       '"Both survive" and "Neither" are where Levee adds no survival benefit. "Collateral only" is where Levee does worse because its repay was late. ' +
       'The upside of keeping the reserve off the venue, such as yield or sharing it across positions, is not measured here.',
+    cooldown: cooldownSensitivity(items, params),
     byWindow: byGroup(items, params, (item) => item.position.window),
     byChain: byGroup(items, params, (item) => item.position.chain),
     byDebtScope: byGroup(items, params, (item) => (item.position.scope === 'usdc_only' ? 'USDC only' : 'Mixed debt')),

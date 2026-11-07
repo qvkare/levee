@@ -9,3 +9,5 @@ export const GRID = {
 
 /** The spec leaves cooldown_secs to the owner. This is the value the backtest assumes. */
 export const COOLDOWN_SEC = 60;
+/** Checked once, at the headline cell, because a follow-up repay depends on it. */
+export const COOLDOWN_SENSITIVITY_SEC = [0, 10, 60, 300];
