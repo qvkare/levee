@@ -43,7 +43,7 @@ async function firstAnswer<T>(
 }
 
 function chainLookup(urls: string[]): ChainLookup {
-  const clients = urls.map(createEvmClient);
+  const clients = urls.map((url) => createEvmClient(url));
   return {
     transaction: (hash: Hex) => firstAnswer(clients, (client) => client.readTransaction(hash)),
     receipt: (hash: Hex) => firstAnswer(clients, (client) => client.readReceipt(hash)),
