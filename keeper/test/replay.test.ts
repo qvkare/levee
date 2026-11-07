@@ -1,5 +1,7 @@
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RunRecord } from '../src/evidence.js';
+import { REPO_ROOT } from '../src/config.js';
+import { type RunRecord, readRunFile } from '../src/evidence.js';
 import { formatReplay, replayRun } from '../src/replay.js';
 import { tick } from '../src/rescue.js';
 import { type Harness, fakeNear, harness, sickSample } from './support/fakes.js';
@@ -180,6 +182,21 @@ describe('replaying an altered record', () => {
     const text = formatReplay(await replayRun(run));
     expect(text).toContain('[MISMATCH]');
     expect(text).toContain('DOES NOT match');
+  });
+});
+
+describe('a run captured from the Aave fork', () => {
+  const fixture = join(REPO_ROOT, 'keeper/test/fixtures/simulated-run.json');
+
+  it('still replays exactly, which pins the pipeline to a real position', async () => {
+    const run = await readRunFile(fixture);
+
+    const result = await replayRun(run);
+
+    expect(run).toMatchObject({ network: 'simulated', outcome: 'success', chain_id: 8453 });
+    expect(result.ok).toBe(true);
+    const recomputed = result.steps.filter((step) => step.ok === true).map((step) => step.title);
+    expect(recomputed).toEqual(['Quorum', 'Decision', 'Signature', 'Broadcast', 'Receipt']);
   });
 });
 

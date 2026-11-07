@@ -19,8 +19,10 @@ pnpm --silent --filter keeper keeper rescue-once --id 1
 pnpm --silent --filter keeper keeper rescue-once --id 1 --amount 2500000
 pnpm --silent --filter keeper keeper derive-address --id 1 --contract levee.testnet --network testnet
 pnpm --silent --filter keeper keeper verify
-pnpm --silent --filter keeper keeper replay 2026-11-09T10-12-03Z-base-1
+pnpm --silent --filter keeper keeper replay test/fixtures/simulated-run.json
 ```
+
+The fixture is a run captured from the end-to-end test, so `replay` works before any real run exists. It is labelled `simulated`. For a real run, pass its id, such as `2026-11-09T10-12-03Z-base-1`.
 
 | Command | Does |
 |---|---|
