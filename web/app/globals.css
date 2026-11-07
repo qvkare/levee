@@ -25,6 +25,8 @@
   --size-min: 15px;
   --size-max: 208px;
 
+  --bare: 84px; /* height of the header row in the last 5% */
+
   --motion: 220ms cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -236,7 +238,7 @@ code,
 
 .head-bare {
   grid-template-columns: auto minmax(0, 1fr);
-  height: 84px;
+  height: var(--bare);
   padding-right: var(--r);
 }
 
@@ -350,6 +352,12 @@ html:has([data-crisis="on"]) .head::before {
 
 .row[data-tier="mid"] .lab .second {
   display: none;
+}
+
+.row[data-tier="small"] .lab {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .row[data-tier="small"] .lab b,
@@ -490,7 +498,7 @@ html:has([data-crisis="on"]) .head::before {
   container-type: inline-size;
   display: flex;
   flex-direction: column;
-  min-height: calc(100svh - 84px);
+  min-height: calc(100svh - var(--bare));
   padding: 0 var(--r) 30px 30px;
 }
 
@@ -649,6 +657,15 @@ html:has([data-crisis="on"]) .head::before {
   color: var(--ink-2);
 }
 
+.page-note {
+  display: flex;
+  justify-content: space-between;
+  gap: 30px;
+  padding: 0 var(--r) 18px var(--left);
+  font-size: 14.5px;
+  color: var(--ink-2);
+}
+
 .foot {
   display: flex;
   justify-content: space-between;
@@ -710,6 +727,7 @@ html:has([data-crisis="on"]) .head::before {
 .nums td:first-child {
   font-weight: 600;
   letter-spacing: -0.015em;
+  font-variant-numeric: normal;
 }
 
 .nums td.strong {
@@ -766,6 +784,12 @@ html:has([data-crisis="on"]) .head::before {
   white-space: nowrap;
 }
 
+.prose-table code {
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
 .prose-table small {
   display: block;
   font-size: inherit;
@@ -775,6 +799,39 @@ html:has([data-crisis="on"]) .head::before {
 
 .scroll {
   overflow-x: auto;
+}
+
+.addresses {
+  margin-top: 20px;
+  border-top: 1.5px solid var(--ink);
+  list-style: none;
+  padding: 0;
+}
+
+.addresses li {
+  border-bottom: 1px solid var(--rule);
+}
+
+.addresses a {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 9px 0;
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  text-decoration: none;
+}
+
+.addresses a:hover {
+  text-decoration: underline;
+}
+
+.addresses code {
+  flex: none;
+  font-size: 14.5px;
+  font-weight: 400;
+  color: var(--ink-2);
 }
 
 .tools {
@@ -803,7 +860,6 @@ html:has([data-crisis="on"]) .head::before {
   background: transparent;
   color: var(--ink);
   font-size: 16px;
-  font-variant-numeric: tabular-nums;
 }
 
 .tool .button {
@@ -974,10 +1030,10 @@ summary {
 }
 
 .hop .val {
-  top: 8px;
+  top: 10px;
   left: calc(var(--a) + var(--d) * var(--unit));
-  font-size: 40px;
-  letter-spacing: -0.045em;
+  font-size: 33px;
+  letter-spacing: -0.04em;
 }
 
 .hop .stem {
@@ -990,7 +1046,7 @@ summary {
   position: relative;
   container-type: inline-size;
   border-top: 3px solid var(--ink);
-  --stage: clamp(432px, calc(100svh - 312px), 860px);
+  --stage: clamp(432px, calc(100svh - 312px), 680px);
 }
 
 .sim::before {
@@ -1035,12 +1091,15 @@ summary {
 
 .sim-stage {
   position: relative;
+  display: flex;
+  flex-direction: column;
   height: var(--stage);
   margin-top: 8px;
 }
 
 .sim .row {
-  height: calc(var(--size-max) * 0.92);
+  height: auto;
+  min-height: 0;
   margin-bottom: 0;
 }
 
@@ -1059,22 +1118,33 @@ summary {
 }
 
 .sim .run {
-  padding: 0;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  flex: 1;
+  grid-template-rows: 1fr 1fr;
+  min-height: 0;
+  padding: 24px 0 0;
 }
 
+.sim .axis {
+  flex: none;
+}
+
+/* Where the keeper fires and where the repay lands. The numbers pass in front of them. */
 .mark {
   position: absolute;
   top: 0;
-  bottom: 24px;
+  bottom: 46px;
   left: calc(var(--a) + var(--t) * var(--unit));
-  border-left: 1.5px dashed var(--ink-2);
+  border-left: 1.5px solid var(--rule);
   transition: left var(--motion);
 }
 
 .mark span {
   position: absolute;
-  bottom: -22px;
-  left: -1.5px;
+  top: 0;
+  left: 0;
   padding-left: 6px;
   font-size: 13.5px;
   line-height: 1.1;
@@ -1141,6 +1211,10 @@ summary {
   line-height: 1.5;
   white-space: nowrap;
   color: var(--ink-2);
+}
+
+.track-mark .who {
+  display: inline;
 }
 
 .track-mark[data-flip="true"] {
@@ -1217,7 +1291,6 @@ input[type="range"]::-moz-range-thumb {
   background: transparent;
   color: var(--ink);
   font-size: 19px;
-  font-variant-numeric: tabular-nums;
 }
 
 .sim-out {
@@ -1240,6 +1313,20 @@ input[type="range"]::-moz-range-thumb {
     --left: 24px;
     --k: 1900;
     --size-max: 157px;
+    --bare: 72px;
+  }
+
+  .lab {
+    width: calc(var(--a) - var(--left) - var(--wall) - 8px);
+  }
+
+  .prose-table code {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .prose-table .wide {
+    display: none;
   }
 
   .head {
@@ -1251,7 +1338,7 @@ input[type="range"]::-moz-range-thumb {
 
   .head-bare {
     grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: 72px;
+    grid-template-rows: var(--bare);
     padding-bottom: 0;
   }
 
@@ -1318,6 +1405,7 @@ input[type="range"]::-moz-range-thumb {
     --k: 1120;
     --size-min: 19px;
     --size-max: 92px;
+    --bare: 60px;
     --unit: calc((100cqw - var(--left) - var(--r) - var(--tail)) / 100);
   }
 
@@ -1400,7 +1488,7 @@ input[type="range"]::-moz-range-thumb {
   .head-bare {
     grid-template-columns: auto auto;
     grid-template-rows: auto;
-    height: 60px;
+    height: var(--bare);
     padding: 0 var(--r);
   }
 
@@ -1507,32 +1595,37 @@ input[type="range"]::-moz-range-thumb {
   }
 
   .crisis {
-    min-height: calc(100svh - 60px);
     padding: 0 var(--r) 22px;
   }
 
   .now {
-    display: block;
+    display: contents;
   }
 
   .now .lead {
+    order: 1;
     font-size: 15px;
   }
 
+  .crit {
+    order: 2;
+    margin: 18px 0 0 -6px;
+    /* 0.0% is the widest it gets, at just under two ems. */
+    font-size: calc((100cqw - 2 * var(--r)) / 2);
+    letter-spacing: -0.075em;
+  }
+
   .rest {
+    order: 3;
     margin-top: 14px;
     font-size: 14.5px;
     text-align: left;
   }
 
-  .crit {
-    margin: 18px 0 0 -6px;
-    font-size: 44cqw;
-    letter-spacing: -0.075em;
-  }
-
   .then {
+    order: 4;
     gap: 12px;
+    margin-top: 0;
     padding-top: 18px;
   }
 
@@ -1578,6 +1671,24 @@ input[type="range"]::-moz-range-thumb {
     font-size: 14px;
   }
 
+  .page-note {
+    display: block;
+    padding: 0 var(--r) 14px var(--left);
+    font-size: 14px;
+  }
+
+  .page-note p + p {
+    margin-top: 6px;
+  }
+
+  .addresses a {
+    display: block;
+  }
+
+  .addresses code {
+    display: block;
+  }
+
   .nums {
     font-size: 13.5px;
     letter-spacing: -0.01em;
@@ -1615,6 +1726,7 @@ input[type="range"]::-moz-range-thumb {
     padding: 2px 0 9px;
     font-size: 13px;
     font-weight: 400;
+    font-variant-numeric: normal;
     text-align: left;
     white-space: normal;
     color: var(--ink-2);
@@ -1733,7 +1845,7 @@ input[type="range"]::-moz-range-thumb {
   }
 
   .sim {
-    --stage: 408px;
+    --stage: 372px;
   }
 
   .sim-head {
@@ -1752,11 +1864,16 @@ input[type="range"]::-moz-range-thumb {
   }
 
   .sim .run {
+    display: block;
     padding: 14px var(--r) 0 var(--left);
   }
 
   .sim .row {
     height: 172px;
+  }
+
+  .sim .axis {
+    display: none;
   }
 
   .sim .val,
@@ -1779,11 +1896,11 @@ input[type="range"]::-moz-range-thumb {
 
   .sim-crit .crit {
     margin-top: 0;
-    font-size: 44cqw;
+    font-size: calc((100cqw - var(--left) - var(--r)) / 2);
   }
 
   .sim-crit .rest {
-    font-size: 20px;
+    font-size: 17px;
   }
 
   .sim-fall {
@@ -1802,6 +1919,10 @@ input[type="range"]::-moz-range-thumb {
 
   .track {
     margin-left: 0;
+  }
+
+  .track-mark .who {
+    display: none;
   }
 
   .terms {
