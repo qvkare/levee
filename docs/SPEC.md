@@ -88,6 +88,8 @@ pub struct Position {
 }
 ```
 
+EVM addresses are `0x` followed by exactly 40 hex characters, and are stored lowercase. The zero address is refused: a borrower can never be changed, and value sent to zero is burnt.
+
 ### Methods
 
 | Method | Caller | Effect |
