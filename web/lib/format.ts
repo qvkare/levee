@@ -52,3 +52,48 @@ export function utcTime(iso: string | number): string {
   const date = new Date(iso);
   return `${date.toISOString().slice(0, 10)} ${date.toISOString().slice(11, 19)} UTC`;
 }
+
+/** A price with a dollar sign, in as many digits as the size of the number needs. */
+export function dollars(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 100_000) return `$${whole.format(value)}`;
+  if (abs >= 1) return `$${cents.format(value)}`;
+  return `$${new Intl.NumberFormat("en-US", { maximumSignificantDigits: 4 }).format(value)}`;
+}
+
+/** A threshold or bonus with no needless zero: 84%, 5%, 77.5%. */
+export function plainShare(fraction: number): string {
+  return `${Number((fraction * 100).toFixed(1))}%`;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** 7 Nov 2026, 19:22 UTC. Built by hand, so a server in any locale prints the same text. */
+export function readDate(iso: string | number): string {
+  const date = new Date(iso);
+  const time = date.toISOString().slice(11, 16);
+  return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}, ${time} UTC`;
+}
+
+/** 19:22:40 UTC. */
+export function clock(iso: string | number): string {
+  return `${new Date(iso).toISOString().slice(11, 19)} UTC`;
+}
+
+const WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
+
+/** Spelled out up to twelve, as the sentence around it expects. */
+export function countWord(count: number): string {
+  return WORDS[count] ?? integer(count);
+}
+
+/** a, b and c */
+export function joined(items: string[]): string {
+  if (items.length < 2) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/** Seconds from milliseconds, to one decimal. */
+export function seconds(milliseconds: number): string {
+  return `${(milliseconds / 1000).toFixed(1)} s`;
+}
