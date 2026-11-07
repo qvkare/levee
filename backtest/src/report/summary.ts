@@ -4,6 +4,7 @@ import { healthFactor, simulate } from '../sim/simulate.ts';
 import {
   byGroup,
   exclusions,
+  fairByDelay,
   fairComparison,
   HEADLINE,
   paramsOf,
@@ -13,6 +14,7 @@ import {
   SIZE_BUCKETS,
   warningTable,
   type Cell,
+  type DelayRow,
   type Exclusion,
   type FairRow,
   type GroupRow,
@@ -47,6 +49,7 @@ export interface Summary {
   warning: WarningRow[];
   grid: Cell[];
   fair: FairRow[];
+  fairByDelay: DelayRow[];
   fairNote: string;
   byWindow: GroupRow[];
   byChain: GroupRow[];
@@ -110,6 +113,7 @@ export function buildSummary(positions: DerivedPosition[], usdcThreshold: (p: De
     warning: warningTable(items),
     grid,
     fair,
+    fairByDelay: fairByDelay(items, HEADLINE),
     fairNote:
       `A dollar repaid offsets a dollar of debt. A dollar of USDC collateral adds only its liquidation threshold (${threshold.toFixed(2)}) of capacity, so a repay that lands is worth ${(1 / threshold).toFixed(2)} times as much at the point of liquidation. ` +
       'That is the only survival edge Levee has over plain collateral, and it exists only if the repay lands first. ' +

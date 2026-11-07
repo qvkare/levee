@@ -1,7 +1,7 @@
 // Markdown for results/summary.md. Wording follows docs/SPEC.md section 8.
 import { WINDOWS } from '../config.ts';
 import { GRID } from '../grid.ts';
-import { HEADLINE, SIZE_BUCKETS, type Cell, type Exclusion, type FairRow, type GroupRow, type Population, type WarningRow } from './aggregate.ts';
+import { HEADLINE, SIZE_BUCKETS, type Cell, type DelayRow, type Exclusion, type FairRow, type GroupRow, type Population, type WarningRow } from './aggregate.ts';
 import type { Example, Summary } from './summary.ts';
 
 const usd = (x: number): string => {
@@ -124,6 +124,21 @@ function fairTable(rows: FairRow[]): string {
   );
 }
 
+function delayTable(rows: DelayRow[]): string {
+  return table(
+    ['D', 'Levee', 'Same USDC as collateral', 'Both survive', 'Levee only', 'Collateral only', 'Neither'],
+    rows.map((r) => [
+      `${r.delaySec} s`,
+      `${r.levee} (${pct(r.levee, r.positions)})`,
+      `${r.holdAsCollateral} (${pct(r.holdAsCollateral, r.positions)})`,
+      r.both,
+      r.leveeOnly,
+      r.collateralOnly,
+      r.neither,
+    ]),
+  );
+}
+
 function groupTable(rows: GroupRow[], first: string): string {
   return table(
     [first, 'Positions', 'Saved', 'Saved %', 'Bonus avoided', 'Bonus at risk', 'Reserve used on saved'],
@@ -222,6 +237,10 @@ export function renderSummary(summary: Summary): string {
   out.push(`T ${HEADLINE.trigger.toFixed(2)}, G ${HEADLINE.target.toFixed(2)}, D ${HEADLINE.delaySec} s. "Same USDC as collateral" supplies the reserve to Aave at arming. "Repaid at arming" is the bound for any rescue of that size, with no delay and no trigger.`);
   out.push('');
   out.push(fairTable(summary.fair));
+  out.push('');
+  out.push(`The same comparison at R ${share(HEADLINE.reserveShare)}, across delays.`);
+  out.push('');
+  out.push(delayTable(summary.fairByDelay));
   out.push('');
   out.push(summary.fairNote);
   out.push('');

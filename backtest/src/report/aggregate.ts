@@ -205,23 +205,34 @@ export interface FairRow {
   neither: number;
 }
 
+function fairRow(items: Prepared[], params: Params): FairRow {
+  const { reserveShare } = params;
+  const row: FairRow = { reserveShare, positions: items.length, levee: 0, holdAsCollateral: 0, repayAtArming: 0, both: 0, leveeOnly: 0, collateralOnly: 0, neither: 0 };
+  for (const item of items) {
+    const levee = simulate(item.path, params).saved;
+    const collateral = holdAsCollateral(item.path, reserveShare, item.usdcThreshold).survived;
+    if (repayAtArming(item.path, reserveShare).survived) row.repayAtArming++;
+    if (levee) row.levee++;
+    if (collateral) row.holdAsCollateral++;
+    if (levee && collateral) row.both++;
+    else if (levee) row.leveeOnly++;
+    else if (collateral) row.collateralOnly++;
+    else row.neither++;
+  }
+  return row;
+}
+
 export function fairComparison(items: Prepared[], base: { trigger: number; target: number; delaySec: number }): FairRow[] {
-  return GRID.reserveShares.map((reserveShare) => {
-    const row: FairRow = { reserveShare, positions: items.length, levee: 0, holdAsCollateral: 0, repayAtArming: 0, both: 0, leveeOnly: 0, collateralOnly: 0, neither: 0 };
-    const params = paramsOf({ ...base, reserveShare });
-    for (const item of items) {
-      const levee = simulate(item.path, params).saved;
-      const collateral = holdAsCollateral(item.path, reserveShare, item.usdcThreshold).survived;
-      if (repayAtArming(item.path, reserveShare).survived) row.repayAtArming++;
-      if (levee) row.levee++;
-      if (collateral) row.holdAsCollateral++;
-      if (levee && collateral) row.both++;
-      else if (levee) row.leveeOnly++;
-      else if (collateral) row.collateralOnly++;
-      else row.neither++;
-    }
-    return row;
-  });
+  return GRID.reserveShares.map((reserveShare) => fairRow(items, paramsOf({ ...base, reserveShare })));
+}
+
+export interface DelayRow extends FairRow {
+  delaySec: number;
+}
+
+/** The same comparison at one reserve size, across delays. */
+export function fairByDelay(items: Prepared[], base: { trigger: number; target: number; reserveShare: number }): DelayRow[] {
+  return GRID.delaysSec.map((delaySec) => ({ delaySec, ...fairRow(items, paramsOf({ ...base, delaySec })) }));
 }
 
 export const SIZE_BUCKETS: Array<{ label: string; min: number; max: number }> = [
