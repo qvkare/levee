@@ -192,11 +192,7 @@ contract BaseCrashTest is AaveFork {
     }
 
     function setWethPrice(uint256 price) internal {
-        vm.mockCall(
-            address(oracle),
-            abi.encodeCall(IAaveOracle.getAssetPrice, (address(weth))),
-            abi.encode(price)
-        );
+        vm.mockCall(address(oracle), abi.encodeCall(IAaveOracle.getAssetPrice, (address(weth))), abi.encode(price));
         assertEq(oracle.getAssetPrice(address(weth)), price, "oracle mock did not take");
     }
 
@@ -211,18 +207,27 @@ contract BaseCrashTest is AaveFork {
         return IPoolDataProvider(IPoolAddressesProviderData(pool.ADDRESSES_PROVIDER()).getPoolDataProvider());
     }
 
-    function printDifference(Timeline memory unrescued, Timeline memory rescued, uint256 savedBase)
-        internal
-        view
-    {
+    function printDifference(Timeline memory unrescued, Timeline memory rescued, uint256 savedBase) internal view {
         console2.log("== Forced crash on Base at block", target.forkBlock);
         console2.log("WETH price USD", fixedPoint(startPrice, 1e8, 2), "->", fixedPoint(crashPrice, 1e8, 2));
         console2.log("trigger", fixedPoint(TRIGGER, WAD, 2), "target", fixedPoint(TARGET, WAD, 2));
-        row("health factor at crash", fixedPoint(unrescued.healthFactorAtCrash, WAD, 4), fixedPoint(rescued.healthFactorAtCrash, WAD, 4));
+        row(
+            "health factor at crash",
+            fixedPoint(unrescued.healthFactorAtCrash, WAD, 4),
+            fixedPoint(rescued.healthFactorAtCrash, WAD, 4)
+        );
         row("liquidated", "yes", "no");
-        row("WETH collateral left", fixedPoint(unrescued.collateralLeft, 1e18, 4), fixedPoint(rescued.collateralLeft, 1e18, 4));
+        row(
+            "WETH collateral left",
+            fixedPoint(unrescued.collateralLeft, 1e18, 4),
+            fixedPoint(rescued.collateralLeft, 1e18, 4)
+        );
         row("USDC debt left", fixedPoint(unrescued.debtLeft, USDC_UNIT, 2), fixedPoint(rescued.debtLeft, USDC_UNIT, 2));
-        row("USDC spent from reserve", fixedPoint(unrescued.reserveSpent, USDC_UNIT, 2), fixedPoint(rescued.reserveSpent, USDC_UNIT, 2));
+        row(
+            "USDC spent from reserve",
+            fixedPoint(unrescued.reserveSpent, USDC_UNIT, 2),
+            fixedPoint(rescued.reserveSpent, USDC_UNIT, 2)
+        );
         row("net equity USD", fixedPoint(unrescued.netEquityBase, 1e8, 2), fixedPoint(rescued.netEquityBase, 1e8, 2));
         console2.log("liquidator paid USDC", fixedPoint(unrescued.liquidatorPaid, USDC_UNIT, 2));
         console2.log("liquidator received WETH", fixedPoint(unrescued.liquidatorReceived, 1e18, 4));

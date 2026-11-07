@@ -95,15 +95,12 @@ abstract contract AaveFork is Test {
     }
 
     /// Supplies WETH and borrows USDC at a variable rate, sized to a health factor.
-    function openPosition(address user, uint256 wethAmount, uint256 healthFactor)
-        internal
-        returns (uint256 debt)
-    {
+    function openPosition(address user, uint256 wethAmount, uint256 healthFactor) internal returns (uint256 debt) {
         deal(address(weth), user, wethAmount);
         vm.startPrank(user);
         weth.approve(address(pool), wethAmount);
         pool.supply(address(weth), wethAmount, user, 0);
-        (uint256 collateralBase,,,uint256 threshold,,) = pool.getUserAccountData(user);
+        (uint256 collateralBase,,, uint256 threshold,,) = pool.getUserAccountData(user);
         uint256 debtBase = collateralBase * threshold * WAD / BPS / healthFactor;
         debt = debtBase * USDC_UNIT / oracle.getAssetPrice(address(usdc));
         pool.borrow(address(usdc), debt, VARIABLE_RATE, 0, user);
@@ -119,11 +116,7 @@ abstract contract AaveFork is Test {
 
     /// docs/SPEC.md section 5, R = D - (C * L) / T, in USDC base units. Rounds up and
     /// adds DEBT_ROUNDING, because the bare formula lands just under the target.
-    function repayToTarget(address user, uint256 targetHealthFactor)
-        internal
-        view
-        returns (uint256)
-    {
+    function repayToTarget(address user, uint256 targetHealthFactor) internal view returns (uint256) {
         (uint256 collateralBase, uint256 debtBase,, uint256 threshold,,) = pool.getUserAccountData(user);
         uint256 supportedDebtBase = collateralBase * threshold * WAD / BPS / targetHealthFactor;
         assertGt(debtBase, supportedDebtBase, "already at or above target");
