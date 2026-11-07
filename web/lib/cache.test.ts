@@ -14,14 +14,16 @@ test("serves a fresh value and reloads after it expires", async () => {
   assert.equal(await cache.get("a", load), 2);
 });
 
-test("concurrent reads share one load", async () => {
+test("concurrent misses each load, because a Worker request cannot wait on another's promise", async () => {
   let loads = 0;
   const cache = ttlCache<number>(() => 100, 10);
   const load = async () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
     return ++loads;
   };
-  assert.deepEqual(await Promise.all([cache.get("a", load), cache.get("a", load)]), [1, 1]);
+  await Promise.all([cache.get("a", load), cache.get("a", load)]);
+  assert.equal(loads, 2);
+  assert.equal(await cache.get("a", load), 2); // The last finished value is served.
 });
 
 test("a zero lifetime is not stored", async () => {

@@ -22,15 +22,10 @@ const VIEM_CHAINS = { base, arbitrum } as const;
 const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
 const REQUEST_TIMEOUT_MS = 4000;
 
-const clients = new Map<ChainKey, PublicClient>();
-
+/** A client per read: viem shares in-flight promises inside a client, which Workers requests must not. */
 function clientFor(chain: ChainConfig): PublicClient {
-  const existing = clients.get(chain.key);
-  if (existing) return existing;
   const transport = fallback(rpcUrls(chain).map((url) => http(url, { timeout: REQUEST_TIMEOUT_MS, retryCount: 0 })));
-  const client = createPublicClient({ chain: VIEM_CHAINS[chain.key], transport }) as PublicClient;
-  clients.set(chain.key, client);
-  return client;
+  return createPublicClient({ chain: VIEM_CHAINS[chain.key], transport }) as PublicClient;
 }
 
 async function readReserves(client: PublicClient, chain: ChainConfig, blockNumber: bigint, user: Address): Promise<Reserves> {

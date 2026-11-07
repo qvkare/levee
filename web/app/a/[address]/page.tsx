@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import { cache } from "react";
+import type { Address } from "viem";
 import { AddressForm } from "@/components/address-form.tsx";
 import { Report } from "@/components/report.tsx";
 import { ADDRESS_ERRORS, parseAddress, shortAddress } from "@/lib/address.ts";
 import { DEFAULT_TARGET, parseTarget } from "@/lib/math.ts";
 import { verdict } from "@/lib/reading.ts";
+import { withTarget } from "@/lib/report.ts";
 import { getRiskReport } from "@/lib/risk.ts";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +15,9 @@ interface Props {
   params: Promise<{ address: string }>;
   searchParams: Promise<{ target?: string | string[] }>;
 }
+
+/** The page and its metadata run together, and should share one read. */
+const reportFor = cache((address: Address) => getRiskReport(address));
 
 async function addressFrom(params: Props["params"]) {
   const { address } = await params;
@@ -27,7 +33,7 @@ async function addressFrom(params: Props["params"]) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { parsed } = await addressFrom(params);
   if (!parsed.ok) return { title: "Not an address", robots: { index: false } };
-  const report = await getRiskReport(parsed.address);
+  const report = await reportFor(parsed.address);
   return { title: `Stage report for ${shortAddress(parsed.address)}`, description: verdict(report).text, robots: { index: false } };
 }
 
@@ -44,7 +50,7 @@ export default async function Page({ params, searchParams }: Props) {
 
   const { target } = await searchParams;
   const chosen = parseTarget(Array.isArray(target) ? target[0] : target) ?? DEFAULT_TARGET;
-  const report = await getRiskReport(parsed.address, chosen);
+  const report = withTarget(await reportFor(parsed.address), chosen);
   return (
     <>
       <section className="tool wrap">
