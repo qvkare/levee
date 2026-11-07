@@ -102,8 +102,8 @@ EVM addresses are `0x` followed by exactly 40 hex characters, and are stored low
 
 | Method | Caller | Effect |
 |---|---|---|
-| `new(mpc_contract, chains)` | init | Stores immutable config. Rejects duplicate chain ids |
-| `register(chain_id, borrower, keeper, max_per_rescue, max_per_day, cooldown_secs) -> u64` | anyone, payable | Creates a position owned by the caller. Attached deposit covers storage |
+| `new(mpc_contract, chains)` | the contract account, once | Stores immutable config. Rejects duplicate chain ids, an empty chain list, malformed addresses, a zero max fee ceiling and a gas limit below 21000. Private, so nobody can get in between deployment and this call and point the contract at their own signer |
+| `register(chain_id, borrower, keeper, max_per_rescue, max_per_day, cooldown_secs) -> u64` | anyone, payable | Creates a position owned by the caller. Ids start at 1. Both caps must be above zero. The deposit pays for the most storage the position can ever use, a 64-character keeper and a queued loosening, because `set_keeper` and `queue_loosen` take no deposit. The surplus is refunded |
 | `set_keeper(id, keeper)` | owner | Replaces the keeper |
 | `tighten(id, max_per_rescue, max_per_day, cooldown_secs)` | owner | Immediate. Each value may only get stricter or stay the same. Cancels any queued loosening |
 | `queue_loosen(id, max_per_rescue, max_per_day, cooldown_secs)`, `apply_loosen(id)` | owner | Loosening takes effect after 24 hours. Each value may only get looser or stay the same, and at least one must change. Queueing again replaces the queue and restarts the delay |
@@ -112,7 +112,7 @@ EVM addresses are `0x` followed by exactly 40 hex characters, and are stored low
 | `rescue(id, amount, fees)` | keeper | Signs `Pool.repay(USDC, amount, 2, borrower)`. See below |
 | `withdraw_float(id, amount, fees)` | owner | Signs `USDC.transfer(borrower, amount)`. The destination is fixed |
 | `sweep_gas(id, amount_wei, fees)` | owner | Signs a value transfer to `borrower`, with `gas_limit_transfer`. A flat 21000 would not do: on Arbitrum the gas limit has to cover L1 data cost |
-| `get_position(id)`, `rescuer_path(id)`, `preview_rescue(id, amount, fees)` | view | `preview_rescue` returns the unsigned tx hex and hash |
+| `get_position(id)`, `rescuer_path(id)`, `preview_rescue(id, amount, fees)`, `get_chain(chain_id)`, `get_mpc_contract()` | view | `get_position` reports the current UTC day: `spent_today` reads 0 if the stored bucket is from an earlier day. `preview_rescue` returns the unsigned tx hex and hash. `get_chain` and `get_mpc_contract` let anyone audit the immutable config |
 
 `fees` is `{ nonce: u64, max_fee_per_gas: U128, max_priority_fee_per_gas: U128 }`.
 
