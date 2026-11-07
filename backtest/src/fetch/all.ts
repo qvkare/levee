@@ -1,4 +1,4 @@
-// `pnpm fetch`: every network step, in order, then `derive`. Each stage caches what it reads
+// `pnpm fetch-data`: every network step, in order, then `derive`. Each stage caches what it reads
 // in data/raw and skips it on the next run, so a killed run resumes.
 import { derive } from '../derive.ts';
 import { crossCheck } from './crosscheck.ts';

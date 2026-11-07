@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-/** Raw responses as fetched. Git-ignored. Re-created by `pnpm fetch`. */
+/** Raw responses as fetched. Git-ignored. Re-created by `pnpm fetch-data`. */
 export const RAW_DIR = join(ROOT, 'data', 'raw');
 /** Compact files derived from raw data. Committed; `pnpm backtest` reads only these. */
 export const DERIVED_DIR = join(ROOT, 'data', 'derived');
