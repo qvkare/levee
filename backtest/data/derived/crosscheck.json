@@ -1,0 +1,19 @@
+{
+  "reads": 54394,
+  "mismatches": 0,
+  "providers": [
+    "42161.rpc.thirdweb.com",
+    "8453.rpc.thirdweb.com",
+    "arb-one.api.pocket.network",
+    "arb-pokt.nodies.app",
+    "arbitrum-one.public.blastapi.io",
+    "arbitrum.gateway.tenderly.co",
+    "base-public.nodies.app",
+    "base.drpc.org",
+    "base.gateway.tenderly.co",
+    "base.merkle.io",
+    "mainnet.base.org",
+    "rpc.sentio.xyz"
+  ],
+  "providerCallsThatFailed": 63
+}
