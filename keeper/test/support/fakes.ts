@@ -107,6 +107,7 @@ export function fakeNear(
     fail?: Error;
     tamper?: (fields: Parameters<typeof unsignedTransaction>[0]) => void;
     nearTx?: string;
+    borrower?: Address;
   } = {},
 ): FakeNear {
   const requests: RescueRequest[] = [];
@@ -121,7 +122,7 @@ export function fakeNear(
         maxFeePerGas: request.fees.maxFeePerGas,
         maxPriorityFeePerGas: request.fees.maxPriorityFeePerGas,
         to: chain.pool,
-        data: repayCalldata(chain.usdc, request.amount, 2n, borrower),
+        data: repayCalldata(chain.usdc, request.amount, 2n, behaviour.borrower ?? borrower),
       };
       behaviour.tamper?.(fields);
       return {

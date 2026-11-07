@@ -93,10 +93,18 @@ async function readWiring(client: PublicClient, query: PositionQuery): Promise<A
 const notFound = (error: unknown): boolean =>
   error instanceof Error && error.name.endsWith('NotFoundError');
 
-export function createEvmClient(url: string): EvmClient {
+/** Short, because a slow endpoint must not delay the five second loop. */
+const DEFAULT_RPC_TIMEOUT_MS = 4_000;
+
+export function createEvmClient(
+  url: string,
+  options: { timeoutMs?: number } = {},
+): EvmClient {
   const client: PublicClient = createPublicClient({
-    // Short, because a slow endpoint must not delay the five second loop.
-    transport: http(url, { timeout: 4_000, retryCount: 1 }),
+    transport: http(url, {
+      timeout: options.timeoutMs ?? DEFAULT_RPC_TIMEOUT_MS,
+      retryCount: 1,
+    }),
   });
 
   let wiring: Promise<AaveWiring> | undefined;
