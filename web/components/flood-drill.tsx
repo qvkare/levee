@@ -10,7 +10,7 @@ import { RiverSection } from "./river-section.tsx";
 import { StackTable, type Column } from "./stack-table.tsx";
 import { StateTag } from "./state-tag.tsx";
 
-const REFRESH_TIMEOUT_MS = 2500;
+const REFRESH_TIMEOUT_MS = 3000;
 /** Share of the section in view before the drill starts. */
 const IN_VIEW = 0.6;
 

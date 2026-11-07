@@ -595,8 +595,10 @@ input[aria-invalid="true"] {
   position: absolute;
 }
 
+/* Water stops inside the crest. The land behind it is lower, and stays dry until it is overtopped. */
 .chart-water {
   inset: 0;
+  right: calc(var(--levee) * 0.56);
   z-index: 1;
   background: var(--water);
   border-top: 2px solid var(--ink);
@@ -637,6 +639,7 @@ input[aria-invalid="true"] {
 
 /* Over flood stage the levee is under water, so only its outline is left. */
 .chart[data-state="over"] .chart-water {
+  right: 0;
   z-index: 3;
   border-top-color: var(--flood);
 }
@@ -824,8 +827,12 @@ input[aria-invalid="true"] {
   position: absolute;
   top: 0;
   left: calc(var(--chart-edge) + var(--staff));
-  right: 0;
+  right: calc(var(--levee) * 0.56);
   border-top: 2px dashed var(--ink);
+}
+
+.chart[data-state="over"] .chart-target i {
+  right: 0;
 }
 
 .chart-target-label span {
