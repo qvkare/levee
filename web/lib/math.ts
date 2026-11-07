@@ -10,7 +10,7 @@ export interface Debtor {
 
 export const DEFAULT_TARGET = 1.5;
 export const MIN_TARGET = 1.05;
-export const MAX_TARGET = 5;
+export const MAX_TARGET = 3;
 
 /** Spec section 7: for volatile collateral against stable debt, the drop is about 1 - 1/HF. */
 export function approxFall(healthFactor: number): number {
