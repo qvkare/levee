@@ -2,6 +2,7 @@
 
 pub mod address;
 pub mod evm;
+pub mod mpc;
 pub mod policy;
 pub mod rlp;
 pub mod txs;

@@ -41,8 +41,8 @@ Addresses come from `bgd-labs/aave-address-book`.
 
 MPC: `v1.signer` 3.17.0 on mainnet, `v1.signer-prod.testnet` 3.18.0 on testnet.
 
-- Call `sign({ request: { path, domain_id: 0, payload_v2: { Ecdsa: "<32 bytes hex>" } } })` with a deposit of 1 yoctoNEAR. At least 10 Tgas must be attached.
-- A secp256k1 response has `big_r`, `s`, `recovery_id`. `r` is bytes 1..33 of the compressed `big_r`. `s` is low-s normalised. The payload is signed as given, with no further hashing.
+- Call `sign({ request: { path, domain_id: 0, payload_v2: { Ecdsa: "<32 bytes hex>" } } })` with a deposit of 1 yoctoNEAR. At least 15 Tgas must be attached: `sign_call_gas_attachment_requirement_tera_gas` is 15 in the config of both live contracts, read on 2026-11-07.
+- A secp256k1 response is `{ scheme: "Secp256k1", big_r: { affine_point }, s: { scalar }, recovery_id }`, with bare lowercase hex. `r` is bytes 1..33 of the compressed `big_r`. `s` is low-s normalised. The payload is signed as given, with no further hashing.
 - View `derived_public_key({ path, predecessor, domain_id: 0 })` returns the derived key. Check a recovered key against it.
 
 Selectors:

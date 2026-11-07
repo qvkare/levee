@@ -1,0 +1,23 @@
+{
+  "source": "v1.signer-prod.testnet, read over RPC on 2026-11-07",
+  "tx_hash": "7JGDDajWhtQvfs9RSg3YzPSdjeNoEEYVoB34B3a5xsrz",
+  "request": {
+    "request": {
+      "domain_id": 0,
+      "path": "",
+      "payload_v2": {
+        "Ecdsa": "4dbf5bc6e6ad89b82e0f2d081c881620ce0bdd89c9dbbd6694585c73708ac2e9"
+      }
+    }
+  },
+  "response": {
+    "scheme": "Secp256k1",
+    "big_r": {
+      "affine_point": "03f801266a516fbdef4a890b10ca39cbbfa959320412d3126e5bd0fa05ded238d3"
+    },
+    "s": {
+      "scalar": "4071aa91247451c43e29f2bc1fbbdfcae2d06b0e36e2b2ceefb0a8a64d388f86"
+    },
+    "recovery_id": 1
+  }
+}
