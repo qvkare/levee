@@ -42,6 +42,9 @@ const BORROWER: &str = "0x1234567890abcdef1234567890abcdef12345678";
 const MAX_FEE_CEILING: u128 = 2_000_000_000;
 const PRIORITY_CEILING: u128 = 100_000_000;
 
+/// Yoctonear per byte, on mainnet and here.
+const STORAGE_BYTE_COST: u128 = 10_000_000_000_000_000_000;
+
 const HOUR: u64 = 3_600 * 1_000_000_000;
 const DAY: u64 = 24 * HOUR;
 
@@ -1270,7 +1273,7 @@ async fn a_surplus_deposit_is_refunded_to_the_registrant() -> anyhow::Result<()>
     // What was charged covers what was stored.
     let levee_after = h.levee.view_account().await?.storage_usage;
     let stored_bytes = u128::from(levee_after - levee_before);
-    assert!(stored_bytes * 10_000_000_000_000_000_000 <= paid.0);
+    assert!(stored_bytes * STORAGE_BYTE_COST <= paid.0);
     Ok(())
 }
 
@@ -1340,11 +1343,7 @@ async fn paid_storage_covers_a_position_at_its_largest() -> anyhow::Result<()> {
 
     let usage_after = h.levee.view_account().await?.storage_usage;
     let bytes = u128::from(usage_after - usage_before);
-    assert!(
-        bytes * 10_000_000_000_000_000_000 <= paid.0,
-        "stored {bytes} bytes on a payment of {}",
-        paid.0
-    );
+    assert_eq!(bytes * STORAGE_BYTE_COST, paid.0);
     Ok(())
 }
 

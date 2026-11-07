@@ -483,11 +483,23 @@ mod registration {
         assert_eq!(grown as u64, PENDING_LOOSEN_BYTES);
     }
 
+    /// The whole flow stays in one context, because `testing_env!` resets the storage
+    /// counter. Across contexts this would only see the growth, not the record.
     #[test]
-    fn paid_storage_covers_the_largest_the_record_can_grow() {
+    fn paid_storage_is_exactly_the_largest_the_record_can_grow_to() {
         let mut contract = new_contract();
+        testing_env!(context(OWNER, NOON)
+            .attached_deposit(NearToken::from_near(1))
+            .build());
         let usage_before = env::storage_usage();
-        let id = register(&mut contract, "k.near");
+        let id = contract.register(
+            8453,
+            BORROWER.into(),
+            account("k.near"),
+            U128(MAX_PER_RESCUE),
+            U128(MAX_PER_DAY),
+            COOLDOWN_SECS,
+        );
         let paid: U128 =
             serde_json::from_value(last_event()["data"]["storage_paid"].clone()).unwrap();
         let paid_bytes = paid.0 / env::storage_byte_cost().as_yoctonear();
@@ -495,16 +507,12 @@ mod registration {
         // The longest keeper a NEAR account id allows, and a queued loosening.
         let longest = format!("{}.near", "k".repeat(59));
         assert_eq!(longest.len(), 64);
-        act_as(OWNER, NOON);
         contract.set_keeper(id, account(&longest));
         contract.queue_loosen(id, U128(u128::MAX), U128(u128::MAX), 0);
         contract.positions.flush();
 
-        let grown_to = env::storage_usage() - usage_before;
-        assert!(
-            u128::from(grown_to) <= paid_bytes,
-            "{grown_to} > {paid_bytes}"
-        );
+        let stored = u128::from(env::storage_usage() - usage_before);
+        assert_eq!(stored, paid_bytes);
     }
 }
 
