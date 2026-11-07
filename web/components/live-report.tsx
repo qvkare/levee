@@ -154,7 +154,7 @@ export function LiveReport({ report: initial, whatIf }: { report: RiskReport; wh
                 </>
               ) : (
                 <>
-                  <b>Live reading.</b> {readingLine(wall.crisis, report)} {late}
+                  <b>Live reading.</b> {[readingLine(wall.crisis, report), unread, late].filter(Boolean).join(" ")}
                 </>
               )
             }
