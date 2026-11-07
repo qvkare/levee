@@ -78,7 +78,6 @@ One light theme. The hues are those of a nautical chart: white deep water, blue 
 | Water | `#BFDFF0` | Water, and nothing else |
 | Land | `#EFDCA4` | The levee and the land behind it, and nothing else |
 | Flood | `#9C0B66` | Flood stage, and anything at or past it |
-| Mark | `#0F4C6E` | The disc of the mark. It exists only in `public/levee-mark.svg` and appears nowhere in the interface |
 
 Colour means: blue is water, buff is land, and magenta is flood stage. Being healthy is the normal state and is drawn in ink, so a safe position is not painted as a reward. Action stage is ink too, and is told in words and by the water's height.
 
@@ -96,7 +95,11 @@ Fonts are self-hosted from `app/fonts` under the SIL Open Font License, so the b
 
 ## Mark
 
-A blue disc holding a buff levee profile and one white water line that stops at the bank. It is set left of the wordmark at 28 px in the header, used alone as the favicon, and heads the README. It is a replaceable asset: `public/levee-mark.svg` is the only copy, so the owner can swap it by replacing that file. This is the default until the owner picks. Do not redraw it inside pages, recolour it to the palette, or put it on the water tint.
+An L, chosen by the owner on 7 Nov 2026. The tall arm is held water and the short arm is protected land, split by a slanted cut, the bank. It is one colour: ink on paper, pale steel on dark.
+
+It is set left of the wordmark at about 28 px in the header, and it heads the README. `public/levee-mark.svg` is the ink mark. `public/levee-mark-profile.svg` is the pale mark on its dark field, for social and Open Graph images, and it is the only dark thing in the product. The favicon and the Open Graph image are rendered from these two files. If the mark changes, render them again.
+
+Do not recolour it to the palette, add effects, or redraw it inside pages.
 
 ## Layout
 
