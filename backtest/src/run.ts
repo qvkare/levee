@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { CHAINS, type ChainKey } from './config.ts';
 import { readPositions, VALIDATION_FILE, type DerivedPosition } from './data.ts';
 import type { MarketSnapshot } from './fetch/reserves.ts';
+import { runHyperliquid } from './hyperliquid.ts';
 import { DERIVED_DIR, existsSync, readJson, RESULTS_DIR, writeJson } from './paths.ts';
 import { renderSummary } from './report/render.ts';
 import { buildSummary, type ValidationRow } from './report/summary.ts';
@@ -95,6 +96,7 @@ export function run(): void {
   console.log(`positions in scope ${cell.positions}, excluded ${summary.excludedPositions}`);
   console.log(`headline: saved ${cell.saved}, not saved ${cell.notSaved}, bonus avoided $${cell.bonusAvoidedUsd}`);
   console.log(`wrote ${join(RESULTS_DIR, 'summary.json')} and summary.md`);
+  runHyperliquid();
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) run();

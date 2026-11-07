@@ -1,0 +1,173 @@
+{
+  "source": {
+    "repository": "ConejoCapital/HyperMultiAssetedADL",
+    "commit": "79bad0fae259fc1fcd9fce960953ae3b398f2db7",
+    "path": "data/canonical/cash-only balances ADL event orderbook 2025-10-10/liquidations_full_12min.csv",
+    "sha256": "1afd4c09494665d82fadf3ad65fb210b6b3a2213ab66ed2bc179aa23b2b55684"
+  },
+  "rows": 63637,
+  "positionsUsed": 1465,
+  "positionsWithoutLoss": 32,
+  "prices": {
+    "BTC": {
+      "high": 108983.6,
+      "low": 97471.3,
+      "firstFill": "2025-10-10 21:16:59.514294+00:00",
+      "lastFill": "2025-10-10 21:20:24.198183+00:00"
+    },
+    "ETH": {
+      "high": 3567.77,
+      "low": 3099.95,
+      "firstFill": "2025-10-10 21:16:59.514294+00:00",
+      "lastFill": "2025-10-10 21:21:09.665285+00:00"
+    }
+  },
+  "fresh": [
+    {
+      "coin": "BTC",
+      "leverage": 3,
+      "liquidationDistance": 0.32489451476793246,
+      "dropInFile": 0.10563332464701114,
+      "survivesUnprotected": true,
+      "topUpNeededE": 0
+    },
+    {
+      "coin": "BTC",
+      "leverage": 5,
+      "liquidationDistance": 0.18987341772151897,
+      "dropInFile": 0.10563332464701114,
+      "survivesUnprotected": true,
+      "topUpNeededE": 0
+    },
+    {
+      "coin": "BTC",
+      "leverage": 10,
+      "liquidationDistance": 0.08860759493670886,
+      "dropInFile": 0.10563332464701114,
+      "survivesUnprotected": false,
+      "topUpNeededE": 0.16812908088923506
+    },
+    {
+      "coin": "ETH",
+      "leverage": 3,
+      "liquidationDistance": 0.31972789115646255,
+      "dropInFile": 0.1311239233470768,
+      "survivesUnprotected": true,
+      "topUpNeededE": 0
+    },
+    {
+      "coin": "ETH",
+      "leverage": 5,
+      "liquidationDistance": 0.18367346938775514,
+      "dropInFile": 0.1311239233470768,
+      "survivesUnprotected": true,
+      "topUpNeededE": 0
+    },
+    {
+      "coin": "ETH",
+      "leverage": 10,
+      "liquidationDistance": 0.0816326530612245,
+      "dropInFile": 0.1311239233470768,
+      "survivesUnprotected": false,
+      "topUpNeededE": 0.4850144488013526
+    }
+  ],
+  "liquidated": [
+    {
+      "coin": "BTC",
+      "bucket": "3x",
+      "positions": 0,
+      "notionalUsd": 0,
+      "survivedWithTopUp": {
+        "1": 0,
+        "2": 0,
+        "0.25": 0,
+        "0.5": 0
+      }
+    },
+    {
+      "coin": "BTC",
+      "bucket": "5x",
+      "positions": 115,
+      "notionalUsd": 19455320,
+      "survivedWithTopUp": {
+        "1": 115,
+        "2": 115,
+        "0.25": 28,
+        "0.5": 108
+      }
+    },
+    {
+      "coin": "BTC",
+      "bucket": "10x",
+      "positions": 490,
+      "notionalUsd": 403201472,
+      "survivedWithTopUp": {
+        "1": 439,
+        "2": 490,
+        "0.25": 5,
+        "0.5": 113
+      }
+    },
+    {
+      "coin": "BTC",
+      "bucket": "over 15x",
+      "positions": 259,
+      "notionalUsd": 204847145,
+      "survivedWithTopUp": {
+        "1": 17,
+        "2": 147,
+        "0.25": 0,
+        "0.5": 0
+      }
+    },
+    {
+      "coin": "ETH",
+      "bucket": "3x",
+      "positions": 38,
+      "notionalUsd": 2684031,
+      "survivedWithTopUp": {
+        "1": 38,
+        "2": 38,
+        "0.25": 38,
+        "0.5": 38
+      }
+    },
+    {
+      "coin": "ETH",
+      "bucket": "5x",
+      "positions": 403,
+      "notionalUsd": 177660111,
+      "survivedWithTopUp": {
+        "1": 403,
+        "2": 403,
+        "0.25": 138,
+        "0.5": 373
+      }
+    },
+    {
+      "coin": "ETH",
+      "bucket": "10x",
+      "positions": 118,
+      "notionalUsd": 75089812,
+      "survivedWithTopUp": {
+        "1": 101,
+        "2": 118,
+        "0.25": 2,
+        "0.5": 23
+      }
+    },
+    {
+      "coin": "ETH",
+      "bucket": "over 15x",
+      "positions": 42,
+      "notionalUsd": 31871147,
+      "survivedWithTopUp": {
+        "1": 1,
+        "2": 33,
+        "0.25": 0,
+        "0.5": 0
+      }
+    }
+  ]
+}
