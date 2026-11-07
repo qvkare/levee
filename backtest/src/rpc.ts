@@ -18,16 +18,9 @@ interface EndpointState {
 const FATAL_MESSAGES = ['execution reverted', 'revert', 'invalid opcode', 'stack underflow', 'out of gas'];
 
 // Providers word their log-range limits in many ways. A match means "ask for less".
-const RANGE_MESSAGES = [
-  'range',
-  'too large',
-  'too many',
-  'limit',
-  'exceed',
-  'response size',
-  'query returned more',
-  'block range',
-];
+const RANGE_MESSAGES = ['block range', 'range too large', 'range exceeds', 'ranges over', 'span', 'response size', 'query returned more', 'too many results'];
+// Checked first: these mean "slow down", not "ask for less".
+const RATE_MESSAGES = ['rate limit', 'request limit', 'too many requests', 'cu limit', 'compute unit', 'capacity'];
 
 export class RangeTooLargeError extends Error {}
 
@@ -83,6 +76,15 @@ export class Rpc {
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 
+  /** Like `call`, but a null result moves on to the next endpoint. Pruned nodes answer null. */
+  async callUntilPresent<T>(method: string, params: unknown[]): Promise<T> {
+    for (let attempt = 0; attempt < this.endpoints.length * 3; attempt++) {
+      const result = await this.call<T | null>(method, params);
+      if (result !== null) return result;
+    }
+    throw new Error(`no endpoint has ${method} ${JSON.stringify(params)}`);
+  }
+
   private async post<T>(endpoint: EndpointState, method: string, params: unknown[]): Promise<T> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.opts.timeoutMs ?? 30_000);
@@ -94,16 +96,17 @@ export class Rpc {
         signal: controller.signal,
       });
       const text = await response.text();
-      let body: { result?: T; error?: { code?: number; message?: string } };
+      let body: { result?: T; error?: { code?: number; message?: string; data?: unknown } };
       try {
         body = JSON.parse(text);
       } catch {
         throw new Error(`${endpoint.url}: HTTP ${response.status}: ${text.slice(0, 160)}`);
       }
       if (body.error) {
-        const message = body.error.message ?? JSON.stringify(body.error);
+        const message = `${body.error.message ?? ''} ${body.error.data ?? ''}`.trim() || JSON.stringify(body.error);
         const lower = message.toLowerCase();
-        if (method === 'eth_getLogs' && RANGE_MESSAGES.some((m) => lower.includes(m)) && response.status !== 429) {
+        const rateLimited = response.status === 429 || RATE_MESSAGES.some((m) => lower.includes(m));
+        if (method === 'eth_getLogs' && !rateLimited && RANGE_MESSAGES.some((m) => lower.includes(m))) {
           throw new RangeTooLargeError(`${endpoint.url}: ${message}`);
         }
         const error: RpcError = new Error(`${endpoint.url}: ${message}`);

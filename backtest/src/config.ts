@@ -9,8 +9,8 @@ export interface ChainConfig {
   usdc: `0x${string}`;
   /** Free endpoints that need no key. Order is the preference for archive `eth_call`. */
   archiveRpcs: string[];
-  /** Free endpoints that serve `eth_getLogs` over wide ranges. */
-  logRpcs: string[];
+  /** Two independent free `eth_getLogs` providers, with the widest chunk each accepts. */
+  logRpcs: Array<{ url: string; chunk: number }>;
 }
 
 // Pool and USDC addresses are the ones in docs/SPEC.md section 3.
@@ -21,7 +21,10 @@ export const CHAINS: Record<ChainKey, ChainConfig> = {
     pool: '0xA238Dd80C259a72e81d7e4664a9801593F98d1c5',
     usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     archiveRpcs: ['https://mainnet.base.org', 'https://gateway.tenderly.co/public/base', 'https://base.api.pocket.network'],
-    logRpcs: ['https://base.api.pocket.network', 'https://mainnet.base.org'],
+    logRpcs: [
+      { url: 'https://gateway.tenderly.co/public/base', chunk: 1_000 },
+      { url: 'https://base.api.pocket.network', chunk: 500 },
+    ],
   },
   arbitrum: {
     key: 'arbitrum',
@@ -29,7 +32,10 @@ export const CHAINS: Record<ChainKey, ChainConfig> = {
     pool: '0x794a61358D6845594F94dc1DB02A252b5b4814aD',
     usdc: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
     archiveRpcs: ['https://gateway.tenderly.co/public/arbitrum', 'https://arb-one.api.pocket.network', 'https://arbitrum-one.public.blastapi.io'],
-    logRpcs: ['https://gateway.tenderly.co/public/arbitrum', 'https://arb1.arbitrum.io/rpc'],
+    logRpcs: [
+      { url: 'https://gateway.tenderly.co/public/arbitrum', chunk: 20_000 },
+      { url: 'https://arb1.arbitrum.io/rpc', chunk: 20_000 },
+    ],
   },
 };
 
