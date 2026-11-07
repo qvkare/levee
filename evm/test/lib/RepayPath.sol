@@ -77,6 +77,13 @@ abstract contract RepayPath is AaveFork {
         uint256 amount = repayToTarget(borrower, targetHealthFactor);
         fundRescuer(rescuer, amount, amount);
 
+        // keeper/test/decision.test.ts pins its arithmetic to these numbers.
+        (uint256 collateralBase, uint256 debtBase,, uint256 threshold,,) = pool.getUserAccountData(borrower);
+        console2.log(target.name, "vector collateral base", collateralBase);
+        console2.log(target.name, "vector debt base", debtBase);
+        console2.log(target.name, "vector threshold bps", threshold);
+        console2.log(target.name, "vector USDC price", oracle.getAssetPrice(address(usdc)));
+
         vm.prank(rescuer);
         pool.repay(address(usdc), amount, VARIABLE_RATE, borrower);
 

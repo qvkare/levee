@@ -144,7 +144,7 @@ Package: `keeper`, TypeScript, Node 22. One keeper serves one or more positions 
 Loop, every 5 seconds per position:
 
 1. Read `getUserAccountData(borrower)` from at least two RPC endpoints. Act only if they agree within 0.5% and are less than 30 seconds old.
-2. If `healthFactor < trigger`, compute `amount` to reach `target`, capped by the position, the rescuer USDC balance and the debt.
+2. If `healthFactor < trigger`, compute `amount` to reach `target`, capped by the position, the rescuer USDC balance, the rescuer's allowance to the Pool and the USDC debt.
 3. Read rescuer nonce and fees from the chain.
 4. Call `rescue` with a function-call key. Wait for the callback result.
 5. Assemble the signed EIP-1559 transaction, verify the recovered address equals the derived rescuer, and broadcast to both RPCs.
@@ -155,6 +155,8 @@ Repay needed to reach target `T`, with collateral `C` (USD), liquidation thresho
 ```
 R = D - (C * L) / T
 ```
+
+`C`, `D` and `R` are in Aave's base currency, 8 decimals of USD. Convert `R` to USDC base units at Aave's oracle price for USDC, rounding up, then add 2 base units: Aave burns scaled debt rounding down and reads the balance rounding up, so the bare formula lands just under `T`.
 
 The trigger, target and RPC list live off chain. No LLM is involved.
 
