@@ -1,0 +1,115 @@
+{
+  "label": "Rehearsal on a local anvil fork of Base Sepolia at block 55657033. The NEAR contract and the MPC signature are real testnet. The EVM transaction landed only on the fork, so public explorers will not show it.",
+  "run_id": "2026-11-07T19-15-46Z-base-sepolia-1",
+  "network": "testnet",
+  "position_id": 1,
+  "chain_id": 84532,
+  "borrower": "0x1BA01ceF25983F71e508f139Ecb10030b0403331",
+  "rescuer": "0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971",
+  "amount": "100000000",
+  "outcome": "success",
+  "failure_reason": null,
+  "health_factor_before": "1.060644",
+  "health_factor_after": "1.090979",
+  "timestamps_ms": {
+    "detected": 1794078946558,
+    "near_included": 1794078948091,
+    "signed": 1794078952801,
+    "broadcast": 1794078952827,
+    "included": 1794078953997
+  },
+  "near_tx": "4m1wJzmL2q4J3HVPMbU87Xvz8zNDTHUv7X2AQFx6bUPM",
+  "evm_tx": "0xd40be6694a6882752120c441358f55f37316a355d4b79a6431592932358488e5",
+  "evm_block": 55657045,
+  "near_contract": "levee-core-1503.testnet",
+  "near_sender": "levee-keeper-1503.testnet",
+  "trace": {
+    "trigger": "1.20",
+    "target": "1.50",
+    "manual_amount": null,
+    "quorum": {
+      "now_ms": 1794078946558,
+      "samples": [
+        {
+          "rpc": "http://127.0.0.1:8599",
+          "chain_id": 84532,
+          "block_number": "55657041",
+          "block_timestamp": "1794078944",
+          "health_factor": "1060644769424052591",
+          "total_collateral_base": "448671496182",
+          "total_debt_base": "359565033222",
+          "liquidation_threshold_bps": "8500",
+          "usdc_price_base": "99976097",
+          "usdc_debt": "3596510006",
+          "rescuer_usdc": "899121617",
+          "rescuer_allowance": "1000000000"
+        },
+        {
+          "rpc": "http://localhost:8599",
+          "chain_id": 84532,
+          "block_number": "55657041",
+          "block_timestamp": "1794078944",
+          "health_factor": "1060644769424052591",
+          "total_collateral_base": "448671496182",
+          "total_debt_base": "359565033222",
+          "liquidation_threshold_bps": "8500",
+          "usdc_price_base": "99976097",
+          "usdc_debt": "3596510006",
+          "rescuer_usdc": "899121617",
+          "rescuer_allowance": "1000000000"
+        }
+      ],
+      "failures": [],
+      "refused": null
+    },
+    "caps": {
+      "max_per_rescue": "100000000",
+      "remaining_today": "482000000",
+      "rescuer_balance": "899121617",
+      "rescuer_allowance": "1000000000",
+      "cooldown_remaining_secs": 0,
+      "paused": false
+    },
+    "decision": {
+      "action": "repay",
+      "reason": null,
+      "amount": "100000000",
+      "needed": "1053430324",
+      "limited_by": "max_per_rescue",
+      "projected_health_factor": "1090979153355514143"
+    },
+    "fees": {
+      "nonce": 1,
+      "max_fee_per_gas": "1003478324",
+      "max_priority_fee_per_gas": "1000000000"
+    },
+    "rescue_result": {
+      "kind": "rescue",
+      "id": 1,
+      "unsigned_tx": "0x02f8b083014a3401843b9aca00843bcfdd34830493e0948bab6d1b75f19e9ed9fce8b9bd338844ff79ae2780b884573ade81000000000000000000000000ba50cd2a20f6da35d788639e581bca8d0b5d4d5f0000000000000000000000000000000000000000000000000000000005f5e10000000000000000000000000000000000000000000000000000000000000000020000000000000000000000001ba01cef25983f71e508f139ecb10030b0403331c0",
+      "tx_hash": "0xc0a0a8332ff2f978d44f2036e746ec7bc078ecb7f8cb2c7a3f044b5f0e3a88f9",
+      "big_r": "0x02ae9df02f4525fc54c8c43c6ab2f0093d09ca0a12d998e850e53dbdc0c0f8d073",
+      "s": "0x3c929e285292f2de660f3cc60fb8be5845a807bcab1a27139e380c0e0504565b",
+      "recovery_id": 0
+    },
+    "signed_tx": "0x02f8f383014a3401843b9aca00843bcfdd34830493e0948bab6d1b75f19e9ed9fce8b9bd338844ff79ae2780b884573ade81000000000000000000000000ba50cd2a20f6da35d788639e581bca8d0b5d4d5f0000000000000000000000000000000000000000000000000000000005f5e10000000000000000000000000000000000000000000000000000000000000000020000000000000000000000001ba01cef25983f71e508f139ecb10030b0403331c080a0ae9df02f4525fc54c8c43c6ab2f0093d09ca0a12d998e850e53dbdc0c0f8d073a03c929e285292f2de660f3cc60fb8be5845a807bcab1a27139e380c0e0504565b",
+    "broadcast": [
+      {
+        "rpc": "http://127.0.0.1:8599",
+        "ok": true,
+        "error": null
+      },
+      {
+        "rpc": "http://localhost:8599",
+        "ok": true,
+        "error": null
+      }
+    ],
+    "receipt": {
+      "success": true,
+      "block_number": "55657045",
+      "gas_used": "158600",
+      "effective_gas_price": "1001019466"
+    }
+  }
+}
