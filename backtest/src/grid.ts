@@ -2,7 +2,7 @@
 // for a rescue paid from float already on the lending chain (not measured end to end yet).
 export const GRID = {
   triggers: [1.05, 1.1, 1.15, 1.2, 1.3],
-  targets: [1.35, 1.5],
+  targets: [1.35, 1.5, 2],
   reserveShares: [0.05, 0.1, 0.2, 0.3, 0.5],
   delaysSec: [10, 30, 60, 120, 300],
 } as const;
