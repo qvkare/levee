@@ -1,15 +1,19 @@
 //! Contract-level unit tests. The rules themselves are tested on their boundaries in
-//! `policy.rs`. These tests prove the methods are wired to those rules.
+//! `policy.rs`. These tests prove the methods are wired to those rules, and check what
+//! actually leaves the contract: receipts, gas, deposits, logs and return values.
 
 use near_sdk::mock::MockAction;
-use near_sdk::serde_json::{self, Value};
+use near_sdk::serde_json::{self, json, Value};
 use near_sdk::test_utils::{get_created_receipts, get_logs, VMContextBuilder};
-use near_sdk::{testing_env, Gas, NearToken};
+use near_sdk::{test_vm_config, testing_env, NearToken, PromiseResult, RuntimeFeesConfig};
 
 use super::*;
 use crate::policy::{
-    ERR_LOOSEN_NOT_READY, ERR_NO_PENDING_LOOSEN, ERR_TIGHTEN_COOLDOWN, ERR_TIGHTEN_MAX_PER_DAY,
-    ERR_TIGHTEN_MAX_PER_RESCUE, NANOS_PER_DAY, NANOS_PER_SEC,
+    ERR_COOLDOWN, ERR_LOOSEN_NOT_READY, ERR_MAX_FEE_CEILING, ERR_NO_PENDING_LOOSEN,
+    ERR_OVER_DAILY_BUDGET, ERR_OVER_MAX_PER_RESCUE, ERR_PAUSED,
+    ERR_PRIORITY_FEE_CEILING, ERR_PRIORITY_OVER_MAX_FEE, ERR_TIGHTEN_COOLDOWN,
+    ERR_TIGHTEN_MAX_PER_DAY, ERR_TIGHTEN_MAX_PER_RESCUE, ERR_ZERO_AMOUNT, NANOS_PER_DAY,
+    NANOS_PER_SEC,
 };
 
 const CONTRACT: &str = "levee.near";
@@ -97,6 +101,18 @@ fn setup() -> (Levee, u64) {
     (contract, id)
 }
 
+fn fees() -> Fees {
+    Fees {
+        nonce: 7,
+        max_fee_per_gas: U128(MAX_FEE_CEILING),
+        max_priority_fee_per_gas: U128(PRIORITY_CEILING),
+    }
+}
+
+fn spent(contract: &Levee, id: u64) -> u128 {
+    contract.get_position(id).unwrap().spent_today.0
+}
+
 fn events() -> Vec<Value> {
     get_logs()
         .iter()
@@ -107,6 +123,43 @@ fn events() -> Vec<Value> {
 
 fn last_event() -> Value {
     events().pop().expect("no event was logged")
+}
+
+struct Call {
+    receiver: AccountId,
+    method: String,
+    args: Value,
+    deposit: NearToken,
+    gas: Gas,
+    weight: u64,
+}
+
+/// The function calls the contract just scheduled, in order.
+fn calls() -> Vec<Call> {
+    get_created_receipts()
+        .into_iter()
+        .flat_map(|receipt| {
+            let receiver = receipt.receiver_id.clone();
+            receipt.actions.into_iter().filter_map(move |action| match action {
+                MockAction::FunctionCallWeight {
+                    method_name,
+                    args,
+                    attached_deposit,
+                    prepaid_gas,
+                    gas_weight,
+                    ..
+                } => Some(Call {
+                    receiver: receiver.clone(),
+                    method: String::from_utf8(method_name).unwrap(),
+                    args: serde_json::from_slice(&args).unwrap(),
+                    deposit: attached_deposit,
+                    gas: prepaid_gas,
+                    weight: gas_weight.0,
+                }),
+                _ => None,
+            })
+        })
+        .collect()
 }
 
 fn transfers() -> Vec<(AccountId, NearToken)> {
@@ -120,6 +173,45 @@ fn transfers() -> Vec<(AccountId, NearToken)> {
             })
         })
         .collect()
+}
+
+/// The `PendingSignature` the last signing call handed to the callback.
+fn pending() -> PendingSignature {
+    let calls = calls();
+    let callback = calls
+        .iter()
+        .find(|call| call.method == "on_signed")
+        .expect("no on_signed call");
+    serde_json::from_value(callback.args["pending"].clone()).unwrap()
+}
+
+fn real_signature() -> Vec<u8> {
+    let fixture: Value =
+        serde_json::from_str(include_str!("../fixtures/mpc_sign_response.json")).unwrap();
+    serde_json::to_vec(&fixture["response"]).unwrap()
+}
+
+/// Delivers `result` to `on_signed` at time `now`.
+fn deliver(
+    contract: &mut Levee,
+    pending: PendingSignature,
+    result: PromiseResult,
+    now: u64,
+) -> Option<SignedTx> {
+    testing_env!(
+        context(CONTRACT, now).build(),
+        test_vm_config(),
+        RuntimeFeesConfig::test(),
+        Default::default(),
+        vec![result]
+    );
+    contract.on_signed(pending)
+}
+
+fn rescue(contract: &mut Levee, id: u64, amount: u128, now: u64) -> PendingSignature {
+    act_as(KEEPER, now);
+    let _ = contract.rescue(id, U128(amount), fees());
+    pending()
 }
 
 mod init {
@@ -487,6 +579,14 @@ mod unknown_position {
 
     #[test]
     #[should_panic(expected = "position not found")]
+    fn rescue() {
+        let mut contract = new_contract();
+        act_as(KEEPER, NOON);
+        let _ = contract.rescue(99, U128(1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "position not found")]
     fn pause() {
         let mut contract = new_contract();
         act_as(OWNER, NOON);
@@ -494,9 +594,468 @@ mod unknown_position {
     }
 
     #[test]
+    #[should_panic(expected = "position not found")]
+    fn preview() {
+        let contract = new_contract();
+        act_as(KEEPER, NOON);
+        contract.preview_rescue(99, U128(1), fees());
+    }
+
+    #[test]
     fn get_position_returns_none() {
         let contract = new_contract();
         assert_eq!(contract.get_position(99), None);
+    }
+}
+
+mod keeper {
+    use super::*;
+
+    #[test]
+    fn set_keeper_swaps_who_can_rescue() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        contract.set_keeper(id, account(STRANGER));
+        let event = last_event();
+        assert_eq!(event["event"], "keeper_changed");
+        assert_eq!(event["data"]["old_keeper"], KEEPER);
+        assert_eq!(event["data"]["new_keeper"], STRANGER);
+
+        act_as(STRANGER, NOON);
+        let _ = contract.rescue(id, U128(1), fees());
+        assert_eq!(spent(&contract, id), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "caller is not the keeper")]
+    fn the_old_keeper_is_locked_out() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        contract.set_keeper(id, account(STRANGER));
+        act_as(KEEPER, NOON);
+        let _ = contract.rescue(id, U128(1), fees());
+    }
+}
+
+mod rescue_rules {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "caller is not the keeper")]
+    fn rule_1_a_stranger_is_rejected() {
+        let (mut contract, id) = setup();
+        act_as(STRANGER, NOON);
+        let _ = contract.rescue(id, U128(1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "caller is not the keeper")]
+    fn rule_1_the_owner_is_not_the_keeper() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        let _ = contract.rescue(id, U128(1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "position is paused")]
+    fn rule_2_paused() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        contract.pause(id);
+        rescue(&mut contract, id, 1, NOON);
+    }
+
+    #[test]
+    fn rule_2_resume_lifts_the_pause() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        contract.pause(id);
+        assert_eq!(last_event()["event"], "paused");
+        contract.resume(id);
+        assert_eq!(last_event()["event"], "resumed");
+        rescue(&mut contract, id, 1, NOON);
+        assert_eq!(spent(&contract, id), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount must be above zero")]
+    fn rule_3_zero() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, 0, NOON);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount exceeds max_per_rescue")]
+    fn rule_3_over_the_cap() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, MAX_PER_RESCUE + 1, NOON);
+    }
+
+    #[test]
+    fn rule_3_at_the_cap() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, MAX_PER_RESCUE, NOON);
+        assert_eq!(spent(&contract, id), MAX_PER_RESCUE);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount exceeds the daily budget")]
+    fn rule_4_over_the_budget() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, 100, NOON);
+        rescue(&mut contract, id, 100, NOON + HOUR);
+        rescue(&mut contract, id, 51, NOON + 2 * HOUR);
+    }
+
+    #[test]
+    fn rule_4_exactly_the_budget() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, 100, NOON);
+        rescue(&mut contract, id, 100, NOON + HOUR);
+        rescue(&mut contract, id, 50, NOON + 2 * HOUR);
+        assert_eq!(spent(&contract, id), MAX_PER_DAY);
+    }
+
+    #[test]
+    fn rule_4_a_new_utc_day_starts_a_new_budget() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, 100, NOON);
+        rescue(&mut contract, id, 100, NOON + HOUR);
+        rescue(&mut contract, id, 100, NOON + NANOS_PER_DAY);
+        assert_eq!(contract.get_position(id).unwrap().spent_today, U128(100));
+    }
+
+    #[test]
+    #[should_panic(expected = "cooldown has not elapsed")]
+    fn rule_5_inside_the_cooldown() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, 1, NOON);
+        rescue(&mut contract, id, 1, NOON + 60 * NANOS_PER_SEC - 1);
+    }
+
+    #[test]
+    fn rule_5_at_the_end_of_the_cooldown() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, 1, NOON);
+        rescue(&mut contract, id, 1, NOON + 60 * NANOS_PER_SEC);
+        assert_eq!(spent(&contract, id), 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "max_fee_per_gas exceeds the chain ceiling")]
+    fn rule_6_max_fee() {
+        let (mut contract, id) = setup();
+        act_as(KEEPER, NOON);
+        let mut high = fees();
+        high.max_fee_per_gas = U128(MAX_FEE_CEILING + 1);
+        let _ = contract.rescue(id, U128(1), high);
+    }
+
+    #[test]
+    #[should_panic(expected = "max_priority_fee_per_gas exceeds the chain ceiling")]
+    fn rule_6_priority_fee() {
+        let (mut contract, id) = setup();
+        act_as(KEEPER, NOON);
+        let mut high = fees();
+        high.max_priority_fee_per_gas = U128(PRIORITY_CEILING + 1);
+        let _ = contract.rescue(id, U128(1), high);
+    }
+
+    #[test]
+    fn a_rule_failure_changes_nothing() {
+        let (contract, id) = setup();
+        let before = contract.get_position(id);
+        act_as(KEEPER, NOON);
+        let result = policy::check_rescue(
+            contract.position(id),
+            contract.get_chain(8453).as_ref().unwrap(),
+            MAX_PER_RESCUE + 1,
+            &fees(),
+            NOON,
+        );
+        assert_eq!(result, Err(ERR_OVER_MAX_PER_RESCUE));
+        assert_eq!(contract.get_position(id), before);
+    }
+
+    #[test]
+    fn the_error_constants_are_the_ones_callers_see() {
+        // The `should_panic` strings above are literals. Pin them to the constants so
+        // a reworded error cannot leave a test passing on a stale message.
+        assert_eq!(ERR_PAUSED, "position is paused");
+        assert_eq!(ERR_ZERO_AMOUNT, "amount must be above zero");
+        assert_eq!(ERR_OVER_MAX_PER_RESCUE, "amount exceeds max_per_rescue");
+        assert_eq!(ERR_OVER_DAILY_BUDGET, "amount exceeds the daily budget");
+        assert_eq!(ERR_COOLDOWN, "cooldown has not elapsed");
+        assert_eq!(ERR_MAX_FEE_CEILING, "max_fee_per_gas exceeds the chain ceiling");
+        assert_eq!(
+            ERR_PRIORITY_FEE_CEILING,
+            "max_priority_fee_per_gas exceeds the chain ceiling"
+        );
+    }
+}
+
+mod signing {
+    use super::*;
+
+    #[test]
+    fn rescue_asks_the_signer_for_the_contract_built_hash() {
+        let (mut contract, id) = setup();
+        act_as(KEEPER, NOON);
+        let _ = contract.rescue(id, U128(2), fees());
+
+        let chain = contract.get_chain(8453).unwrap();
+        let position = contract.get_position(id).unwrap();
+        let unsigned = txs::repay_tx(&chain, &position, 2, &fees()).unsigned_bytes();
+        let hash = env::keccak256_array(&unsigned);
+
+        let calls = calls();
+        assert_eq!(calls.len(), 2);
+        let sign = &calls[0];
+        assert_eq!(sign.receiver, account(SIGNER));
+        assert_eq!(sign.method, "sign");
+        assert_eq!(
+            sign.args,
+            json!({
+                "request": {
+                    "path": format!("levee/v1/{id}"),
+                    "domain_id": 0,
+                    "payload_v2": { "Ecdsa": hex::encode(hash) },
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn the_contract_attaches_exactly_one_yocto_to_sign_and_none_to_the_callback() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, 1, NOON);
+        let calls = calls();
+        assert_eq!(calls[0].deposit, NearToken::from_yoctonear(1));
+        assert_eq!(calls[1].deposit, NearToken::from_yoctonear(0));
+    }
+
+    #[test]
+    fn unused_gas_flows_to_sign_and_the_callback_share_is_fixed() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, 1, NOON);
+        let calls = calls();
+        assert_eq!(calls[0].method, "sign");
+        assert_eq!(calls[0].gas, SIGN_GAS);
+        assert_eq!(calls[0].weight, 1);
+        assert_eq!(calls[1].method, "on_signed");
+        assert_eq!(calls[1].receiver, account(CONTRACT));
+        assert_eq!(calls[1].gas, ON_SIGNED_GAS);
+        assert_eq!(calls[1].weight, 0);
+    }
+
+    #[test]
+    fn the_budget_is_reserved_before_the_signature_returns() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, 40, NOON);
+        let position = contract.get_position(id).unwrap();
+        assert_eq!(position.spent_today, U128(40));
+        assert_eq!(position.last_rescue_at, NOON);
+    }
+
+    #[test]
+    fn the_reservation_travels_to_the_callback() {
+        let (mut contract, id) = setup();
+        let pending = rescue(&mut contract, id, 40, NOON);
+        assert_eq!(
+            pending.reservation,
+            Some(Reservation {
+                amount: U128(40),
+                day: policy::utc_day(NOON),
+                at: NOON,
+                previous_at: 0,
+            })
+        );
+    }
+
+    #[test]
+    fn rescue_logs_rescue_requested() {
+        let (mut contract, id) = setup();
+        let pending = rescue(&mut contract, id, 40, NOON);
+        let event = last_event();
+        assert_eq!(event["event"], "rescue_requested");
+        assert_eq!(event["data"]["id"], id);
+        assert_eq!(event["data"]["amount"], "40");
+        assert_eq!(event["data"]["nonce"], 7);
+        assert_eq!(event["data"]["tx_hash"], json!(pending.tx_hash));
+    }
+
+    #[test]
+    fn each_position_signs_from_its_own_path() {
+        let mut contract = new_contract();
+        let first = register(&mut contract, KEEPER);
+        let second = register(&mut contract, KEEPER);
+        assert_ne!(contract.rescuer_path(first), contract.rescuer_path(second));
+
+        act_as(KEEPER, NOON);
+        let _ = contract.rescue(second, U128(1), fees());
+        assert_eq!(calls()[0].args["request"]["path"], "levee/v1/2");
+    }
+
+    /// Only the boundary of the check. Whether the minimum really reaches the signer
+    /// is measured against the real VM in `tests/sandbox.rs`.
+    #[test]
+    fn the_gas_check_boundary_is_inclusive() {
+        assert_eq!(check_signing_gas(MIN_SIGNING_GAS), Ok(()));
+        let short = Gas::from_gas(MIN_SIGNING_GAS.as_gas() - 1);
+        assert_eq!(check_signing_gas(short), Err(ERR_GAS_TOO_LOW));
+    }
+
+    #[test]
+    #[should_panic(expected = "not enough gas attached to reach the signer")]
+    fn less_than_the_minimum_gas_is_rejected() {
+        let (mut contract, id) = setup();
+        let short = Gas::from_gas(MIN_SIGNING_GAS.as_gas() - 1);
+        testing_env!(context(KEEPER, NOON).prepaid_gas(short).build());
+        let _ = contract.rescue(id, U128(1), fees());
+    }
+}
+
+mod callback {
+    use super::*;
+
+    #[test]
+    fn a_signature_comes_back_with_all_it_takes_to_broadcast() {
+        let (mut contract, id) = setup();
+        let pending = rescue(&mut contract, id, 40, NOON);
+        let expected = pending.clone();
+
+        let signed = deliver(
+            &mut contract,
+            pending,
+            PromiseResult::Successful(real_signature()),
+            NOON,
+        )
+        .unwrap();
+
+        assert_eq!(signed.kind, SignKind::Rescue);
+        assert_eq!(signed.id, id);
+        assert_eq!(signed.unsigned_tx, expected.unsigned_tx);
+        assert_eq!(signed.tx_hash, expected.tx_hash);
+        assert_eq!(
+            signed.big_r,
+            "0x03f801266a516fbdef4a890b10ca39cbbfa959320412d3126e5bd0fa05ded238d3"
+        );
+        assert_eq!(
+            signed.s,
+            "0x4071aa91247451c43e29f2bc1fbbdfcae2d06b0e36e2b2ceefb0a8a64d388f86"
+        );
+        assert_eq!(signed.recovery_id, 1);
+    }
+
+    #[test]
+    fn the_log_says_the_same_as_the_return_value() {
+        let (mut contract, id) = setup();
+        let pending = rescue(&mut contract, id, 40, NOON);
+        let signed = deliver(
+            &mut contract,
+            pending,
+            PromiseResult::Successful(real_signature()),
+            NOON,
+        )
+        .unwrap();
+
+        let event = last_event();
+        assert_eq!(event["event"], "rescue_signed");
+        assert_eq!(event["data"], serde_json::to_value(&signed).unwrap());
+    }
+
+    #[test]
+    fn success_keeps_the_budget_charged() {
+        let (mut contract, id) = setup();
+        let pending = rescue(&mut contract, id, 40, NOON);
+        deliver(
+            &mut contract,
+            pending,
+            PromiseResult::Successful(real_signature()),
+            NOON,
+        );
+        assert_eq!(spent(&contract, id), 40);
+    }
+
+    #[test]
+    fn a_failed_call_releases_the_budget_and_returns_null() {
+        let (mut contract, id) = setup();
+        let pending = rescue(&mut contract, id, 40, NOON);
+        let result = deliver(&mut contract, pending, PromiseResult::Failed, NOON);
+        assert_eq!(result, None);
+        assert_eq!(spent(&contract, id), 0);
+    }
+
+    #[test]
+    fn a_failed_call_frees_the_cooldown_so_the_keeper_can_retry() {
+        let (mut contract, id) = setup();
+        let pending = rescue(&mut contract, id, 40, NOON);
+        deliver(&mut contract, pending, PromiseResult::Failed, NOON + 1);
+        assert_eq!(contract.get_position(id).unwrap().last_rescue_at, 0);
+        rescue(&mut contract, id, 40, NOON + 2);
+        assert_eq!(spent(&contract, id), 40);
+    }
+
+    #[test]
+    fn a_failed_call_logs_rescue_failed() {
+        let (mut contract, id) = setup();
+        let pending = rescue(&mut contract, id, 40, NOON);
+        let tx_hash = pending.tx_hash.clone();
+        deliver(&mut contract, pending, PromiseResult::Failed, NOON);
+        let event = last_event();
+        assert_eq!(event["event"], "rescue_failed");
+        assert_eq!(event["data"]["reason"], "mpc_failed");
+        assert_eq!(event["data"]["released"], "40");
+        assert_eq!(event["data"]["tx_hash"], json!(tx_hash));
+    }
+
+    #[test]
+    fn a_failure_after_midnight_does_not_refund_the_new_day() {
+        let (mut contract, id) = setup();
+        let late = (policy::utc_day(NOON) + 1) * NANOS_PER_DAY - 1;
+        let pending = rescue(&mut contract, id, 40, late);
+
+        let later = late + 120 * NANOS_PER_SEC;
+        rescue(&mut contract, id, 30, later);
+        deliver(&mut contract, pending, PromiseResult::Failed, later);
+
+        assert_eq!(spent(&contract, id), 30);
+        assert_eq!(last_event()["data"]["released"], "0");
+    }
+
+    #[test]
+    fn a_malformed_response_keeps_the_budget_charged() {
+        let (mut contract, id) = setup();
+        let pending = rescue(&mut contract, id, 40, NOON);
+        let result = deliver(
+            &mut contract,
+            pending,
+            PromiseResult::Successful(b"not a signature".to_vec()),
+            NOON,
+        );
+        assert_eq!(result, None);
+        assert_eq!(spent(&contract, id), 40);
+        assert_eq!(contract.get_position(id).unwrap().last_rescue_at, NOON);
+
+        let event = last_event();
+        assert_eq!(event["event"], "rescue_failed");
+        assert_eq!(event["data"]["reason"], "malformed_response");
+        assert_eq!(event["data"]["released"], "0");
+    }
+
+    #[test]
+    fn an_oversized_response_counts_as_malformed() {
+        let (mut contract, id) = setup();
+        let pending = rescue(&mut contract, id, 40, NOON);
+        let result = deliver(
+            &mut contract,
+            pending,
+            PromiseResult::Successful(vec![b'x'; MAX_RESPONSE_BYTES + 1]),
+            NOON,
+        );
+        assert_eq!(result, None);
+        assert_eq!(spent(&contract, id), 40);
+        assert_eq!(last_event()["data"]["reason"], "malformed_response");
     }
 }
 
@@ -570,6 +1129,10 @@ mod caps {
         assert_eq!(ERR_TIGHTEN_COOLDOWN, "cooldown_secs may only increase");
         assert_eq!(ERR_NO_PENDING_LOOSEN, "no loosening is queued");
         assert_eq!(ERR_LOOSEN_NOT_READY, "the loosening delay has not elapsed");
+        assert_eq!(
+            ERR_PRIORITY_OVER_MAX_FEE,
+            "max_priority_fee_per_gas exceeds max_fee_per_gas"
+        );
     }
 
     #[test]
@@ -708,6 +1271,17 @@ mod caps {
         contract.apply_loosen(id);
         assert_eq!(caps(&contract, id), (200, 500, 30));
     }
+
+    #[test]
+    fn a_loosened_cap_is_enforced_at_its_new_value() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        contract.queue_loosen(id, U128(200), U128(500), 30);
+        act_as(OWNER, NOON + NANOS_PER_DAY);
+        contract.apply_loosen(id);
+        rescue(&mut contract, id, 200, NOON + NANOS_PER_DAY);
+        assert_eq!(spent(&contract, id), 200);
+    }
 }
 
 mod views {
@@ -718,5 +1292,61 @@ mod views {
         let contract = new_contract();
         assert_eq!(contract.rescuer_path(1), "levee/v1/1");
         assert_eq!(contract.rescuer_path(4_294_967_296), "levee/v1/4294967296");
+    }
+
+    #[test]
+    fn get_position_shows_todays_spend_not_a_stale_bucket() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, 40, NOON);
+        assert_eq!(spent(&contract, id), 40);
+
+        act_as(STRANGER, NOON + NANOS_PER_DAY);
+        let position = contract.get_position(id).unwrap();
+        assert_eq!(position.spent_today, U128(0));
+        assert_eq!(position.day, policy::utc_day(NOON) + 1);
+    }
+
+    #[test]
+    fn preview_shows_exactly_what_rescue_signs() {
+        let (mut contract, id) = setup();
+        act_as(STRANGER, NOON);
+        let preview = contract.preview_rescue(id, U128(40), fees());
+        let pending = rescue(&mut contract, id, 40, NOON);
+        assert_eq!(preview.unsigned_tx, pending.unsigned_tx);
+        assert_eq!(preview.tx_hash, pending.tx_hash);
+    }
+
+    #[test]
+    fn preview_changes_no_state() {
+        let (contract, id) = setup();
+        act_as(STRANGER, NOON);
+        let before = contract.get_position(id);
+        contract.preview_rescue(id, U128(40), fees());
+        assert_eq!(contract.get_position(id), before);
+    }
+
+    #[test]
+    #[should_panic(expected = "position is paused")]
+    fn preview_fails_as_rescue_would_when_paused() {
+        let (mut contract, id) = setup();
+        act_as(OWNER, NOON);
+        contract.pause(id);
+        contract.preview_rescue(id, U128(1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "amount exceeds max_per_rescue")]
+    fn preview_fails_as_rescue_would_over_the_cap() {
+        let (contract, id) = setup();
+        act_as(STRANGER, NOON);
+        contract.preview_rescue(id, U128(MAX_PER_RESCUE + 1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "cooldown has not elapsed")]
+    fn preview_fails_as_rescue_would_during_cooldown() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, 1, NOON);
+        contract.preview_rescue(id, U128(1), fees());
     }
 }

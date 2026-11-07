@@ -20,12 +20,24 @@ mod tests;
 
 use near_sdk::json_types::U128;
 use near_sdk::store::LookupMap;
-use near_sdk::{env, near, require, AccountId, PanicOnDefault, Promise};
+use near_sdk::{env, near, require, AccountId, Gas, PanicOnDefault, Promise, PromiseError};
 
 use crate::address::normalise_address;
-use crate::events::LeveeEvent;
+use crate::events::{FailureReason, LeveeEvent, SignFailure, SignKind, SignedTx};
+use crate::evm::{signing_hash, Eip1559Tx};
+use crate::mpc::{
+    ext_mpc, parse_signature, SignPayload, SignRequest, ECDSA_DOMAIN_ID, MAX_RESPONSE_BYTES,
+    SIGN_DEPOSIT,
+};
 use crate::policy::{utc_day, LOOSEN_DELAY_NANOS};
-use crate::types::{ChainConfig, PendingLoosen, Position};
+use crate::types::{ChainConfig, Fees, PendingLoosen, Position, PreviewTx, Reservation};
+
+/// Static gas for `sign`. See `docs/SPEC.md`, section "Gas".
+pub const SIGN_GAS: Gas = Gas::from_tgas(20);
+/// Static gas for `on_signed`.
+pub const ON_SIGNED_GAS: Gas = Gas::from_tgas(10);
+/// Least gas a signing method must be called with.
+pub const MIN_SIGNING_GAS: Gas = Gas::from_tgas(35);
 
 /// Bytes of `Some(PendingLoosen)` over `None`.
 const PENDING_LOOSEN_BYTES: u64 = 44;
@@ -43,6 +55,20 @@ pub const ERR_ZERO_CAP: &str = "max_per_rescue and max_per_day must be above zer
 pub const ERR_DEPOSIT_TOO_LOW: &str = "attached deposit does not cover storage";
 pub const ERR_NO_POSITION: &str = "position not found";
 pub const ERR_NOT_OWNER: &str = "caller is not the owner";
+pub const ERR_NOT_KEEPER: &str = "caller is not the keeper";
+pub const ERR_GAS_TOO_LOW: &str = "not enough gas attached to reach the signer";
+
+/// What `on_signed` needs to know about the signature it is waiting for.
+#[near(serializers = [json])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PendingSignature {
+    pub kind: SignKind,
+    pub id: u64,
+    pub unsigned_tx: String,
+    pub tx_hash: String,
+    /// Set only for a rescue, which is the one kind that holds budget.
+    pub reservation: Option<Reservation>,
+}
 
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
@@ -59,8 +85,19 @@ fn derivation_path(id: u64) -> String {
     format!("levee/v1/{id}")
 }
 
+fn hex_of(bytes: &[u8]) -> String {
+    format!("0x{}", hex::encode(bytes))
+}
+
 fn or_panic<T>(result: Result<T, &'static str>) -> T {
     result.unwrap_or_else(|err| env::panic_str(err))
+}
+
+fn check_signing_gas(prepaid: Gas) -> Result<(), &'static str> {
+    if prepaid < MIN_SIGNING_GAS {
+        return Err(ERR_GAS_TOO_LOW);
+    }
+    Ok(())
 }
 
 fn validated_chain(chain: ChainConfig) -> ChainConfig {
@@ -269,6 +306,87 @@ impl Levee {
         LeveeEvent::Resumed { id }.emit();
     }
 
+    /// Signs `Pool.repay(USDC, amount, 2, borrower)` within the position's caps.
+    pub fn rescue(&mut self, id: u64, amount: U128, fees: Fees) -> Promise {
+        let position = self.position(id);
+        require!(
+            env::predecessor_account_id() == position.keeper,
+            ERR_NOT_KEEPER
+        );
+        let chain = self.chain(position);
+        let reservation = or_panic(policy::check_rescue(
+            position,
+            chain,
+            amount.0,
+            &fees,
+            env::block_timestamp(),
+        ));
+        let tx = txs::repay_tx(chain, position, amount.0, &fees);
+
+        let promise = self.request_signature(SignKind::Rescue, id, &tx, Some(reservation.clone()));
+        let tx_hash = hex_of(&signing_hash(&tx.unsigned_bytes()));
+        let position = self
+            .positions
+            .get_mut(&id)
+            .unwrap_or_else(|| env::panic_str(ERR_NO_POSITION));
+        policy::reserve(position, &reservation);
+        LeveeEvent::RescueRequested {
+            id,
+            amount,
+            nonce: fees.nonce,
+            tx_hash,
+        }
+        .emit();
+        promise
+    }
+
+    /// Receives the MPC result, and returns everything needed to broadcast, or `null`
+    /// if there is no signature. A failure has to return normally: a panic here would
+    /// roll back the release.
+    #[private]
+    pub fn on_signed(&mut self, pending: PendingSignature) -> Option<SignedTx> {
+        let response = env::promise_result_checked(0, MAX_RESPONSE_BYTES);
+        let signature = response.as_deref().ok().and_then(parse_signature);
+        if let Some(signature) = signature {
+            let signed = SignedTx {
+                kind: pending.kind,
+                id: pending.id,
+                unsigned_tx: pending.unsigned_tx,
+                tx_hash: pending.tx_hash,
+                big_r: signature.big_r,
+                s: signature.s,
+                recovery_id: signature.recovery_id,
+            };
+            let event = match signed.kind {
+                SignKind::Rescue => LeveeEvent::RescueSigned(signed.clone()),
+                SignKind::Allowance => LeveeEvent::AllowanceSigned(signed.clone()),
+                SignKind::WithdrawFloat => LeveeEvent::FloatWithdrawn(signed.clone()),
+                SignKind::SweepGas => LeveeEvent::GasSwept(signed.clone()),
+            };
+            event.emit();
+            return Some(signed);
+        }
+
+        // Only a failed call proves nothing was signed. If the call succeeded but the
+        // response is unreadable, a signature may exist, so its budget stays charged.
+        let (reason, released) = match response {
+            Err(PromiseError::Failed) => (FailureReason::MpcFailed, self.release(&pending)),
+            _ => (FailureReason::MalformedResponse, 0),
+        };
+        let failure = SignFailure {
+            kind: pending.kind,
+            id: pending.id,
+            tx_hash: pending.tx_hash,
+            reason,
+            released: U128(released),
+        };
+        match failure.kind {
+            SignKind::Rescue => LeveeEvent::RescueFailed(failure).emit(),
+            _ => LeveeEvent::SignFailed(failure).emit(),
+        }
+        None
+    }
+
     /// The position as of now: `spent_today` and `day` show the current UTC day, even
     /// if the stored bucket is from an earlier one.
     pub fn get_position(&self, id: u64) -> Option<Position> {
@@ -283,6 +401,25 @@ impl Levee {
         derivation_path(id)
     }
 
+    /// The transaction `rescue` would sign now, failing with the same error it would.
+    /// A view has no caller, so rule 1 is the one rule this cannot check.
+    pub fn preview_rescue(&self, id: u64, amount: U128, fees: Fees) -> PreviewTx {
+        let position = self.position(id);
+        let chain = self.chain(position);
+        or_panic(policy::check_rescue(
+            position,
+            chain,
+            amount.0,
+            &fees,
+            env::block_timestamp(),
+        ));
+        let unsigned = txs::repay_tx(chain, position, amount.0, &fees).unsigned_bytes();
+        PreviewTx {
+            tx_hash: hex_of(&signing_hash(&unsigned)),
+            unsigned_tx: hex_of(&unsigned),
+        }
+    }
+
     pub fn get_chain(&self, chain_id: u64) -> Option<ChainConfig> {
         self.chains.get(&chain_id).cloned()
     }
@@ -293,6 +430,12 @@ impl Levee {
 }
 
 impl Levee {
+    fn position(&self, id: u64) -> &Position {
+        self.positions
+            .get(&id)
+            .unwrap_or_else(|| env::panic_str(ERR_NO_POSITION))
+    }
+
     fn owned_position_mut(&mut self, id: u64) -> &mut Position {
         let position = self
             .positions
@@ -300,5 +443,60 @@ impl Levee {
             .unwrap_or_else(|| env::panic_str(ERR_NO_POSITION));
         require!(env::predecessor_account_id() == position.owner, ERR_NOT_OWNER);
         position
+    }
+
+    /// A chain is checked at `register` and chains never change, so this always finds it.
+    fn chain(&self, position: &Position) -> &ChainConfig {
+        self.chains
+            .get(&position.chain_id)
+            .unwrap_or_else(|| env::panic_str(ERR_UNKNOWN_CHAIN))
+    }
+
+    /// Hashes `tx` and asks the MPC contract to sign it from the position's rescuer.
+    fn request_signature(
+        &self,
+        kind: SignKind,
+        id: u64,
+        tx: &Eip1559Tx,
+        reservation: Option<Reservation>,
+    ) -> Promise {
+        or_panic(check_signing_gas(env::prepaid_gas()));
+        let unsigned = tx.unsigned_bytes();
+        let hash = signing_hash(&unsigned);
+        let request = SignRequest {
+            path: derivation_path(id),
+            domain_id: ECDSA_DOMAIN_ID,
+            payload_v2: SignPayload::Ecdsa(hex::encode(hash)),
+        };
+        let pending = PendingSignature {
+            kind,
+            id,
+            unsigned_tx: hex_of(&unsigned),
+            tx_hash: hex_of(&hash),
+            reservation,
+        };
+        // `sign` takes the unused gas: the signer's requirement is its own config, and
+        // this contract can never be upgraded, so a future rise has to be meetable by
+        // attaching more. The callback's share is fixed, so `sign` cannot take it.
+        ext_mpc::ext(self.mpc_contract.clone())
+            .with_attached_deposit(SIGN_DEPOSIT)
+            .with_static_gas(SIGN_GAS)
+            .with_unused_gas_weight(1)
+            .sign(request)
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(ON_SIGNED_GAS)
+                    .with_unused_gas_weight(0)
+                    .on_signed(pending),
+            )
+    }
+
+    fn release(&mut self, pending: &PendingSignature) -> u128 {
+        let reservation = pending.reservation.as_ref();
+        let position = self.positions.get_mut(&pending.id);
+        match (position, reservation) {
+            (Some(position), Some(reservation)) => policy::release(position, reservation),
+            _ => 0,
+        }
     }
 }

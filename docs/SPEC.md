@@ -112,7 +112,7 @@ EVM addresses are `0x` followed by exactly 40 hex characters, and are stored low
 | `rescue(id, amount, fees)` | keeper | Signs `Pool.repay(USDC, amount, 2, borrower)`. See below |
 | `withdraw_float(id, amount, fees)` | owner | Signs `USDC.transfer(borrower, amount)`. The destination is fixed |
 | `sweep_gas(id, amount_wei, fees)` | owner | Signs a value transfer to `borrower`, with `gas_limit_transfer`. A flat 21000 would not do: on Arbitrum the gas limit has to cover L1 data cost |
-| `get_position(id)`, `rescuer_path(id)`, `preview_rescue(id, amount, fees)`, `get_chain(chain_id)`, `get_mpc_contract()` | view | `get_position` reports the current UTC day: `spent_today` reads 0 if the stored bucket is from an earlier day. `preview_rescue` returns the unsigned tx hex and hash. `get_chain` and `get_mpc_contract` let anyone audit the immutable config |
+| `get_position(id)`, `rescuer_path(id)`, `preview_rescue(id, amount, fees)`, `get_chain(chain_id)`, `get_mpc_contract()` | view | `get_position` reports the current UTC day: `spent_today` reads 0 if the stored bucket is from an earlier day. `preview_rescue` returns the unsigned tx hex and hash, and fails as `rescue` would under rules 2 to 6. A view has no caller, so it cannot check rule 1. `get_chain` and `get_mpc_contract` let anyone audit the immutable config |
 
 `fees` is `{ nonce: u64, max_fee_per_gas: U128, max_priority_fee_per_gas: U128 }`.
 
@@ -127,7 +127,7 @@ Reject unless all of these hold:
 5. `now - last_rescue_at >= cooldown_secs`.
 6. Both fee values are at or below the chain's ceilings, and the priority fee is at or below the max fee. A transaction that breaks the last part can never be included, so signing it would only burn budget.
 
-The contract then builds an EIP-1559 transaction itself: chain id, nonce, fees, gas limit, `to = Pool`, value 0, the `repay` calldata and an empty access list. It hashes `keccak256(0x02 || rlp(fields))` and calls MPC with path `rescuer_path(id)`.
+The contract then builds an EIP-1559 transaction itself: chain id, nonce, fees, gas limit, `to = Pool`, value 0, the `repay` calldata and an empty access list. It hashes `keccak256(0x02 || rlp(fields))` and calls MPC with path `rescuer_path(id)`. The contract attaches the 1 yoctoNEAR from its own balance, because a function-call key cannot attach a deposit.
 
 The keeper never supplies calldata, a target or a payload. It supplies only the position id, the amount and `fees`. The EVM nonce is not tracked on chain because the contract cannot see Base. A wrong nonce wastes budget but cannot move value anywhere else.
 
@@ -139,7 +139,9 @@ A timed-out MPC request does not prove that no signature exists, since a node's 
 
 A tighten cancels a queued loosening. Otherwise a loosening queued before the tighten could undo it in less than 24 hours. For the same reason, queueing again restarts the delay. A tighten with unchanged values is how an owner cancels a queued loosening.
 
-The callback returns `{ kind, id, unsigned_tx, tx_hash, big_r, s, recovery_id }`, and logs the same as an event, so anyone can assemble and broadcast the signed transaction.
+The callback returns `{ kind, id, unsigned_tx, tx_hash, big_r, s, recovery_id }`, and logs the same as an event, so anyone can assemble and broadcast the signed transaction. `kind` is `rescue`, `allowance`, `withdraw_float` or `sweep_gas`. All hex is `0x`-prefixed and lowercase. `tx_hash` is the hash that was signed, not the hash of the broadcast transaction, which also covers the signature. `big_r` is the 33-byte compressed point, and `recovery_id` is the EIP-1559 `y_parity`.
+
+If no signature comes back, the callback returns `null` and logs `rescue_failed` with `{ kind, id, tx_hash, reason, released }`. It must not panic, because that would roll back the release. `reason` is `mpc_failed` when the call failed. It is `malformed_response` when the call succeeded but the response cannot be read: a signature may exist, so the reservation stands.
 
 ### Derivation
 
@@ -153,7 +155,7 @@ NEP-297, standard `levee`, version `1.0.0`: `position_registered`, `rescue_reque
 
 ### Mainnet lock
 
-After deployment and `new`, all full-access keys are deleted. There is no upgrade path and no admin method.
+After deployment and `new`, all full-access keys are deleted. There is no upgrade path and no admin method. Fund the contract above its storage cost first: every signature costs it 1 yoctoNEAR, and anyone can top it up later.
 
 ## 5. Keeper
 
