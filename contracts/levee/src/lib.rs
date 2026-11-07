@@ -94,6 +94,22 @@ fn or_panic<T>(result: Result<T, &'static str>) -> T {
     result.unwrap_or_else(|err| env::panic_str(err))
 }
 
+fn pending_signature(
+    kind: SignKind,
+    id: u64,
+    tx: &Eip1559Tx,
+    reservation: Option<Reservation>,
+) -> PendingSignature {
+    let unsigned = tx.unsigned_bytes();
+    PendingSignature {
+        kind,
+        id,
+        tx_hash: hex_of(&signing_hash(&unsigned)),
+        unsigned_tx: hex_of(&unsigned),
+        reservation,
+    }
+}
+
 fn check_signing_gas(prepaid: Gas) -> Result<(), &'static str> {
     if prepaid < MIN_SIGNING_GAS {
         return Err(ERR_GAS_TOO_LOW);
@@ -324,7 +340,7 @@ impl Levee {
         let chain = self.chain(position);
         or_panic(policy::check_fees(chain, &fees));
         let tx = txs::approve_tx(chain, amount.0, &fees);
-        self.request_signature(SignKind::Allowance, id, &tx, None)
+        self.request_signature(pending_signature(SignKind::Allowance, id, &tx, None))
     }
 
     /// Signs `Pool.repay(USDC, amount, 2, borrower)` within the position's caps.
@@ -343,9 +359,8 @@ impl Levee {
             env::block_timestamp(),
         ));
         let tx = txs::repay_tx(chain, position, amount.0, &fees);
+        let pending = pending_signature(SignKind::Rescue, id, &tx, Some(reservation.clone()));
 
-        let promise = self.request_signature(SignKind::Rescue, id, &tx, Some(reservation.clone()));
-        let tx_hash = hex_of(&signing_hash(&tx.unsigned_bytes()));
         let position = self
             .positions
             .get_mut(&id)
@@ -355,10 +370,10 @@ impl Levee {
             id,
             amount,
             nonce: fees.nonce,
-            tx_hash,
+            tx_hash: pending.tx_hash.clone(),
         }
         .emit();
-        promise
+        self.request_signature(pending)
     }
 
     /// Signs `USDC.transfer(borrower, amount)`. The destination is fixed.
@@ -367,7 +382,7 @@ impl Levee {
         let chain = self.chain(position);
         or_panic(policy::check_fees(chain, &fees));
         let tx = txs::transfer_tx(chain, position, amount.0, &fees);
-        self.request_signature(SignKind::WithdrawFloat, id, &tx, None)
+        self.request_signature(pending_signature(SignKind::WithdrawFloat, id, &tx, None))
     }
 
     /// Signs a value transfer to the borrower. The destination is fixed.
@@ -376,7 +391,7 @@ impl Levee {
         let chain = self.chain(position);
         or_panic(policy::check_fees(chain, &fees));
         let tx = txs::sweep_tx(chain, position, amount_wei.0, &fees);
-        self.request_signature(SignKind::SweepGas, id, &tx, None)
+        self.request_signature(pending_signature(SignKind::SweepGas, id, &tx, None))
     }
 
     /// Receives the MPC result, and returns everything needed to broadcast, or `null`
@@ -503,28 +518,15 @@ impl Levee {
             .unwrap_or_else(|| env::panic_str(ERR_UNKNOWN_CHAIN))
     }
 
-    /// Hashes `tx` and asks the MPC contract to sign it from the position's rescuer.
-    fn request_signature(
-        &self,
-        kind: SignKind,
-        id: u64,
-        tx: &Eip1559Tx,
-        reservation: Option<Reservation>,
-    ) -> Promise {
+    /// Asks the MPC contract to sign from the position's rescuer. Nothing a caller
+    /// supplied reaches it directly: the payload is the hash of a transaction this
+    /// contract built.
+    fn request_signature(&self, pending: PendingSignature) -> Promise {
         or_panic(check_signing_gas(env::prepaid_gas()));
-        let unsigned = tx.unsigned_bytes();
-        let hash = signing_hash(&unsigned);
         let request = SignRequest {
-            path: derivation_path(id),
+            path: derivation_path(pending.id),
             domain_id: ECDSA_DOMAIN_ID,
-            payload_v2: SignPayload::Ecdsa(hex::encode(hash)),
-        };
-        let pending = PendingSignature {
-            kind,
-            id,
-            unsigned_tx: hex_of(&unsigned),
-            tx_hash: hex_of(&hash),
-            reservation,
+            payload_v2: SignPayload::Ecdsa(pending.tx_hash[2..].to_string()),
         };
         // `sign` takes the unused gas: the signer's requirement is its own config, and
         // this contract can never be upgraded, so a future rise has to be meetable by
