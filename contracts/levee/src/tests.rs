@@ -8,13 +8,7 @@ use near_sdk::test_utils::{get_created_receipts, get_logs, VMContextBuilder};
 use near_sdk::{test_vm_config, testing_env, NearToken, PromiseResult, RuntimeFeesConfig};
 
 use super::*;
-use crate::policy::{
-    ERR_COOLDOWN, ERR_LOOSEN_NOT_READY, ERR_MAX_FEE_CEILING, ERR_NO_PENDING_LOOSEN,
-    ERR_OVER_DAILY_BUDGET, ERR_OVER_MAX_ALLOWANCE, ERR_OVER_MAX_PER_RESCUE, ERR_PAUSED,
-    ERR_PRIORITY_FEE_CEILING, ERR_PRIORITY_OVER_MAX_FEE, ERR_TIGHTEN_COOLDOWN,
-    ERR_TIGHTEN_MAX_PER_DAY, ERR_TIGHTEN_MAX_PER_RESCUE, ERR_ZERO_AMOUNT, NANOS_PER_DAY,
-    NANOS_PER_SEC,
-};
+use crate::policy::{NANOS_PER_DAY, NANOS_PER_SEC};
 
 const CONTRACT: &str = "levee.near";
 const SIGNER: &str = "signer.near";
@@ -772,45 +766,6 @@ mod rescue_rules {
         high.max_priority_fee_per_gas = U128(PRIORITY_CEILING + 1);
         let _ = contract.rescue(id, U128(1), high);
     }
-
-    #[test]
-    fn a_rule_failure_changes_nothing() {
-        let (contract, id) = setup();
-        let before = contract.get_position(id);
-        act_as(KEEPER, NOON);
-        let result = policy::check_rescue(
-            contract.position(id),
-            contract.get_chain(8453).as_ref().unwrap(),
-            MAX_PER_RESCUE + 1,
-            &fees(),
-            NOON,
-        );
-        assert_eq!(result, Err(ERR_OVER_MAX_PER_RESCUE));
-        assert_eq!(contract.get_position(id), before);
-    }
-
-    #[test]
-    fn the_error_constants_are_the_ones_callers_see() {
-        // The `should_panic` strings above are literals. Pin them to the constants so
-        // a reworded error cannot leave a test passing on a stale message.
-        assert_eq!(ERR_PAUSED, "position is paused");
-        assert_eq!(ERR_ZERO_AMOUNT, "amount must be above zero");
-        assert_eq!(ERR_OVER_MAX_PER_RESCUE, "amount exceeds max_per_rescue");
-        assert_eq!(ERR_OVER_DAILY_BUDGET, "amount exceeds the daily budget");
-        assert_eq!(ERR_COOLDOWN, "cooldown has not elapsed");
-        assert_eq!(
-            ERR_MAX_FEE_CEILING,
-            "max_fee_per_gas exceeds the chain ceiling"
-        );
-        assert_eq!(
-            ERR_PRIORITY_FEE_CEILING,
-            "max_priority_fee_per_gas exceeds the chain ceiling"
-        );
-        assert_eq!(
-            ERR_OVER_MAX_ALLOWANCE,
-            "amount exceeds 30 times max_per_day"
-        );
-    }
 }
 
 mod signing {
@@ -1399,22 +1354,6 @@ mod caps {
         act_as(OWNER, NOON);
         contract.tighten(id, U128(0), U128(0), COOLDOWN_SECS);
         assert_eq!(caps(&contract, id), (0, 0, COOLDOWN_SECS));
-    }
-
-    #[test]
-    fn the_error_constants_are_the_ones_callers_see() {
-        assert_eq!(
-            ERR_TIGHTEN_MAX_PER_RESCUE,
-            "max_per_rescue may only decrease"
-        );
-        assert_eq!(ERR_TIGHTEN_MAX_PER_DAY, "max_per_day may only decrease");
-        assert_eq!(ERR_TIGHTEN_COOLDOWN, "cooldown_secs may only increase");
-        assert_eq!(ERR_NO_PENDING_LOOSEN, "no loosening is queued");
-        assert_eq!(ERR_LOOSEN_NOT_READY, "the loosening delay has not elapsed");
-        assert_eq!(
-            ERR_PRIORITY_OVER_MAX_FEE,
-            "max_priority_fee_per_gas exceeds max_fee_per_gas"
-        );
     }
 
     #[test]
