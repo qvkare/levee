@@ -234,6 +234,19 @@ export function renderSummary(summary: Summary): string {
   out.push(`Gross liquidation bonus avoided on saved positions: **${usd(main.bonusAvoidedUsd)}** of ${usd(main.bonusAtRiskUsd)} at risk (first episode only). Reserve used on saved positions: ${usd(main.reserveUsedOnSavedUsd)}, from ${usd(main.reserveHeldUsd)} held across all in-scope positions.`);
   out.push(`Holding the same USDC as Aave collateral from the start, with no keeper at all: **${headline.fair.holdAsCollateral}** survive (${pct(headline.fair.holdAsCollateral, headline.fair.positions)}), avoiding ${usd(headline.fair.bonusAvoidedCollateralUsd)}. Saved by Levee only: ${headline.fair.leveeOnly}. Saved by collateral only: ${headline.fair.collateralOnly}.`);
   out.push('');
+  out.push('');
+  out.push('**Do not quote that one cell alone.** R 30% sits just past a cliff: most positions needed under about 30% of debt. The same cell at other reserve sizes:');
+  out.push('');
+  out.push(
+    table(
+      ['R', ...summary.fair.map((r) => share(r.reserveShare))],
+      [
+        ['Levee saved', ...summary.fair.map((r) => pct(r.levee, r.positions))],
+        ['Same USDC as collateral survived', ...summary.fair.map((r) => pct(r.holdAsCollateral, r.positions))],
+      ],
+    ),
+  );
+  out.push('');
   out.push('## Population');
   out.push('');
   out.push(populationTable(summary.population));
