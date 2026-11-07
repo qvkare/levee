@@ -42,7 +42,7 @@ export function AddressForm({ value = "", error = null }: { value?: string; erro
           aria-describedby={`${id}-hint`}
         />
         <button className="button" type="submit" disabled={pending}>
-          {pending ? "Reading the gauges" : "Read the gauge"}
+          {pending ? "Reading" : "Read it"}
         </button>
       </div>
       <p id={`${id}-hint`} className={problem ? "form-error" : "form-hint"} role={problem ? "alert" : undefined}>

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import type { Address } from "viem";
 import { AddressForm } from "@/components/address-form.tsx";
-import { Report } from "@/components/report.tsx";
 import { ADDRESS_ERRORS, parseAddress, shortAddress } from "@/lib/address.ts";
 import { DEFAULT_TARGET, parseTarget } from "@/lib/math.ts";
 import { verdict } from "@/lib/reading.ts";
@@ -34,17 +33,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { parsed } = await addressFrom(params);
   if (!parsed.ok) return { title: "Not an address", robots: { index: false } };
   const report = await reportFor(parsed.address);
-  return { title: `Stage report for ${shortAddress(parsed.address)}`, description: verdict(report).text, robots: { index: false } };
+  return { title: shortAddress(parsed.address), description: verdict(report).text, robots: { index: false } };
 }
 
 export default async function Page({ params, searchParams }: Props) {
   const { input, parsed } = await addressFrom(params);
   if (!parsed.ok) {
     return (
-      <section className="tool wrap">
+      <main id="main">
         <h1>That address cannot be read.</h1>
         <AddressForm value={input} error={ADDRESS_ERRORS[parsed.error]} />
-      </section>
+      </main>
     );
   }
 
@@ -52,13 +51,9 @@ export default async function Page({ params, searchParams }: Props) {
   const chosen = parseTarget(Array.isArray(target) ? target[0] : target) ?? DEFAULT_TARGET;
   const report = withTarget(await reportFor(parsed.address), chosen);
   return (
-    <>
-      <section className="tool wrap">
-        <h1>Stage report for <span className="mono">{shortAddress(report.address)}</span></h1>
-        <p className="mono full-address">{report.address}</p>
-        <AddressForm key={report.address} />
-      </section>
-      <Report key={report.address} report={report} />
-    </>
+    <main id="main">
+      <h1>{shortAddress(report.address)}</h1>
+      <AddressForm key={report.address} />
+    </main>
   );
 }

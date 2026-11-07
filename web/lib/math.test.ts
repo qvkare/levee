@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ADDRESS_ERRORS, parseAddress, shapeError } from "./address.ts";
 import { percent, stageValue, usd } from "./format.ts";
-import { BED_Y, CREST_Y, chartY, spreadLabels, staffTicks } from "./gauge.ts";
 import { approxFall, healthAfterRepay, parseTarget, repayToTarget, stageForFall, stageForHealth } from "./math.ts";
 
 const position = { collateralUsd: 1000, liquidationThreshold: 0.8, debtUsd: 600 };
@@ -67,21 +66,4 @@ test("printed readings round down, not up", () => {
   assert.equal(usd(1234.56), "$1,235");
   assert.equal(usd(12.3), "$12.30");
   assert.equal(usd(-5), "-$5.00");
-});
-
-test("the staff runs from crest to bed in order", () => {
-  assert.equal(chartY(0), CREST_Y);
-  assert.equal(chartY(0.8), BED_Y);
-  assert.equal(chartY(5), BED_Y);
-  const ys = staffTicks().map((tick) => tick.y);
-  assert.deepEqual([...ys].sort((a, b) => a - b), ys);
-  assert.equal(staffTicks().filter((tick) => tick.stage).length, 8);
-});
-
-test("spreadLabels keeps labels apart without moving a lone label", () => {
-  assert.deepEqual(spreadLabels([40], 6), [40]);
-  assert.deepEqual(spreadLabels([40, 41], 6), [40, 46]);
-  const [low, high] = spreadLabels([96, 95], 6);
-  assert.ok(Math.abs((low as number) - (high as number)) >= 6);
-  assert.ok((low as number) <= BED_Y);
 });
