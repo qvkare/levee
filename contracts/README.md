@@ -47,7 +47,7 @@ cargo test --manifest-path contracts/Cargo.toml --workspace
 |---|---|---|
 | `levee` unit | 199 | Every rule on its boundaries, and what leaves the contract: receipts, gas, deposits, logs, return values |
 | `levee/tests/vectors.rs` | 5 | Calldata, RLP and signing hash against `cast`, byte for byte |
-| `levee/tests/properties.rs` | 5 | Any amount, nonce and fee decodes in alloy to the same fields, and `to`, selector, asset and `onBehalfOf` never change. The daily budget holds under any interleaving |
+| `levee/tests/properties.rs` | 5 | Any amount, nonce and fee decodes in alloy to the same fields, and `to`, selector, asset and `onBehalfOf` do not change. The daily budget holds under any interleaving |
 | `levee/tests/sandbox.rs` | 33 | The real wasm in near-sandbox against the mock signer |
 | `mock-signer` unit | 9 | That the mock enforces what the real `sign` enforces |
 

@@ -96,7 +96,7 @@ pub struct PendingLoosen {
 }
 ```
 
-EVM addresses are `0x` followed by exactly 40 hex characters, and are stored lowercase. The zero address is refused: a borrower can never be changed, and value sent to zero is burnt.
+EVM addresses are `0x` followed by exactly 40 hex characters, and are stored lowercase. The zero address is refused: a borrower cannot be changed, and value sent to zero is burnt.
 
 ### Methods
 
@@ -125,7 +125,7 @@ Reject unless all of these hold:
 3. `0 < amount <= max_per_rescue`.
 4. `spent_today + amount <= max_per_day`, using a UTC day bucket from `env::block_timestamp`.
 5. `now - last_rescue_at >= cooldown_secs`.
-6. Both fee values are at or below the chain's ceilings, and the priority fee is at or below the max fee. A transaction that breaks the last part can never be included, so signing it would only burn budget.
+6. Both fee values are at or below the chain's ceilings, and the priority fee is at or below the max fee. A transaction that breaks the last part cannot be included, so signing it would only burn budget.
 
 The contract then builds an EIP-1559 transaction itself: chain id, nonce, fees, gas limit, `to = Pool`, value 0, the `repay` calldata and an empty access list. It hashes `keccak256(0x02 || rlp(fields))` and calls MPC with path `rescuer_path(id)`. The contract attaches the 1 yoctoNEAR from its own balance, because a function-call key cannot attach a deposit.
 
