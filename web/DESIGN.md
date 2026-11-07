@@ -47,7 +47,7 @@ Water rises as health falls, because that is what danger looks like on a river. 
 | Chosen target | Dashed line on the staff. The repay figure is what draws the water down to it |
 | Reserve | The levee: a buff bank with protected land behind it |
 | No debt and no positions | Dry channel: water sits on the bed |
-| Health factor below 1.00 | Water over the crest and across the land |
+| Health factor below 1.00 | Water over the crest and across the land, with only the levee's outline left |
 | A source that did not answer | Gauge out of service: the reading is struck through with hatching and says why. A blank is never drawn as zero |
 | Isolated Hyperliquid position | Row labelled "Not covered" in words |
 
@@ -101,13 +101,13 @@ Fonts are self-hosted from `app/fonts` under the SIL Open Font License, so the b
 
 - Buttons: ink plate with paper text, 2 px radius. One primary per screen. Hover inverts to outline, focus shows a 2 px ink ring with offset, disabled drops to `--ink-2`.
 - Inputs: 1 px ink border on paper with a visible label. Errors appear under the field in words, tied with `aria-describedby`.
-- Status: stage names in words. Magenta only for flood stage. A status always has text, never colour alone.
-- Tables: real `table` elements with captions and header scopes. At phone width long tables reflow to stacked rows and keep explicit ARIA roles.
-- Empty, loading and error states: empty is a dry channel with the reason. Loading keeps the section's shape and says "Reading the gauges". A failed source is a gauge out of service, says which source and that the figures are missing, not zero.
+- Status: stage names in words. Magenta only for flood stage. A status always has text, not colour alone.
+- Tables: real `table` elements with captions and header scopes. At phone width long tables reflow to stacked rows and keep explicit ARIA roles. Short tables stay tables.
+- Empty, loading and error states: empty is a dry channel with the reason. While a report loads, the current page stays put and the button says "Reading the gauges". There is no skeleton, because the report is rendered in full on the server: a reader without scripts, or a screener fetching the URL, gets every number in the first response. A failed source is a gauge out of service, says which source and that the figures are missing, not zero. Nothing that needs a reading (slider, repay sentence, target line) appears without one.
 
 ## Motion
 
-- The target line and water line slide 180 ms with a cubic-bezier when the reader moves the target, using transform only. This shows cause and effect.
+- The target line slides 180 ms with a cubic-bezier when the reader moves the target, using transform only. This shows cause and effect. It stops at the levee, because a water level cannot pass through land.
 - Nothing moves on scroll or on load.
 - With `prefers-reduced-motion` all transitions are removed.
 

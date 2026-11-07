@@ -1,0 +1,895 @@
+/* Tokens and roles are defined in web/DESIGN.md. Change that document first. */
+:root {
+  color-scheme: light dark;
+  --paper: #fcfdfc;
+  --ink: #101a22;
+  --ink-2: #44525d;
+  --rule: #c6ced1;
+  --water: #bfdff0;
+  --land: #efdca4;
+  --flood: #9c0b66;
+
+  --gutter: clamp(16px, 4vw, 48px);
+  --column: 1180px;
+  --edge: max(var(--gutter), calc((100vw - var(--column)) / 2));
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0d161b;
+    --ink: #e6edef;
+    --ink-2: #a3b3bb;
+    --rule: #2e3c44;
+    --water: #17405a;
+    --land: #4b4126;
+    --flood: #ff8acd;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  background: var(--paper);
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-text), "Helvetica Neue", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+main {
+  flex: 1;
+}
+
+h1,
+h2,
+h3,
+p,
+dl,
+dd,
+ol,
+ul,
+figure {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+h1 {
+  font-size: clamp(28px, 3.6vw, 42px);
+  max-width: 28em;
+  text-wrap: balance;
+}
+
+h2 {
+  font-size: clamp(23px, 2.4vw, 28px);
+}
+
+h3 {
+  font-size: 19px;
+}
+
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+code,
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  overflow-wrap: anywhere;
+}
+
+.wrap {
+  padding-inline: var(--edge);
+}
+
+.prose {
+  max-width: 68ch;
+}
+
+.prose > * + * {
+  margin-top: 0.8em;
+}
+
+.muted {
+  color: var(--ink-2);
+}
+
+.small {
+  font-size: 15px;
+}
+
+.skip {
+  position: absolute;
+  left: var(--edge);
+  top: -60px;
+  z-index: 10;
+  padding: 8px 12px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+}
+
+.skip:focus {
+  top: 8px;
+}
+
+/* Header and footer */
+
+.site-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  padding-block: 18px;
+}
+
+.wordmark {
+  font-size: 22px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.site-nav {
+  display: flex;
+  gap: 24px;
+}
+
+.site-footer {
+  margin-top: 72px;
+  padding-block: 20px 28px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.site-footer p {
+  max-width: 68ch;
+}
+
+/* The tool */
+
+.tool {
+  padding-block: 8px 28px;
+}
+
+.tool h1 {
+  margin-bottom: 20px;
+}
+
+.address-form {
+  max-width: 720px;
+}
+
+.address-form label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.address-row {
+  display: flex;
+  gap: 8px;
+}
+
+.address-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+input[type="text"] {
+  height: 48px;
+  padding-inline: 12px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 16px;
+}
+
+input[type="text"]::placeholder {
+  color: var(--ink-2);
+}
+
+input[aria-invalid="true"] {
+  border-color: var(--flood);
+  border-width: 2px;
+}
+
+.button {
+  height: 48px;
+  padding-inline: 18px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+.button:disabled {
+  background: var(--ink-2);
+  border-color: var(--ink-2);
+  color: var(--paper);
+  cursor: progress;
+}
+
+.full-address {
+  margin: -10px 0 16px;
+  color: var(--ink-2);
+}
+
+.form-hint {
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.form-error {
+  margin-top: 6px;
+  color: var(--flood);
+  font-weight: 500;
+}
+
+@media (max-width: 520px) {
+  .address-row {
+    flex-direction: column;
+  }
+
+  .address-row input {
+    flex: none;
+    width: 100%;
+  }
+}
+
+/* The section chart */
+
+.section {
+  margin-top: 8px;
+}
+
+.section-title {
+  padding-bottom: 12px;
+}
+
+.chart {
+  position: relative;
+  height: clamp(340px, 46vh, 520px);
+  overflow: hidden;
+  border-top: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.chart > * {
+  position: absolute;
+}
+
+.chart-water {
+  left: 0;
+  right: 0;
+  bottom: 3%;
+  z-index: 1;
+  background: var(--water);
+  border-top: 2px solid var(--ink);
+}
+
+.chart-ground {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3%;
+  z-index: 2;
+  background: var(--land);
+  border-top: 2px solid var(--ink);
+}
+
+.chart-levee {
+  top: 0;
+  right: 0;
+  z-index: 2;
+  width: clamp(96px, 24%, 340px);
+  height: 100%;
+}
+
+.chart-levee polygon {
+  fill: var(--land);
+  stroke: var(--ink);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-levee-name {
+  right: 12px;
+  bottom: calc(3% + 10px);
+  z-index: 3;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.chart[data-state="over"] .chart-water {
+  z-index: 3;
+}
+
+/* Over flood stage the levee is under water, so only its outline is left. */
+.chart[data-state="over"] .chart-levee {
+  z-index: 4;
+}
+
+.chart[data-state="over"] .chart-levee polygon {
+  fill: none;
+  stroke-dasharray: 6 5;
+}
+
+.chart[data-state="over"] .chart-levee-name {
+  z-index: 4;
+}
+
+.chart[data-state="over"] .chart-flood span {
+  top: auto;
+  bottom: 3px;
+}
+
+.chart-flood {
+  left: 0;
+  right: 0;
+  z-index: 4;
+  border-top: 2px solid var(--flood);
+}
+
+.chart-flood span {
+  position: absolute;
+  top: 2px;
+  left: calc(var(--edge) + 104px);
+  color: var(--flood);
+  font-weight: 500;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.chart-staff {
+  top: 3%;
+  bottom: 3%;
+  left: var(--edge);
+  z-index: 5;
+  width: 88px;
+  background: var(--paper);
+  border-inline: 1px solid var(--ink);
+  border-top: 1px solid var(--ink);
+}
+
+.chart-staff::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  border-left: 1px solid var(--ink);
+}
+
+.staff-tick {
+  position: absolute;
+  height: 1px;
+  width: 7px;
+  left: 50%;
+  margin-left: -3px;
+  background: var(--ink);
+}
+
+.staff-tick[data-major="true"] {
+  width: 15px;
+  margin-left: -7px;
+}
+
+.staff-number {
+  position: absolute;
+  transform: translateY(-50%);
+  font-family: var(--font-figures), var(--font-text), sans-serif;
+  font-size: 13px;
+  line-height: 1;
+  background: var(--paper);
+  padding-block: 1px;
+}
+
+.staff-number[data-face="stage"] {
+  right: calc(50% + 9px);
+}
+
+.staff-number[data-face="fall"] {
+  left: calc(50% + 9px);
+}
+
+.staff-head {
+  position: absolute;
+  top: 2px;
+  font-family: var(--font-figures), var(--font-text), sans-serif;
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--ink-2);
+}
+
+.staff-head[data-face="stage"] {
+  right: calc(50% + 6px);
+}
+
+.staff-head[data-face="fall"] {
+  left: calc(50% + 6px);
+}
+
+.chart-leaders {
+  top: 0;
+  z-index: 4;
+  left: calc(var(--edge) + 88px);
+  width: 16px;
+  height: 100%;
+}
+
+.chart-leaders line {
+  stroke: var(--ink);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Water features are lettered in italic, as on a chart. */
+.water-label {
+  font-family: var(--font-water), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.chart-mark {
+  left: calc(var(--edge) + 108px);
+  right: clamp(100px, 25%, 350px);
+  z-index: 4;
+  margin-top: 3px;
+  font-size: clamp(17px, 2vw, 21px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.chart[data-state="over"] .chart-mark {
+  right: var(--gutter);
+}
+
+.chart-target,
+.chart-target-label {
+  inset: 0;
+  pointer-events: none;
+  transition: transform 180ms var(--ease);
+}
+
+.chart-target {
+  z-index: 1;
+}
+
+.chart-target-label {
+  z-index: 4;
+}
+
+.chart[data-state="over"] .chart-target {
+  z-index: 4;
+}
+
+.chart-target i {
+  position: absolute;
+  top: 0;
+  left: calc(var(--edge) + 88px);
+  right: 0;
+  border-top: 2px dashed var(--ink);
+}
+
+.chart-target-label span {
+  position: absolute;
+  right: clamp(104px, 26%, 360px);
+  top: 3px;
+  font-size: 17px;
+  white-space: nowrap;
+}
+
+.chart-empty {
+  left: calc(var(--edge) + 108px);
+  right: clamp(100px, 25%, 350px);
+  top: 42%;
+  z-index: 4;
+  max-width: 34ch;
+}
+
+.chart-hatch {
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  color: var(--rule);
+}
+
+.chart-caption {
+  padding-top: 10px;
+  color: var(--ink-2);
+  font-size: 15px;
+  max-width: 68ch;
+}
+
+@media (max-width: 640px) {
+  .chart-staff {
+    width: 68px;
+  }
+
+  .chart-leaders {
+    left: calc(var(--edge) + 68px);
+  }
+
+  .chart-mark,
+  .chart-empty {
+    left: calc(var(--edge) + 88px);
+    right: 72px;
+  }
+
+  .chart-flood span {
+    left: calc(var(--edge) + 84px);
+  }
+
+  .chart-target i {
+    left: calc(var(--edge) + 68px);
+  }
+
+  .chart-levee {
+    width: 92px;
+  }
+
+  /* The water is narrow here, so the label sits on the bank, clear of the readings. */
+  .chart-target-label span {
+    right: 6px;
+  }
+}
+
+/* Report */
+
+.verdict {
+  font-size: clamp(21px, 2.3vw, 26px);
+  line-height: 1.25;
+  max-width: 34em;
+}
+
+.verdict[data-stage="flood"] {
+  color: var(--flood);
+}
+
+.report-head {
+  padding-block: 8px 20px;
+  border-top: 1px solid var(--rule);
+  padding-top: 20px;
+}
+
+.report-head > * + * {
+  margin-top: 10px;
+}
+
+.failures {
+  margin-top: 14px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink);
+  max-width: 68ch;
+}
+
+.failures ul {
+  padding-left: 18px;
+}
+
+.target-control {
+  display: grid;
+  grid-template-columns: minmax(0, 340px) auto;
+  gap: 4px 20px;
+  align-items: center;
+  padding-block: 18px 6px;
+}
+
+.target-control label {
+  grid-column: 1 / -1;
+  font-weight: 500;
+}
+
+.target-control input[type="range"] {
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+.target-value {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.repay-output {
+  display: block;
+  font-size: clamp(18px, 2vw, 21px);
+  font-weight: 500;
+  max-width: 44em;
+}
+
+.hl-body {
+  display: grid;
+  gap: 18px;
+  margin-top: 14px;
+}
+
+.examples {
+  padding-left: 1.1em;
+}
+
+.examples li + li {
+  margin-top: 4px;
+}
+
+.station {
+  padding-block: 28px 8px;
+  border-top: 1px solid var(--rule);
+  margin-top: 28px;
+}
+
+.station-meta {
+  margin-top: 4px;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.station-body {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 16px 48px;
+  align-items: start;
+  margin-top: 14px;
+}
+
+.station-notes {
+  grid-column: 1 / -1;
+  max-width: 68ch;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.station-notes > * + * {
+  margin-top: 6px;
+}
+
+.out-of-service {
+  position: relative;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+.out-of-service svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--rule);
+}
+
+.out-of-service p {
+  position: relative;
+  display: inline;
+  background: var(--paper);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  padding: 2px 6px;
+}
+
+.flood-text {
+  color: var(--flood);
+  font-weight: 500;
+}
+
+.medium {
+  font-weight: 500;
+}
+
+/* Tables */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 16px;
+}
+
+caption {
+  text-align: left;
+  padding-bottom: 6px;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+th,
+td {
+  padding: 7px 14px 7px 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+th:last-child,
+td:last-child {
+  padding-right: 0;
+}
+
+.num {
+  text-align: right;
+}
+
+.figures th {
+  font-weight: 400;
+}
+
+.figures td {
+  text-align: right;
+  font-weight: 500;
+}
+
+@media (max-width: 860px) {
+  .station-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Long tables reflow to stacked rows at phone width. Roles keep them readable as tables. */
+@media (max-width: 720px) {
+  .stack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .stack,
+  .stack tbody,
+  .stack caption {
+    display: block;
+  }
+
+  .stack tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 2px 12px;
+    padding-block: 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .stack td {
+    display: block;
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+
+  .stack-3 tr {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .stack td[data-wide="true"] {
+    grid-column: 1 / -1;
+  }
+
+  .stack td::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--ink-2);
+    font-size: 14px;
+  }
+
+  .stack td[data-bare="true"]::before {
+    content: none;
+  }
+}
+
+/* Long-form pages */
+
+.page-head {
+  padding-block: 12px 28px;
+}
+
+.page-head h1 {
+  max-width: 24em;
+}
+
+.page-head p {
+  margin-top: 12px;
+  max-width: 62ch;
+}
+
+.page-section {
+  padding-block: 32px 0;
+}
+
+.page-section > h2 {
+  margin-bottom: 12px;
+}
+
+.page-section > .prose + table,
+.page-section > .prose + pre,
+.page-section > table + .prose,
+.page-section > ol + .prose {
+  margin-top: 16px;
+}
+
+.steps {
+  padding-left: 1.4em;
+  max-width: 68ch;
+}
+
+.steps li + li {
+  margin-top: 8px;
+}
+
+.formula {
+  padding: 10px 0;
+  border-block: 1px solid var(--rule);
+  overflow-wrap: anywhere;
+}
+
+pre {
+  margin: 0;
+  padding: 12px 0;
+  border-block: 1px solid var(--rule);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-x: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
