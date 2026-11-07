@@ -6,7 +6,8 @@
     "toBlock": 36718926,
     "counts": {
       "gateway.tenderly.co": 470,
-      "base.api.pocket.network": 462
+      "base.api.pocket.network": 462,
+      "rpc.sentio.xyz": 470
     },
     "union": 470,
     "confirmedByReceipt": 8
@@ -18,7 +19,8 @@
     "toBlock": 41816526,
     "counts": {
       "gateway.tenderly.co": 2755,
-      "base.api.pocket.network": 2442
+      "base.api.pocket.network": 2442,
+      "rpc.sentio.xyz": 2755
     },
     "union": 2755,
     "confirmedByReceipt": 313
