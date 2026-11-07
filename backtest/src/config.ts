@@ -9,7 +9,7 @@ export interface ChainConfig {
   usdc: `0x${string}`;
   /** Free keyless endpoints that serve `eth_call` at the window blocks, measured on 2026-11-07. */
   archiveRpcs: string[];
-  /** Two independent free `eth_getLogs` providers, with the widest chunk each accepts. */
+  /** Independent free `eth_getLogs` providers, with the widest chunk each accepts. */
   logRpcs: Array<{ url: string; chunk: number }>;
 }
 
@@ -32,6 +32,7 @@ export const CHAINS: Record<ChainKey, ChainConfig> = {
     logRpcs: [
       { url: 'https://gateway.tenderly.co/public/base', chunk: 1_000 },
       { url: 'https://base.api.pocket.network', chunk: 500 },
+      { url: 'https://rpc.sentio.xyz/base', chunk: 1_000 },
     ],
   },
   arbitrum: {
