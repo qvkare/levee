@@ -52,7 +52,7 @@ function Missing({ report, line }: { report: RiskReport; line: Line }) {
       <Badge lane="K" size="s" />
       <div>
         <p>
-          <b>Part of this reading is missing.</b> {unread}
+          <b>{report.status === "unavailable" ? "Nothing was read." : "Part of this reading is missing."}</b> {unread}
         </p>
         {messages.length > 0 && (
           <ul>
@@ -234,10 +234,12 @@ export function Reading({ report: initial, whatIf, trigger, measured }: Props) {
           </section>
         )}
 
-        <section className="s s-tint s-tight" aria-label="What Levee would do">
-          <LeveeNote first={line.placed[0]} measured={measured} />
-          <p className="note-line">Levee has no relationship with this address. Aave distances are approximate falls in collateral against debt.</p>
-        </section>
+        {report.status !== "unavailable" && (
+          <section className="s s-tint s-tight" aria-label="What Levee would do">
+            <LeveeNote first={line.placed[0]} measured={measured} />
+            <p className="note-line">Levee has no relationship with this address. Aave distances are approximate falls in collateral against debt.</p>
+          </section>
+        )}
       </div>
     </main>
   );
