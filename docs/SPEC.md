@@ -27,7 +27,7 @@ Out of scope: TEEs, an LLM in the money path, pooling user funds, a token, tradi
 
 The worst a stolen keeper key can do is repay the borrower's debt early, burn rescuer gas up to the fee ceiling, or burn the daily budget.
 
-In collateral mode (section 9) the worst case changes: a stolen keeper key can force the borrower to deleverage early, selling collateral at most `max_slippage_bps` worse than Aave's oracle, up to the daily cap. The borrower can stop it on the lending chain at once, without NEAR, by calling `revoke()` or setting the aToken allowance to zero.
+In collateral mode (section 9) the helper checks health factor on chain. A stolen keeper key can act only while the borrower's health factor is below the trigger the borrower set in the helper, and it cannot deleverage much past their target. Each sale is at most `max_slippage_bps` worse than Aave's oracle, up to the daily cap. In effect, a stolen key can do what the keeper was meant to do, with worse timing. The borrower can stop it on the lending chain at once, without NEAR, by calling `revoke()` or setting the aToken allowance to zero.
 
 Caps bound signing, not landing. A signature already issued stays valid until its nonce is used, and pausing stops only new signatures. Such a signature can still only repay the registered borrower's debt, and it was already charged to the budget. An owner can burn it by landing any transaction at that nonce, for example `withdraw_float`.
 
@@ -300,7 +300,7 @@ The population backtest (`backtest/results/portfolio.md`) found that for one pos
 2. It calls `rescue_from_collateral(id, amount, fees)` on the NEAR contract.
 3. The contract checks the same rules as `rescue` (section 4, rules 1 to 6) and signs, from the position's rescuer address, a call to the helper: `LeveeUnwind.unwind(borrower, collateral, amount, pool_fee)`. `borrower`, `collateral` and `pool_fee` come from the position. The keeper supplies only the amount and fees.
 4. In one EVM transaction, the helper:
-   1. Caps `amount` at the borrower's current USDC variable debt.
+   1. Requires the borrower's health factor, from `getUserAccountData`, to be below the `triggerHf` the borrower set. Caps `amount` at the borrower's current USDC variable debt.
    2. Reads Aave's oracle for the collateral and USDC, and computes `max_in = amount × price(USDC) / price(collateral) × (10000 + max_slippage_bps) / 10000`, in collateral units.
    3. Starts an exact-output swap on the Uniswap v3 pool for `(collateral, USDC, pool_fee)`, receiving `amount` USDC.
    4. In the swap callback, checks that the caller is that pool and a swap is in progress, and that the collateral owed is at most `max_in`. It repays `amount` USDC with `Pool.repay(USDC, amount, 2, borrower)`, pulls exactly the owed collateral's aTokens from the borrower with `transferFrom`, and withdraws that collateral from Aave straight to the Uniswap pool to pay for the swap.
@@ -314,14 +314,22 @@ Debt is repaid before collateral leaves, so the aToken transfer does not fail th
 
 ```solidity
 // The borrower calls these from their own wallet.
-function authorize(address rescuer, uint16 maxSlippageBps) external; // 0 < maxSlippageBps <= 300
+// HF values are 1e18-scaled, as getUserAccountData returns them. 1e18 < triggerHf < targetHf.
+function authorize(address rescuer, uint16 maxSlippageBps, uint64 triggerHf, uint64 targetHf) external; // 0 < maxSlippageBps <= 300
 function revoke() external;
 // Only the borrower's authorized rescuer can call this.
 function unwind(address borrower, address collateral, uint256 amount, uint24 poolFee)
     external returns (uint256 repaid, uint256 sold);
 ```
 
-`unwind` reverts unless `msg.sender` is the rescuer `borrower` authorized, the pool exists and the collateral owed is within `max_in`. A borrower's limits are their aToken allowance to the helper, `maxSlippageBps`, and the NEAR caps.
+`unwind` reverts unless all of these hold:
+
+- `msg.sender` is the rescuer `borrower` authorized.
+- Health factor is below `triggerHf` before anything moves.
+- The pool exists, and the collateral owed is within `max_in`.
+- After the swap, health factor has risen and is not far past `targetHf`. The exact bound is in `evm/README.md`; it allows for a real price better than the worst one the keeper sized for.
+
+A public view returns a borrower's config, and the keeper reads its trigger and target from it. A borrower's limits are their aToken allowance to the helper, `maxSlippageBps`, `triggerHf`, `targetHf` and the NEAR caps.
 
 UNVERIFIED: Uniswap v3 factory addresses on Base, Arbitrum and Base Sepolia; whether Aave's `withdraw(asset, amount, to)` to the pool inside the callback holds on every Pool revision in section 3; the gas `unwind` uses (expected 350k to 600k).
 
@@ -360,3 +368,15 @@ Base Sepolia's Aave market uses its own test tokens, and they have no real DEX l
 | Allowance or aToken balance too small | `unwind` reverts |
 | Collateral in isolation mode, or frozen or paused on Aave | `unwind` reverts |
 | The borrower revoked | `unwind` reverts |
+| Health factor recovered above the trigger before inclusion | `unwind` reverts with `AboveTrigger`. The keeper records an aborted run |
+
+### Positioning
+
+Read `research/incumbents.md` (outside the repo) before writing any comparison. DeFi Saver has protected Aave v3 positions held in an EOA on Base and Arbitrum since October 2025, so do not claim Levee is the only tool that works without migrating a position. What Levee can claim, once the helper is built and tested:
+
+- No smart wallet, no module and no credit delegation. The borrower gives a capped aToken allowance to a helper that has no owner and cannot be upgraded.
+- The sale price is bounded against Aave's oracle on chain, by the helper.
+- The trigger is checked on chain, by the helper.
+- One NEAR policy covers positions on several chains.
+
+Do not claim lower cost or better execution: Levee swaps in one Uniswap v3 pool, and no mainnet data exists.
