@@ -44,7 +44,7 @@ pnpm install
 pnpm backtest    # from the repo root. Offline, reads data/derived, writes results/
 ```
 
-`pnpm backtest` makes no network calls and is deterministic: a re-run gives byte-identical results.
+`pnpm backtest` makes no network calls and is deterministic: a re-run gives byte-identical results. It takes about 90 seconds and 1.5 GB of memory, most of it for the population parts.
 
 ```sh
 pnpm --filter @levee/backtest test       # simulation tests, including a hand-worked case
