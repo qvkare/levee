@@ -48,13 +48,16 @@ pub fn repay_tx(chain: &ChainConfig, position: &Position, amount: u128, fees: &F
     )
 }
 
-/// `LeveeUnwind.unwind(borrower, collateral, amount, pool_fee)`. `collateral` is the
-/// position's own, which the caller has already read from it.
+/// `LeveeUnwind.unwind(borrower, collateral, amount, pool_fee, max_sold)`.
+/// `collateral` is the position's own, which the caller has already read from it.
+/// `max_sold` is the keeper's: the contract cannot price it, and the helper still
+/// holds the sale to the borrower's own slippage bound.
 pub fn unwind_tx(
     chain: &ChainConfig,
     position: &Position,
     collateral: &CollateralConfig,
     amount: u128,
+    max_sold: u128,
     fees: &Fees,
 ) -> Eip1559Tx {
     let borrower = stored_address(&position.borrower);
@@ -65,7 +68,7 @@ pub fn unwind_tx(
         chain.gas_limit_unwind,
         stored_address(&chain.unwind),
         0,
-        unwind_calldata(&borrower, &asset, amount, collateral.pool_fee),
+        unwind_calldata(&borrower, &asset, amount, collateral.pool_fee, max_sold),
     )
 }
 

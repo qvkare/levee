@@ -31,6 +31,9 @@ struct Vector {
     unwind: String,
     collateral: String,
     pool_fee: u32,
+    /// Collateral base units. "0" for every kind but `unwind`, which is the only one
+    /// that takes it.
+    max_sold: String,
     borrower: String,
     nonce: u64,
     max_fee_per_gas: String,
@@ -84,12 +87,13 @@ impl Vector {
             max_priority_fee_per_gas: U128(self.max_priority_fee_per_gas.parse().unwrap()),
         };
         let amount: u128 = self.amount.parse().unwrap();
+        let max_sold: u128 = self.max_sold.parse().unwrap();
         match self.kind.as_str() {
             "repay" => repay_tx(&chain, &position, amount, &fees),
             "approve" => approve_tx(&chain, amount, &fees),
             "transfer" => transfer_tx(&chain, &position, amount, &fees),
             "value" => sweep_tx(&chain, &position, amount, &fees),
-            "unwind" => unwind_tx(&chain, &position, &collateral, amount, &fees),
+            "unwind" => unwind_tx(&chain, &position, &collateral, amount, max_sold, &fees),
             other => panic!("unknown kind {other}"),
         }
     }
