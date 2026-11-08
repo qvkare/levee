@@ -1,4 +1,4 @@
-//! The four transactions a position can sign, built from stored configuration.
+//! The five transactions a position can sign, built from stored configuration.
 //!
 //! Each function takes the amount and fees, and everything else comes from the
 //! chain config or the position. There is no way to pass a target or calldata.
@@ -6,8 +6,8 @@
 use near_sdk::env;
 
 use crate::address::{parse_address, Address};
-use crate::evm::{approve_calldata, repay_calldata, transfer_calldata, Eip1559Tx};
-use crate::types::{ChainConfig, Fees, Position};
+use crate::evm::{approve_calldata, repay_calldata, transfer_calldata, unwind_calldata, Eip1559Tx};
+use crate::types::{ChainConfig, CollateralConfig, Fees, Position};
 
 /// Addresses are validated before they are stored, so this cannot fail.
 fn stored_address(value: &str) -> Address {
@@ -45,6 +45,27 @@ pub fn repay_tx(chain: &ChainConfig, position: &Position, amount: u128, fees: &F
         stored_address(&chain.pool),
         0,
         repay_calldata(&usdc, amount, &borrower),
+    )
+}
+
+/// `LeveeUnwind.unwind(borrower, collateral, amount, pool_fee)`. `collateral` is the
+/// position's own, which the caller has already read from it.
+pub fn unwind_tx(
+    chain: &ChainConfig,
+    position: &Position,
+    collateral: &CollateralConfig,
+    amount: u128,
+    fees: &Fees,
+) -> Eip1559Tx {
+    let borrower = stored_address(&position.borrower);
+    let asset = stored_address(&collateral.asset);
+    tx(
+        chain,
+        fees,
+        chain.gas_limit_unwind,
+        stored_address(&chain.unwind),
+        0,
+        unwind_calldata(&borrower, &asset, amount, collateral.pool_fee),
     )
 }
 

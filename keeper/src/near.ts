@@ -49,10 +49,20 @@ export interface RescueFees {
   maxPriorityFeePerGas: bigint;
 }
 
+export type RescueMode = 'reserve' | 'collateral';
+
+/** The keeper method for each mode. Both take the same arguments. */
+export const RESCUE_METHODS: Record<RescueMode, string> = {
+  reserve: 'rescue',
+  collateral: 'rescue_from_collateral',
+};
+
 export interface RescueRequest {
   id: number;
   amount: bigint;
   fees: RescueFees;
+  /** Absent means reserve, `rescue`. */
+  mode?: RescueMode;
 }
 
 export interface RescueOutcome {
@@ -64,7 +74,7 @@ export interface RescueOutcome {
   result: RescueResult;
 }
 
-/** The one call the keeper makes on NEAR. Tests replace it here. */
+/** The one call the keeper makes on NEAR, in either mode. Tests replace it here. */
 export interface NearRescuer {
   rescue(request: RescueRequest): Promise<RescueOutcome>;
 }
@@ -83,7 +93,7 @@ export class NearRescueError extends Error {
   }
 }
 
-/** The argument shape of `rescue(id, amount, fees)` from spec section 4. */
+/** `rescue(id, amount, fees)` from spec section 4, and `rescue_from_collateral` from 9. */
 export function rescueArgs({ id, amount, fees }: RescueRequest) {
   return {
     id,
@@ -134,7 +144,8 @@ export function createNearRescuer(options: NearRescuerOptions): NearRescuer {
   /** Signs locally so the hash is known even if the answer to the send never arrives. */
   async function send(request: RescueRequest): Promise<string> {
     // A function-call access key cannot attach a deposit, so this is always zero.
-    const action = actions.functionCall('rescue', rescueArgs(request), gas, 0n);
+    const method = RESCUE_METHODS[request.mode ?? 'reserve'];
+    const action = actions.functionCall(method, rescueArgs(request), gas, 0n);
     for (let attempt = 1; ; attempt++) {
       const signer = account.getSigner();
       if (!signer) throw new Error('account has no signer');
@@ -213,6 +224,11 @@ const bigintLike = z.union([z.string(), z.number()]).transform((value) => BigInt
 
 /** `get_position` from spec section 4. A u64 may arrive as a JSON number or a string. */
 export const positionSchema = z.object({
+  /** Spec section 9. Absent from a v0.1 contract, null for a reserve-only position. */
+  collateral: z
+    .object({ asset: z.string(), pool_fee: z.number().int().nonnegative() })
+    .nullable()
+    .optional(),
   owner: z.string(),
   keeper: z.string(),
   chain_id: z.number().int(),
@@ -228,9 +244,22 @@ export const positionSchema = z.object({
 
 export type Position = z.infer<typeof positionSchema>;
 
+/** `get_chain`, the contract's immutable per-chain config. */
+export const chainConfigSchema = z.object({
+  chain_id: z.number().int(),
+  pool: z.string(),
+  usdc: z.string(),
+  /** Spec section 9. Absent from a v0.1 contract. */
+  unwind: z.string().optional(),
+});
+
+export type ChainConfig = z.infer<typeof chainConfigSchema>;
+
 export interface NearViews {
   /** Caps as of `blockHash` when given, otherwise as of the final block. */
   getPosition(id: number, blockHash?: string): Promise<Position>;
+  /** The contract's config for a chain, or null if it has none. */
+  getChain(chainId: number): Promise<ChainConfig | null>;
   rootPublicKey(): Promise<string>;
   derivedPublicKey(path: string, predecessor: string): Promise<string>;
 }
@@ -253,6 +282,15 @@ export function createNearViews(options: {
         blockQuery: blockHash ? { blockId: blockHash } : { finality: 'final' },
       });
       return positionSchema.parse(raw);
+    },
+    async getChain(chainId) {
+      const raw = await provider.callFunction({
+        contractId: options.contract,
+        method: 'get_chain',
+        args: { chain_id: chainId },
+        blockQuery: { finality: 'final' },
+      });
+      return chainConfigSchema.nullable().parse(raw ?? null);
     },
     rootPublicKey: () => viewString('public_key', { domain_id: 0 }),
     derivedPublicKey: (path, predecessor) =>

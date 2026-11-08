@@ -38,6 +38,12 @@ const ARBITRUM: u64 = 42161;
 const BASE_POOL: &str = "0xa238dd80c259a72e81d7e4664a9801593f98d1c5";
 const BASE_USDC: &str = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 const BORROWER: &str = "0x1234567890abcdef1234567890abcdef12345678";
+/// Stands in for the LeveeUnwind helper on Base. The contract only encodes it.
+const BASE_UNWIND: &str = "0x5555555555555555555555555555555555555555";
+const BASE_WETH: &str = "0x4200000000000000000000000000000000000006";
+const POOL_FEE: u32 = 500;
+/// Not measured yet. Spec section 9 expects 350k to 600k.
+const GAS_LIMIT_UNWIND: u64 = 600_000;
 
 const MAX_FEE_CEILING: u128 = 2_000_000_000;
 const PRIORITY_CEILING: u128 = 100_000_000;
@@ -172,16 +178,18 @@ fn fees(nonce: u64) -> Value {
     })
 }
 
-fn chain(chain_id: u64, pool: &str, usdc: &str) -> ChainConfig {
+fn chain(chain_id: u64, pool: &str, usdc: &str, unwind: &str) -> ChainConfig {
     ChainConfig {
         chain_id,
         pool: pool.into(),
         usdc: usdc.into(),
+        unwind: unwind.into(),
         max_fee_per_gas_ceiling: U128(MAX_FEE_CEILING),
         max_priority_fee_ceiling: U128(PRIORITY_CEILING),
         gas_limit_approve: 70_000,
         gas_limit_repay: 350_000,
         gas_limit_transfer: 80_000,
+        gas_limit_unwind: GAS_LIMIT_UNWIND,
     }
 }
 
@@ -191,13 +199,19 @@ fn chains() -> Vec<ChainConfig> {
             BASE,
             "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5",
             "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            BASE_UNWIND,
         ),
         chain(
             ARBITRUM,
             "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
             "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+            "0x6666666666666666666666666666666666666666",
         ),
     ]
+}
+
+fn collateral() -> Value {
+    json!({ "asset": BASE_WETH, "pool_fee": POOL_FEE })
 }
 
 /// A chain with both contracts deployed and one each of the people involved.
@@ -262,18 +276,32 @@ impl Harness {
         })
     }
 
+    /// A position with no collateral config, as every v0.1 position was. The JSON
+    /// leaves `collateral` out, so this is also what an old caller sends.
     async fn register(&self, caps: Caps) -> anyhow::Result<u64> {
+        self.register_json(caps, None).await
+    }
+
+    async fn register_with_collateral(&self, caps: Caps) -> anyhow::Result<u64> {
+        self.register_json(caps, Some(collateral())).await
+    }
+
+    async fn register_json(&self, caps: Caps, collateral: Option<Value>) -> anyhow::Result<u64> {
+        let mut args = json!({
+            "chain_id": BASE,
+            "borrower": BORROWER,
+            "keeper": self.keeper.id(),
+            "max_per_rescue": caps.max_per_rescue.to_string(),
+            "max_per_day": caps.max_per_day.to_string(),
+            "cooldown_secs": caps.cooldown_secs,
+        });
+        if let Some(collateral) = collateral {
+            args["collateral"] = collateral;
+        }
         let outcome = self
             .owner
             .call(self.levee.id(), "register")
-            .args_json(json!({
-                "chain_id": BASE,
-                "borrower": BORROWER,
-                "keeper": self.keeper.id(),
-                "max_per_rescue": caps.max_per_rescue.to_string(),
-                "max_per_day": caps.max_per_day.to_string(),
-                "cooldown_secs": caps.cooldown_secs,
-            }))
+            .args_json(args)
             .deposit(NearToken::from_millinear(100))
             .gas(CALL_GAS)
             .transact()
@@ -283,8 +311,23 @@ impl Harness {
     }
 
     fn rescue(&self, caller: &Account, id: u64, amount: u128, nonce: u64) -> CallTransaction {
+        self.keeper_call(caller, "rescue", id, amount, nonce)
+    }
+
+    fn unwind(&self, caller: &Account, id: u64, amount: u128, nonce: u64) -> CallTransaction {
+        self.keeper_call(caller, "rescue_from_collateral", id, amount, nonce)
+    }
+
+    fn keeper_call(
+        &self,
+        caller: &Account,
+        method: &str,
+        id: u64,
+        amount: u128,
+        nonce: u64,
+    ) -> CallTransaction {
         caller
-            .call(self.levee.id(), "rescue")
+            .call(self.levee.id(), method)
             .args_json(json!({ "id": id, "amount": amount.to_string(), "fees": fees(nonce) }))
             .gas(CALL_GAS)
     }
@@ -1112,10 +1155,12 @@ async fn replacing_a_queued_loosening_restarts_the_delay() -> anyhow::Result<()>
     Ok(())
 }
 
+/// The v0.1 keeper key. The position can repay from collateral, so the only thing
+/// standing between this key and `rescue_from_collateral` is the key's method list.
 #[tokio::test]
 async fn a_function_call_key_limited_to_rescue_can_do_nothing_else() -> anyhow::Result<()> {
     let h = Harness::unwarped().await?;
-    let id = h.register(CAPS).await?;
+    let id = h.register_with_collateral(CAPS).await?;
 
     // The keeper's hot key, limited as the trust model says.
     let hot = SecretKey::from_random(KeyType::ED25519);
@@ -1139,8 +1184,13 @@ async fn a_function_call_key_limited_to_rescue_can_do_nothing_else() -> anyhow::
     assert!(rescued.is_success(), "{:?}", rescued.failures());
     assert_eq!(h.request(0).await?.deposit, U128(1));
 
-    // Every other method on the contract fails before any code runs.
+    // Every other method on the contract fails before any code runs, including the
+    // other keeper method: a key scoped for reserve mode does not gain collateral mode.
     let methods = [
+        (
+            "rescue_from_collateral",
+            json!({ "id": id, "amount": "1", "fees": fees(1) }),
+        ),
         (
             "prepare_allowance",
             json!({ "id": id, "amount": "1", "fees": fees(0) }),
@@ -1305,19 +1355,33 @@ async fn too_small_a_deposit_is_rejected_and_returned() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn paid_storage_covers_a_position_at_its_largest() -> anyhow::Result<()> {
+    paid_storage_is_exact_at_its_largest(None).await
+}
+
+/// The collateral config makes the record larger, and is charged as stored.
+#[tokio::test]
+async fn paid_storage_covers_a_position_with_collateral_at_its_largest() -> anyhow::Result<()> {
+    paid_storage_is_exact_at_its_largest(Some(collateral())).await
+}
+
+async fn paid_storage_is_exact_at_its_largest(collateral: Option<Value>) -> anyhow::Result<()> {
     let h = Harness::unwarped().await?;
     let usage_before = h.levee.view_account().await?.storage_usage;
+    let mut args = json!({
+        "chain_id": BASE,
+        "borrower": BORROWER,
+        "keeper": "k.test.near",
+        "max_per_rescue": "1",
+        "max_per_day": "1",
+        "cooldown_secs": 0,
+    });
+    if let Some(collateral) = collateral {
+        args["collateral"] = collateral;
+    }
     let outcome = h
         .owner
         .call(h.levee.id(), "register")
-        .args_json(json!({
-            "chain_id": BASE,
-            "borrower": BORROWER,
-            "keeper": "k.test.near",
-            "max_per_rescue": "1",
-            "max_per_day": "1",
-            "cooldown_secs": 0,
-        }))
+        .args_json(args)
         .deposit(NearToken::from_millinear(100))
         .gas(CALL_GAS)
         .transact()
@@ -1396,6 +1460,9 @@ struct Vector {
     chain_id: u64,
     pool: String,
     usdc: String,
+    unwind: String,
+    collateral: String,
+    pool_fee: u32,
     borrower: String,
     nonce: u64,
     max_fee_per_gas: String,
@@ -1411,11 +1478,13 @@ fn without_ceilings(vector: &Vector) -> ChainConfig {
         chain_id: vector.chain_id,
         pool: vector.pool.clone(),
         usdc: vector.usdc.clone(),
+        unwind: vector.unwind.clone(),
         max_fee_per_gas_ceiling: U128(u128::MAX),
         max_priority_fee_ceiling: U128(u128::MAX),
         gas_limit_approve: vector.gas_limit,
         gas_limit_repay: vector.gas_limit,
         gas_limit_transfer: vector.gas_limit,
+        gas_limit_unwind: vector.gas_limit,
     }
 }
 
@@ -1425,7 +1494,7 @@ fn without_ceilings(vector: &Vector) -> ChainConfig {
 async fn the_wasm_matches_every_cast_vector_byte_for_byte() -> anyhow::Result<()> {
     let fixture: Vectors = serde_json::from_str(include_str!("../fixtures/tx_vectors.json"))?;
     let kinds: BTreeSet<&str> = fixture.vectors.iter().map(|v| v.kind.as_str()).collect();
-    assert_eq!(kinds.len(), 4);
+    assert_eq!(kinds.len(), 5);
     let mut checked = 0;
 
     let worker = near_workspaces::sandbox().await?;
@@ -1455,6 +1524,7 @@ async fn the_wasm_matches_every_cast_vector_byte_for_byte() -> anyhow::Result<()
                 "max_per_rescue": u128::MAX.to_string(),
                 "max_per_day": u128::MAX.to_string(),
                 "cooldown_secs": 0,
+                "collateral": { "asset": vector.collateral, "pool_fee": vector.pool_fee },
             }))
             .deposit(NearToken::from_millinear(100))
             .gas(CALL_GAS)
@@ -1469,9 +1539,14 @@ async fn the_wasm_matches_every_cast_vector_byte_for_byte() -> anyhow::Result<()
             "max_priority_fee_per_gas": vector.max_priority_fee_per_gas,
         });
 
-        if vector.kind == "repay" {
+        let preview_method = match vector.kind.as_str() {
+            "repay" => Some("preview_rescue"),
+            "unwind" => Some("preview_rescue_from_collateral"),
+            _ => None,
+        };
+        if let Some(preview_method) = preview_method {
             let preview: PreviewTx = levee
-                .view("preview_rescue")
+                .view(preview_method)
                 .args_json(json!({ "id": id, "amount": vector.amount, "fees": fees }))
                 .await?
                 .json()?;
@@ -1497,6 +1572,10 @@ async fn the_wasm_matches_every_cast_vector_byte_for_byte() -> anyhow::Result<()
             "value" => (
                 "sweep_gas",
                 json!({ "id": id, "amount_wei": vector.amount, "fees": fees }),
+            ),
+            "unwind" => (
+                "rescue_from_collateral",
+                json!({ "id": id, "amount": vector.amount, "fees": fees }),
             ),
             other => panic!("unknown kind {other}"),
         };
@@ -1817,30 +1896,43 @@ fn print_receipts(h: &Harness, label: &str, outcome: &ExecutionFinalResult) {
 async fn gas_of_a_rescue() -> anyhow::Result<()> {
     let h = Harness::unwarped().await?;
     let id = h.register(CAPS).await?;
+    gas_budget_holds(&h, id, "rescue").await
+}
 
+/// The same budget for `rescue_from_collateral`, which reads a larger record and
+/// builds longer calldata. Same constants, so it has to fit the same way.
+#[tokio::test]
+async fn gas_of_a_rescue_from_collateral() -> anyhow::Result<()> {
+    let h = Harness::unwarped().await?;
+    let id = h.register_with_collateral(CAPS).await?;
+    gas_budget_holds(&h, id, "rescue_from_collateral").await
+}
+
+async fn gas_budget_holds(h: &Harness, id: u64, method: &str) -> anyhow::Result<()> {
     for (index, (label, gas)) in [
-        ("rescue, 100 Tgas attached", CALL_GAS),
-        ("rescue, the minimum attached", MIN_SIGNING_GAS),
+        (format!("{method}, 100 Tgas attached"), CALL_GAS),
+        (format!("{method}, the minimum attached"), MIN_SIGNING_GAS),
     ]
     .into_iter()
     .enumerate()
     {
-        let outcome = h.signed(h.rescue(&h.keeper, id, 1, 0).gas(gas)).await?;
+        let call = h.keeper_call(&h.keeper, method, id, 1, 0).gas(gas);
+        let outcome = h.signed(call).await?;
         assert!(outcome.is_success(), "{label}: {:?}", outcome.failures());
         assert!(returned(&outcome)?.is_some(), "{label}: no signature");
-        print_receipts(&h, label, &outcome);
+        print_receipts(h, &label, &outcome);
 
         // Attaching only the minimum still reaches a signer that wants 20 Tgas, five
         // above what the live contracts ask for today.
         assert!(h.request(index).await?.prepaid_gas_tgas >= 20);
 
-        let (method, callback) = own_receipts(&h, &outcome);
+        let (burnt, callback) = own_receipts(h, &outcome);
         let spare_for_method =
             MIN_SIGNING_GAS.as_gas() - SIGN_GAS.as_gas() - ON_SIGNED_GAS.as_gas();
         assert!(
-            method.as_gas() * 3 / 2 <= spare_for_method,
+            burnt.as_gas() * 3 / 2 <= spare_for_method,
             "the method's {:.3} Tgas leaves too little room in the minimum",
-            tgas(method)
+            tgas(burnt)
         );
         assert!(
             callback.as_gas() * 5 <= ON_SIGNED_GAS.as_gas(),
@@ -1855,10 +1947,13 @@ async fn gas_of_a_rescue() -> anyhow::Result<()> {
         .transact()
         .await?
         .into_result()?;
-    let failing = h.rescue(&h.keeper, id, 1, 0).transact().await?;
+    let failing = h
+        .keeper_call(&h.keeper, method, id, 1, 0)
+        .transact()
+        .await?;
     assert!(failing.is_success());
-    print_receipts(&h, "rescue, signature failed", &failing);
-    let (_, callback) = own_receipts(&h, &failing);
+    print_receipts(h, &format!("{method}, signature failed"), &failing);
+    let (_, callback) = own_receipts(h, &failing);
     assert!(
         callback.as_gas() * 5 <= ON_SIGNED_GAS.as_gas(),
         "the failure path's {:.3} Tgas leaves too little room in its reserve",
@@ -1871,5 +1966,274 @@ async fn gas_of_a_rescue() -> anyhow::Result<()> {
         tgas(ON_SIGNED_GAS),
         tgas(MIN_SIGNING_GAS),
     );
+    Ok(())
+}
+
+/// The whole collateral path: the keeper asks, the contract checks and reserves, the
+/// signer signs, and the result assembles into an `unwind` call from the rescuer that
+/// names only what the position registered.
+#[tokio::test]
+async fn happy_path_a_rescue_from_collateral_ends_in_an_unwind_from_the_rescuer(
+) -> anyhow::Result<()> {
+    let h = Harness::unwarped().await?;
+    let caps = Caps {
+        max_per_day: 1_500_000,
+        ..CAPS
+    };
+    let id = h.register_with_collateral(caps).await?;
+
+    let position = h.position(id).await?;
+    let stored = position
+        .collateral
+        .expect("the collateral config was stored");
+    assert_eq!(stored.asset, BASE_WETH);
+    assert_eq!(stored.pool_fee, POOL_FEE);
+
+    let preview: PreviewTx = h
+        .levee
+        .view("preview_rescue_from_collateral")
+        .args_json(json!({ "id": id, "amount": "750000", "fees": fees(3) }))
+        .await?
+        .json()?;
+
+    let outcome = h.signed(h.unwind(&h.keeper, id, 750_000, 3)).await?;
+    assert!(outcome.is_success(), "{:?}", outcome.failures());
+    let signed = returned(&outcome)?.expect("a signature came back");
+    assert_eq!(signed.kind, SignKind::Unwind);
+    assert_eq!(signed.id, id);
+    assert_eq!(preview.unsigned_tx, signed.unsigned_tx);
+    assert_eq!(preview.tx_hash, signed.tx_hash);
+
+    // The same events as a rescue, so a count of rescues stays a count of rescues.
+    let logged = event(&outcome, "rescue_signed");
+    assert_eq!(logged["data"], serde_json::to_value(&signed)?);
+    assert_eq!(logged["data"]["kind"], "unwind");
+    let requested = event(&outcome, "rescue_requested");
+    assert_eq!(requested["data"]["kind"], "unwind");
+    assert_eq!(requested["data"]["amount"], "750000");
+
+    let request = h.request(0).await?;
+    assert_eq!(request.path, format!("levee/v1/{id}"));
+    assert_eq!(request.deposit, U128(1));
+    assert_eq!(format!("0x{}", request.payload), signed.tx_hash);
+
+    let (tx, from) = assemble(&signed);
+    assert_eq!(from, h.rescuer(id));
+    assert_eq!(tx.chain_id, BASE);
+    assert_eq!(tx.nonce, 3);
+    assert_eq!(tx.gas_limit, GAS_LIMIT_UNWIND);
+    assert_eq!(tx.to, TxKind::Call(parse_address(BASE_UNWIND)));
+    assert_eq!(tx.value, U256::ZERO);
+    assert_eq!(tx.input.len(), 132);
+    assert_eq!(tx.input[..4], [0xd0, 0xcd, 0xa3, 0xc2]);
+    assert_eq!(word_address(&tx.input[4..36]), parse_address(BORROWER));
+    assert_eq!(word_address(&tx.input[36..68]), parse_address(BASE_WETH));
+    assert_eq!(U256::from_be_slice(&tx.input[68..100]), U256::from(750_000));
+    assert_eq!(
+        U256::from_be_slice(&tx.input[100..132]),
+        U256::from(POOL_FEE)
+    );
+
+    // Charged to the same budget a rescue uses: 750,001 is within max_per_rescue but
+    // one over what the day has left.
+    let position = h.position(id).await?;
+    assert_eq!(position.spent_today, U128(750_000));
+    let over = h.rescue(&h.keeper, id, 750_001, 4).transact().await?;
+    assert_rejected(&over, "amount exceeds the daily budget");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_position_without_collateral_config_cannot_unwind() -> anyhow::Result<()> {
+    let h = Harness::unwarped().await?;
+    let id = h.register(CAPS).await?;
+    assert_eq!(h.position(id).await?.collateral, None);
+
+    let outcome = h.unwind(&h.keeper, id, 1, 0).transact().await?;
+    assert_rejected(&outcome, "position has no collateral config");
+    let preview = h
+        .levee
+        .view("preview_rescue_from_collateral")
+        .args_json(json!({ "id": id, "amount": "1", "fees": fees(0) }))
+        .await
+        .expect_err("no collateral to preview");
+    assert!(
+        format!("{preview:?}").contains("position has no collateral config"),
+        "{preview:?}"
+    );
+
+    assert!(
+        h.requests().await?.is_empty(),
+        "something reached the signer"
+    );
+    assert_eq!(h.position(id).await?.spent_today, U128(0));
+    // The reserve path is untouched.
+    let rescued = h.signed(h.rescue(&h.keeper, id, 1, 0)).await?;
+    assert!(rescued.is_success(), "{:?}", rescued.failures());
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_bad_collateral_config_is_refused_at_register() -> anyhow::Result<()> {
+    let h = Harness::unwarped().await?;
+    let cases = [
+        (
+            json!({ "asset": BASE_WETH, "pool_fee": 3001 }),
+            "pool_fee must be 100, 500, 3000 or 10000",
+        ),
+        (
+            json!({ "asset": "0x42", "pool_fee": 500 }),
+            "address must be 0x followed by 40 hex characters",
+        ),
+        (
+            json!({ "asset": BASE_USDC, "pool_fee": 500 }),
+            "the collateral cannot be USDC",
+        ),
+    ];
+    for (collateral, message) in cases {
+        let outcome = h
+            .owner
+            .call(h.levee.id(), "register")
+            .args_json(json!({
+                "chain_id": BASE,
+                "borrower": BORROWER,
+                "keeper": h.keeper.id(),
+                "max_per_rescue": "1",
+                "max_per_day": "1",
+                "cooldown_secs": 0,
+                "collateral": collateral,
+            }))
+            .deposit(NearToken::from_millinear(100))
+            .gas(CALL_GAS)
+            .transact()
+            .await?;
+        assert_rejected(&outcome, message);
+    }
+    Ok(())
+}
+
+/// The keeper key for collateral mode. It reaches `rescue_from_collateral` and
+/// nothing else, `rescue` included.
+#[tokio::test]
+async fn a_function_call_key_limited_to_rescue_from_collateral_can_do_nothing_else(
+) -> anyhow::Result<()> {
+    let h = Harness::unwarped().await?;
+    let id = h.register_with_collateral(CAPS).await?;
+
+    let hot = SecretKey::from_random(KeyType::ED25519);
+    h.keeper
+        .batch(h.keeper.id())
+        .add_key(
+            hot.public_key(),
+            AccessKey::function_call_access(
+                h.levee.id(),
+                &["rescue_from_collateral"],
+                Some(NearToken::from_near(1)),
+            ),
+        )
+        .transact()
+        .await?
+        .into_result()?;
+    let hot_keeper = Account::from_secret_key(h.keeper.id().clone(), hot, &h.worker);
+
+    let unwound = h.signed(h.unwind(&hot_keeper, id, 1, 0)).await?;
+    assert!(unwound.is_success(), "{:?}", unwound.failures());
+    assert_eq!(
+        returned(&unwound)?.map(|signed| signed.kind),
+        Some(SignKind::Unwind)
+    );
+
+    let methods = [
+        (
+            "rescue",
+            json!({ "id": id, "amount": "1", "fees": fees(1) }),
+        ),
+        (
+            "prepare_allowance",
+            json!({ "id": id, "amount": "1", "fees": fees(1) }),
+        ),
+        ("set_keeper", json!({ "id": id, "keeper": h.stranger.id() })),
+        (
+            "tighten",
+            json!({ "id": id, "max_per_rescue": "1", "max_per_day": "1", "cooldown_secs": 0 }),
+        ),
+        (
+            "queue_loosen",
+            json!({ "id": id, "max_per_rescue": "2", "max_per_day": "2", "cooldown_secs": 0 }),
+        ),
+        ("apply_loosen", json!({ "id": id })),
+        ("pause", json!({ "id": id })),
+        ("resume", json!({ "id": id })),
+        (
+            "withdraw_float",
+            json!({ "id": id, "amount": "1", "fees": fees(1) }),
+        ),
+        (
+            "sweep_gas",
+            json!({ "id": id, "amount_wei": "1", "fees": fees(1) }),
+        ),
+        ("on_signed", json!({})),
+    ];
+    for (method, args) in methods {
+        let error = hot_keeper
+            .call(h.levee.id(), method)
+            .args_json(args)
+            .gas(CALL_GAS)
+            .transact()
+            .await
+            .expect_err(method);
+        assert!(
+            format!("{error:?}").contains("MethodNameMismatch"),
+            "{method}: {error:?}"
+        );
+    }
+
+    let with_deposit = h
+        .unwind(&hot_keeper, id, 1, 1)
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await
+        .expect_err("a deposit");
+    assert!(
+        format!("{with_deposit:?}").contains("DepositWithFunctionCall"),
+        "{with_deposit:?}"
+    );
+    let transfer = hot_keeper
+        .transfer_near(h.stranger.id(), NearToken::from_yoctonear(1))
+        .await;
+    assert!(transfer.is_err(), "the key moved funds");
+
+    let position = h.position(id).await?;
+    assert_eq!(position.spent_today, U128(1));
+    assert_eq!(h.requests().await?.len(), 1);
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_unwind_signature_failure_releases_the_budget() -> anyhow::Result<()> {
+    let h = Harness::unwarped().await?;
+    let id = h
+        .register_with_collateral(Caps {
+            cooldown_secs: 86_400,
+            ..CAPS
+        })
+        .await?;
+    h.signer
+        .call("set_failing")
+        .args_json(json!({ "failing": true }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let outcome = h.unwind(&h.keeper, id, 1_000_000, 0).transact().await?;
+    assert!(outcome.is_success(), "{:?}", outcome.failures());
+    assert_eq!(returned(&outcome)?, None);
+    let failed = event(&outcome, "rescue_failed");
+    assert_eq!(failed["data"]["kind"], "unwind");
+    assert_eq!(failed["data"]["reason"], "mpc_failed");
+    assert_eq!(failed["data"]["released"], "1000000");
+    let position = h.position(id).await?;
+    assert_eq!(position.spent_today, U128(0));
+    assert_eq!(position.last_rescue_at, 0);
     Ok(())
 }

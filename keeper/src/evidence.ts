@@ -6,15 +6,31 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import type { Address } from 'viem';
 import type { Caps, Decision } from './decision.js';
-import type { Sample } from './quorum.js';
+import type { CollateralSample, Sample } from './quorum.js';
 import { rescueResultSchema } from './signature.js';
+import type { SwapPrice } from './unwind.js';
 
 /** `network` for a run that never touched a real chain or the real MPC. */
 export const SIMULATED = 'simulated';
 
 const decimal = z.string().regex(/^\d+$/);
+const signedDecimal = z.string().regex(/^-?\d+$/);
 const hex = z.string().regex(/^0x[0-9a-fA-F]*$/);
+
+/** Collateral mode. Absent from reserve samples, and from every record before v0.2. */
+const collateralSampleSchema = z.object({
+  price_base: decimal,
+  decimals: decimal,
+  liquidation_threshold_bps: decimal,
+  a_token_balance: decimal,
+  a_token_allowance: decimal,
+  authorized_rescuer: z.string(),
+  max_slippage_bps: decimal,
+  trigger_hf: decimal,
+  target_hf: decimal,
+});
 
 const sampleSchema = z.object({
   rpc: z.string(),
@@ -29,9 +45,12 @@ const sampleSchema = z.object({
   usdc_debt: decimal,
   rescuer_usdc: decimal,
   rescuer_allowance: decimal,
+  collateral: collateralSampleSchema.optional(),
 });
 
 type TraceSample = z.infer<typeof sampleSchema>;
+
+const logSchema = z.object({ address: z.string(), topics: z.array(hex), data: hex });
 
 const capsSchema = z.object({
   max_per_rescue: decimal,
@@ -89,6 +108,24 @@ const traceSchema = z.object({
       effective_gas_price: decimal,
     })
     .nullable(),
+  /** Collateral mode: what the contract signs for. The helper comes from `get_chain`. */
+  collateral: z
+    .object({ asset: z.string(), helper: z.string(), pool_fee: decimal })
+    .nullable()
+    .optional(),
+  /** Collateral mode: the helper's `Unwound` log and the oracle at its block. */
+  unwound: z
+    .object({
+      log: logSchema,
+      decimals: decimal,
+      /** Null if no endpoint could read the oracle at that block. */
+      collateral_price_base: decimal.nullable(),
+      usdc_price_base: decimal.nullable(),
+    })
+    .nullable()
+    .optional(),
+  /** A revert, replayed with `eth_call` at its block to read the reason. */
+  revert: z.object({ data: hex.nullable(), error: z.string() }).nullable().optional(),
 });
 
 export type Trace = z.infer<typeof traceSchema>;
@@ -119,11 +156,35 @@ export const runRecordSchema = z.object({
   near_contract: z.string(),
   /** Signer of `near_tx`. The RPC cannot resolve a hash without it. */
   near_sender: z.string().nullable(),
+  /** Spec section 9. A record without it is from before v0.2, and is reserve mode. */
+  mode: z.enum(['reserve', 'collateral']).optional(),
+  /** Collateral mode: the asset the helper may sell. */
+  collateral: z.string().nullable().optional(),
+  /** Collateral mode: collateral base units sold, from the helper's `Unwound` event. */
+  sold: decimal.nullable().optional(),
+  /** Collateral mode: what the swap paid against Aave's oracle at its block. */
+  swap: z
+    .object({
+      repaid: decimal,
+      sold: decimal,
+      collateral_price_base: decimal,
+      usdc_price_base: decimal,
+      /** Base currency per whole collateral token, after the pool fee. */
+      effective_price_base: decimal,
+      /** How far below the oracle the collateral sold. Negative is above it. */
+      discount_bps: signedDecimal,
+    })
+    .nullable()
+    .optional(),
   trace: traceSchema.optional(),
 });
 
 export type RunRecord = z.infer<typeof runRecordSchema>;
 export type RunOutcome = RunRecord['outcome'];
+export type RunMode = NonNullable<RunRecord['mode']>;
+
+/** A record with no `mode` predates collateral mode, so it is reserve. */
+export const modeOf = (run: Pick<RunRecord, 'mode'>): RunMode => run.mode ?? 'reserve';
 
 /** `2026-11-09T10-12-03Z-base-1`, the form in spec section 6. */
 export function runId(date: Date, chainName: string, positionId: number): string {
@@ -196,6 +257,34 @@ export async function readRuns(
   return { runs, invalid };
 }
 
+function collateralToTrace(sample: CollateralSample): z.infer<typeof collateralSampleSchema> {
+  return {
+    price_base: sample.priceBase.toString(),
+    decimals: sample.decimals.toString(),
+    liquidation_threshold_bps: sample.liquidationThresholdBps.toString(),
+    a_token_balance: sample.aTokenBalance.toString(),
+    a_token_allowance: sample.aTokenAllowance.toString(),
+    authorized_rescuer: sample.authorizedRescuer,
+    max_slippage_bps: sample.maxSlippageBps.toString(),
+    trigger_hf: sample.triggerHf.toString(),
+    target_hf: sample.targetHf.toString(),
+  };
+}
+
+function collateralFromTrace(sample: z.infer<typeof collateralSampleSchema>): CollateralSample {
+  return {
+    priceBase: BigInt(sample.price_base),
+    decimals: BigInt(sample.decimals),
+    liquidationThresholdBps: BigInt(sample.liquidation_threshold_bps),
+    aTokenBalance: BigInt(sample.a_token_balance),
+    aTokenAllowance: BigInt(sample.a_token_allowance),
+    authorizedRescuer: sample.authorized_rescuer as Address,
+    maxSlippageBps: BigInt(sample.max_slippage_bps),
+    triggerHf: BigInt(sample.trigger_hf),
+    targetHf: BigInt(sample.target_hf),
+  };
+}
+
 export function sampleToTrace(sample: Sample): TraceSample {
   return {
     rpc: sample.rpc,
@@ -210,6 +299,7 @@ export function sampleToTrace(sample: Sample): TraceSample {
     usdc_debt: sample.usdcDebt.toString(),
     rescuer_usdc: sample.rescuerUsdc.toString(),
     rescuer_allowance: sample.rescuerAllowance.toString(),
+    ...(sample.collateral ? { collateral: collateralToTrace(sample.collateral) } : {}),
   };
 }
 
@@ -227,6 +317,18 @@ export function sampleFromTrace(sample: TraceSample): Sample {
     usdcDebt: BigInt(sample.usdc_debt),
     rescuerUsdc: BigInt(sample.rescuer_usdc),
     rescuerAllowance: BigInt(sample.rescuer_allowance),
+    ...(sample.collateral ? { collateral: collateralFromTrace(sample.collateral) } : {}),
+  };
+}
+
+export function swapToRecord(swap: SwapPrice): NonNullable<RunRecord['swap']> {
+  return {
+    repaid: swap.repaid.toString(),
+    sold: swap.sold.toString(),
+    collateral_price_base: swap.collateralPriceBase.toString(),
+    usdc_price_base: swap.usdcPriceBase.toString(),
+    effective_price_base: swap.effectivePriceBase.toString(),
+    discount_bps: swap.discountBps.toString(),
   };
 }
 

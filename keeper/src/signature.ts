@@ -17,6 +17,7 @@ import {
   serializeTransaction,
 } from 'viem';
 import { z } from 'zod';
+import { decodeUnwind } from './unwind.js';
 
 /** secp256k1 group order. EIP-2 rejects signatures with `s` above half of it. */
 const SECP256K1_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
@@ -171,6 +172,22 @@ export interface RepayIntent {
   rescuer: Address;
 }
 
+/** Collateral mode: what `rescue_from_collateral` was asked to sign. */
+export interface UnwindIntent {
+  chainId: number;
+  nonce: number;
+  maxFeePerGas: bigint;
+  maxPriorityFeePerGas: bigint;
+  /** The chain's `LeveeUnwind`, from the contract's `get_chain`. */
+  helper: Address;
+  borrower: Address;
+  /** The position's collateral asset and fee tier, from `get_position`. */
+  collateral: Address;
+  poolFee: bigint;
+  amount: bigint;
+  rescuer: Address;
+}
+
 export interface DecodedRepay {
   asset: Address;
   amount: bigint;
@@ -193,24 +210,17 @@ export function decodeRepay(data: Hex): DecodedRepay | null {
 const sameAddress = (a: string | null | undefined, b: string): boolean =>
   a?.toLowerCase() === b.toLowerCase();
 
-/**
- * The broadcast gate. Everything the keeper asked for is compared with what was signed,
- * so a bug or a compromise anywhere upstream ends here rather than on chain.
- */
-export function assertMatchesIntent(assembled: AssembledTransaction, intent: RepayIntent): void {
-  const { tx, signer } = assembled;
-  const refuse = (reason: string, message: string): never => {
-    throw new SignatureRefused(reason, message);
-  };
+const refuse = (reason: string, message: string): never => {
+  throw new SignatureRefused(reason, message);
+};
 
-  if (!sameAddress(signer, intent.rescuer)) {
-    refuse('signer_mismatch', `recovered ${signer}, derived rescuer is ${intent.rescuer}`);
-  }
+type Envelope = Pick<RepayIntent, 'chainId' | 'nonce' | 'maxFeePerGas' | 'maxPriorityFeePerGas'>;
+
+/** Every field but the signer, the target and the calldata. */
+function assertEnvelope(assembled: AssembledTransaction, intent: Envelope): void {
+  const { tx } = assembled;
   if (tx.chainId !== intent.chainId) {
     refuse('intent_mismatch', `chain id ${tx.chainId}, expected ${intent.chainId}`);
-  }
-  if (!sameAddress(tx.to, intent.pool)) {
-    refuse('intent_mismatch', `target ${tx.to}, expected the Pool ${intent.pool}`);
   }
   if ((tx.value ?? 0n) !== 0n) {
     refuse('intent_mismatch', `value ${tx.value}, expected 0`);
@@ -227,6 +237,21 @@ export function assertMatchesIntent(assembled: AssembledTransaction, intent: Rep
       `priority fee ${tx.maxPriorityFeePerGas}, expected ${intent.maxPriorityFeePerGas}`,
     );
   }
+}
+
+/**
+ * The broadcast gate. Everything the keeper asked for is compared with what was signed,
+ * so a bug or a compromise anywhere upstream ends here rather than on chain.
+ */
+export function assertMatchesIntent(assembled: AssembledTransaction, intent: RepayIntent): void {
+  const { tx } = assembled;
+  if (!sameAddress(assembled.signer, intent.rescuer)) {
+    refuse('signer_mismatch', `recovered ${assembled.signer}, derived rescuer is ${intent.rescuer}`);
+  }
+  if (!sameAddress(tx.to, intent.pool)) {
+    refuse('intent_mismatch', `target ${tx.to}, expected the Pool ${intent.pool}`);
+  }
+  assertEnvelope(assembled, intent);
 
   const repay = decodeRepay(tx.data ?? '0x');
   if (!repay) {
@@ -243,5 +268,37 @@ export function assertMatchesIntent(assembled: AssembledTransaction, intent: Rep
   }
   if (!sameAddress(repay.onBehalfOf, intent.borrower)) {
     refuse('intent_mismatch', `onBehalfOf ${repay.onBehalfOf}, expected ${intent.borrower}`);
+  }
+}
+
+/** The broadcast gate for collateral mode: an `unwind` on the helper, and nothing else. */
+export function assertMatchesUnwindIntent(
+  assembled: AssembledTransaction,
+  intent: UnwindIntent,
+): void {
+  const { tx } = assembled;
+  if (!sameAddress(assembled.signer, intent.rescuer)) {
+    refuse('signer_mismatch', `recovered ${assembled.signer}, derived rescuer is ${intent.rescuer}`);
+  }
+  if (!sameAddress(tx.to, intent.helper)) {
+    refuse('intent_mismatch', `target ${tx.to}, expected the helper ${intent.helper}`);
+  }
+  assertEnvelope(assembled, intent);
+
+  const unwind = decodeUnwind(tx.data ?? '0x');
+  if (!unwind) {
+    return refuse('intent_mismatch', `calldata is not unwind: ${(tx.data ?? '0x').slice(0, 10)}`);
+  }
+  if (!sameAddress(unwind.borrower, intent.borrower)) {
+    refuse('intent_mismatch', `borrower ${unwind.borrower}, expected ${intent.borrower}`);
+  }
+  if (!sameAddress(unwind.collateral, intent.collateral)) {
+    refuse('intent_mismatch', `collateral ${unwind.collateral}, expected ${intent.collateral}`);
+  }
+  if (unwind.amount !== intent.amount) {
+    refuse('intent_mismatch', `amount ${unwind.amount}, expected ${intent.amount}`);
+  }
+  if (unwind.poolFee !== intent.poolFee) {
+    refuse('intent_mismatch', `pool fee ${unwind.poolFee}, expected ${intent.poolFee}`);
   }
 }

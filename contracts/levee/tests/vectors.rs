@@ -7,8 +7,8 @@ use std::collections::BTreeSet;
 
 use levee::address::normalise_address;
 use levee::evm::{signing_hash, Eip1559Tx};
-use levee::txs::{approve_tx, repay_tx, sweep_tx, transfer_tx};
-use levee::types::{ChainConfig, Fees, Position};
+use levee::txs::{approve_tx, repay_tx, sweep_tx, transfer_tx, unwind_tx};
+use levee::types::{ChainConfig, CollateralConfig, Fees, Position};
 use near_sdk::json_types::U128;
 use near_sdk::test_utils::VMContextBuilder;
 use near_sdk::testing_env;
@@ -28,6 +28,9 @@ struct Vector {
     chain_id: u64,
     pool: String,
     usdc: String,
+    unwind: String,
+    collateral: String,
+    pool_fee: u32,
     borrower: String,
     nonce: u64,
     max_fee_per_gas: String,
@@ -48,17 +51,24 @@ impl Vector {
             chain_id: self.chain_id,
             pool: normalise_address(&self.pool).unwrap(),
             usdc: normalise_address(&self.usdc).unwrap(),
+            unwind: normalise_address(&self.unwind).unwrap(),
             max_fee_per_gas_ceiling: U128(u128::MAX),
             max_priority_fee_ceiling: U128(u128::MAX),
             gas_limit_approve: self.gas_limit,
             gas_limit_repay: self.gas_limit,
             gas_limit_transfer: self.gas_limit,
+            gas_limit_unwind: self.gas_limit,
+        };
+        let collateral = CollateralConfig {
+            asset: normalise_address(&self.collateral).unwrap(),
+            pool_fee: self.pool_fee,
         };
         let position = Position {
             owner: "owner.near".parse().unwrap(),
             keeper: "keeper.near".parse().unwrap(),
             chain_id: self.chain_id,
             borrower: normalise_address(&self.borrower).unwrap(),
+            collateral: Some(collateral.clone()),
             max_per_rescue: U128(0),
             max_per_day: U128(0),
             cooldown_secs: 0,
@@ -79,6 +89,7 @@ impl Vector {
             "approve" => approve_tx(&chain, amount, &fees),
             "transfer" => transfer_tx(&chain, &position, amount, &fees),
             "value" => sweep_tx(&chain, &position, amount, &fees),
+            "unwind" => unwind_tx(&chain, &position, &collateral, amount, &fees),
             other => panic!("unknown kind {other}"),
         }
     }
@@ -99,13 +110,24 @@ fn fixture_covers_every_kind_on_both_chains() {
         .map(|v| (v.kind.clone(), v.chain_id))
         .collect();
     for chain_id in [8453, 42161] {
-        for kind in ["approve", "repay", "transfer", "value"] {
+        for kind in ["approve", "repay", "transfer", "value", "unwind"] {
             assert!(
                 seen.contains(&(kind.to_string(), chain_id)),
                 "no vector for {kind} on {chain_id}"
             );
         }
     }
+}
+
+/// Every fee tier the contract accepts is encoded at least once.
+#[test]
+fn fixture_covers_every_fee_tier() {
+    let tiers: BTreeSet<u32> = vectors()
+        .iter()
+        .filter(|v| v.kind == "unwind")
+        .map(|v| v.pool_fee)
+        .collect();
+    assert_eq!(tiers, BTreeSet::from(levee::policy::POOL_FEES));
 }
 
 #[test]

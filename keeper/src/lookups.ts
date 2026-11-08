@@ -89,6 +89,18 @@ function nearLookup(network: Network, urls: string[]): NearLookup {
       }
       return publicKeyToAddress(derived);
     },
+
+    async chain(contract, chainId) {
+      const errors: string[] = [];
+      for (const rpcUrl of urls) {
+        try {
+          return await createNearViews({ rpcUrl, contract, mpc }).getChain(chainId);
+        } catch (error) {
+          errors.push(`${rpcUrl}: ${describeError(error)}`);
+        }
+      }
+      throw new Error(`could not read get_chain on ${contract}: ${errors.join('; ')}`);
+    },
   };
 }
 

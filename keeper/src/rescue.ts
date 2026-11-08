@@ -1,6 +1,6 @@
 /**
- * One pass of the keeper loop for one position, spec section 5. Every attempt that
- * gets as far as wanting to act ends in a run record, including the ones that fail.
+ * One pass of the keeper loop for one position, spec sections 5 and 9. Every attempt
+ * that gets as far as wanting to act ends in a run record, including the ones that fail.
  */
 import type { Address, Hex } from 'viem';
 import { broadcastToAll, waitForReceipt } from './broadcast.js';
@@ -24,19 +24,33 @@ import {
   decisionToTrace,
   runId,
   sampleToTrace,
+  swapToRecord,
   writeRun,
 } from './evidence.js';
-import type { EvmClient } from './evm.js';
+import type { EvmClient, EvmReceipt } from './evm.js';
 import { type FeeCeilings, chooseFees, chooseNonce } from './fees.js';
-import { NearRescueError, type NearRescuer, type NearViews, type Position } from './near.js';
+import {
+  NearRescueError,
+  type NearRescuer,
+  type NearViews,
+  type Position,
+  type RescueMode,
+} from './near.js';
 import { DEFAULT_QUORUM, type QuorumResult, type Sample, readQuorum } from './quorum.js';
 import {
   type AssembledTransaction,
-  type RepayIntent,
   SignatureRefused,
   assembleSignedTransaction,
   assertMatchesIntent,
+  assertMatchesUnwindIntent,
 } from './signature.js';
+import {
+  decodeUnwound,
+  helperConfigMismatch,
+  isAboveTrigger,
+  swapPrice,
+  unwoundEvents,
+} from './unwind.js';
 
 export interface PositionTarget {
   id: number;
@@ -45,6 +59,20 @@ export interface PositionTarget {
   target: string;
   triggerWad: bigint;
   targetWad: bigint;
+  /** Absent means reserve. */
+  mode?: RescueMode;
+  /** Collateral mode: the borrower's slippage limit, as set at the helper. */
+  maxSlippageBps?: bigint;
+}
+
+/** Collateral mode: what the contract signs for, read from it at start. */
+export interface CollateralContext {
+  /** The position's collateral asset, from `get_position`. */
+  asset: Address;
+  /** The chain's `LeveeUnwind`, from `get_chain`. */
+  helper: Address;
+  /** Uniswap v3 fee tier, from `get_position`. */
+  poolFee: bigint;
 }
 
 export interface RescueContext {
@@ -67,6 +95,8 @@ export interface RescueContext {
   receiptPollMs?: number;
   /** Returns false to keep a repeating refusal out of the evidence. */
   allowAbortRecord?: (reason: string) => boolean;
+  /** Set for a position in collateral mode, and only then. */
+  collateral?: CollateralContext;
 }
 
 export interface TickOptions {
@@ -120,6 +150,30 @@ export function decisionInputFor(
   };
 }
 
+/**
+ * Collateral mode. The trigger, target and slippage are the borrower's own, read from
+ * the helper in the same sample, because those are what `unwind` enforces.
+ */
+export function collateralDecisionInputFor(sample: Sample, caps: Caps, poolFee: bigint): DecisionInput {
+  const collateral = sample.collateral;
+  if (!collateral) throw new Error('a collateral decision needs a collateral sample');
+  return {
+    ...decisionInputFor(sample, caps, collateral.triggerHf, collateral.targetHf),
+    collateral: {
+      priceBase: collateral.priceBase,
+      decimals: collateral.decimals,
+      liquidationThresholdBps: collateral.liquidationThresholdBps,
+      aTokenBalance: collateral.aTokenBalance,
+      aTokenAllowance: collateral.aTokenAllowance,
+      poolFee,
+      maxSlippageBps: collateral.maxSlippageBps,
+    },
+  };
+}
+
+const modeOf = (ctx: Pick<RescueContext, 'collateral'>): RescueMode =>
+  ctx.collateral ? 'collateral' : 'reserve';
+
 const describeError = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
@@ -169,8 +223,18 @@ class Attempt {
       evm_block: null,
       near_contract: ctx.nearContract,
       near_sender: null,
+      mode: modeOf(ctx),
       trace: this.trace,
     };
+    if (ctx.collateral) {
+      const { asset, helper, poolFee } = ctx.collateral;
+      Object.assign(this.record, { collateral: asset, sold: null, swap: null });
+      Object.assign(this.trace, {
+        collateral: { asset, helper, pool_fee: poolFee.toString() },
+        unwound: null,
+        revert: null,
+      });
+    }
   }
 
   noteQuorum(quorum: QuorumResult): void {
@@ -186,7 +250,10 @@ class Attempt {
   /** Writes the record, unless a repeating refusal has already been recorded. */
   async finish(outcome: RunOutcome, reason: string | null, detail?: string): Promise<TickResult> {
     const { ctx, record } = this;
-    if (outcome === 'aborted' && reason && ctx.allowAbortRecord && !ctx.allowAbortRecord(reason)) {
+    // Only a refusal that never reached the lending chain can repeat for free. An abort
+    // after a broadcast, such as `above_trigger`, spent gas and is always recorded.
+    const repeatable = outcome === 'aborted' && record.evm_tx === null;
+    if (repeatable && reason && ctx.allowAbortRecord && !ctx.allowAbortRecord(reason)) {
       return { status: 'quiet', reason };
     }
     record.outcome = outcome;
@@ -262,7 +329,87 @@ async function sendAndConfirm(
   const healthAfter = await readHealthAfter(ctx, receipt.blockNumber);
   record.health_factor_after = healthAfter === null ? null : formatWad(healthAfter);
 
+  if (ctx.collateral && receipt.success) await noteUnwound(ctx, attempt, receipt);
+  if (ctx.collateral && !receipt.success) {
+    const revert = await readRevert(ctx, assembled, receipt.blockNumber);
+    trace.revert = revert;
+    // The health factor recovered between the read and inclusion, and the helper
+    // refused. Nothing moved but gas, which is a no-op, not a failed rescue.
+    if (isAboveTrigger(revert?.data)) return attempt.finish('aborted', 'above_trigger');
+    return attempt.finish('failed', 'evm_reverted', revert?.data?.slice(0, 10) ?? revert?.error);
+  }
+
   return receipt.success ? attempt.finish('success', null) : attempt.finish('failed', 'evm_reverted');
+}
+
+/** The first answer any endpoint gives, or null if none does. */
+async function firstAnswer<T>(
+  ctx: RescueContext,
+  what: string,
+  read: (client: EvmClient) => Promise<T>,
+): Promise<T | null> {
+  for (const client of ctx.clients) {
+    try {
+      return await read(client);
+    } catch (error) {
+      ctx.log(`${what} failed on ${client.url}: ${describeError(error)}`);
+    }
+  }
+  return null;
+}
+
+/**
+ * Reads what the helper sold from its `Unwound` event, and prices it against Aave's
+ * oracle at the same block. The event is the helper's own account of the swap.
+ */
+async function noteUnwound(ctx: RescueContext, attempt: Attempt, receipt: EvmReceipt): Promise<void> {
+  const collateral = ctx.collateral as CollateralContext;
+  const log = (receipt.logs ?? []).find(
+    (candidate) => unwoundEvents([candidate], collateral.helper).length > 0,
+  );
+  const event = log ? decodeUnwound(log) : null;
+  if (!event || !log) {
+    ctx.log(`position ${ctx.position.id}: no Unwound event from ${collateral.helper}`);
+    return;
+  }
+  const decimals = attempt.trace.quorum?.samples[0]?.collateral?.decimals ?? null;
+  const prices = await firstAnswer(ctx, 'oracle read', (client) =>
+    client.readAssetPrices(ctx.chain.pool, [collateral.asset, ctx.chain.usdc], receipt.blockNumber),
+  );
+  const [collateralPrice, usdcPrice] = prices ?? [];
+  attempt.record.sold = event.sold.toString();
+  attempt.trace.unwound = {
+    log,
+    decimals: decimals ?? '0',
+    collateral_price_base: collateralPrice?.toString() ?? null,
+    usdc_price_base: usdcPrice?.toString() ?? null,
+  };
+  if (decimals !== null && collateralPrice !== undefined && usdcPrice !== undefined) {
+    attempt.record.swap = swapToRecord(
+      swapPrice(event, BigInt(decimals), collateralPrice, usdcPrice),
+    );
+  }
+}
+
+/**
+ * Replays the reverted call on the state at its block to read why it reverted, since a
+ * receipt does not say. Calls after it in the same block are in that state too, so the
+ * answer is the likely reason, not a proof.
+ */
+async function readRevert(
+  ctx: RescueContext,
+  assembled: AssembledTransaction,
+  blockNumber: bigint,
+): Promise<NonNullable<Trace['revert']> | null> {
+  const { tx } = assembled;
+  if (!tx.to) return null;
+  const call = { from: ctx.rescuer, to: tx.to, data: tx.data ?? '0x', gas: tx.gas ?? 0n };
+  const result = await firstAnswer(ctx, 'revert replay', (client) =>
+    client.simulate(call, blockNumber),
+  );
+  if (!result) return null;
+  if (!result.reverted) return { data: null, error: 'the call no longer reverts at its block' };
+  return { data: result.data, error: result.error };
 }
 
 async function signAndSubmit(
@@ -293,6 +440,7 @@ async function signAndSubmit(
       id: ctx.position.id,
       amount: decision.amount,
       fees: rescueFees,
+      ...(ctx.collateral ? { mode: 'collateral' as const } : {}),
     });
   } catch (error) {
     if (error instanceof NearRescueError) {
@@ -309,10 +457,8 @@ async function signAndSubmit(
   record.timestamps_ms.signed = outcome.signedAtMs;
   trace.rescue_result = outcome.result;
 
-  const intent: RepayIntent = {
+  const common = {
     chainId: ctx.chain.chainId,
-    pool: ctx.chain.pool,
-    usdc: ctx.chain.usdc,
     borrower: ctx.borrower,
     rescuer: ctx.rescuer,
     amount: decision.amount,
@@ -323,7 +469,12 @@ async function signAndSubmit(
   try {
     assembled = await assembleSignedTransaction(outcome.result);
     trace.signed_tx = assembled.serialized;
-    assertMatchesIntent(assembled, intent);
+    if (ctx.collateral) {
+      const { helper, asset, poolFee } = ctx.collateral;
+      assertMatchesUnwindIntent(assembled, { ...common, helper, collateral: asset, poolFee });
+    } else {
+      assertMatchesIntent(assembled, { ...common, pool: ctx.chain.pool, usdc: ctx.chain.usdc });
+    }
   } catch (error) {
     if (error instanceof SignatureRefused) {
       return attempt.finish('aborted', error.reason, error.message);
@@ -343,17 +494,17 @@ async function run(
   const { record, trace } = attempt;
   const manual = options.manualAmount !== undefined;
 
+  const query = {
+    pool: ctx.chain.pool,
+    usdc: ctx.chain.usdc,
+    borrower: ctx.borrower,
+    rescuer: ctx.rescuer,
+    ...(ctx.collateral
+      ? { collateral: { asset: ctx.collateral.asset, helper: ctx.collateral.helper } }
+      : {}),
+  };
   const quorum = await readQuorum(
-    ctx.clients.map((client) => ({
-      url: client.url,
-      read: () =>
-        client.readSample({
-          pool: ctx.chain.pool,
-          usdc: ctx.chain.usdc,
-          borrower: ctx.borrower,
-          rescuer: ctx.rescuer,
-        }),
-    })),
+    ctx.clients.map((client) => ({ url: client.url, read: () => client.readSample(query) })),
     { ...DEFAULT_QUORUM, chainId: ctx.chain.chainId },
     ctx.now,
   );
@@ -371,7 +522,22 @@ async function run(
 
   const { sample } = quorum;
   record.health_factor_before = formatWad(sample.healthFactor);
-  if (!manual && sample.healthFactor >= position.triggerWad) {
+
+  // Collateral mode acts on the borrower's own settings at the helper. They were
+  // checked against the keeper's at start, and a change since stops the keeper.
+  let trigger = position.triggerWad;
+  if (ctx.collateral) {
+    if (!sample.collateral) return attempt.finish('aborted', 'collateral_unavailable');
+    const { authorizedRescuer, maxSlippageBps, triggerHf, targetHf } = sample.collateral;
+    const mismatch = helperConfigMismatch(
+      position,
+      { rescuer: authorizedRescuer, maxSlippageBps, triggerHf, targetHf },
+      ctx.rescuer,
+    );
+    if (mismatch) return attempt.finish('aborted', 'helper_config_mismatch', mismatch);
+    trigger = triggerHf;
+  }
+  if (!manual && sample.healthFactor >= trigger) {
     return { status: 'idle', reason: 'healthy', healthFactor: sample.healthFactor };
   }
 
@@ -384,7 +550,9 @@ async function run(
 
   const caps = capsFor(onContract, sample, quorum.nowMs);
   trace.caps = capsToTrace(caps);
-  const input = decisionInputFor(sample, caps, position.triggerWad, position.targetWad);
+  const input = ctx.collateral
+    ? collateralDecisionInputFor(sample, caps, ctx.collateral.poolFee)
+    : decisionInputFor(sample, caps, position.triggerWad, position.targetWad);
   const decision =
     options.manualAmount === undefined ? decide(input) : decideManual(input, options.manualAmount);
   trace.decision = decisionToTrace(decision);
@@ -396,7 +564,7 @@ async function run(
 
   record.amount = decision.amount.toString();
   ctx.log(
-    `position ${position.id}: health factor ${formatWad(sample.healthFactor)} below ${position.trigger}, repaying ${decision.amount} (limited by ${decision.limitedBy})`,
+    `position ${position.id}: health factor ${formatWad(sample.healthFactor)} below ${formatWad(trigger)}, repaying ${decision.amount} from ${modeOf(ctx)} (limited by ${decision.limitedBy})`,
   );
   return signAndSubmit(ctx, attempt, decision);
 }

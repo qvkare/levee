@@ -4,6 +4,30 @@
  * stop a rescue but cannot cause one.
  */
 
+import type { Address } from 'viem';
+
+/**
+ * Collateral mode only: the collateral, the borrower's hold on it, and what the
+ * borrower set at the helper with `authorize`. Read at the sample's block.
+ */
+export interface CollateralSample {
+  /** Aave's oracle price for the collateral, base currency. */
+  priceBase: bigint;
+  decimals: bigint;
+  /** The collateral reserve's own liquidation threshold, basis points. */
+  liquidationThresholdBps: bigint;
+  aTokenBalance: bigint;
+  /** The borrower's aToken allowance to the helper. */
+  aTokenAllowance: bigint;
+  /** The rescuer the borrower authorized at the helper. Zero once revoked. */
+  authorizedRescuer: Address;
+  maxSlippageBps: bigint;
+  /** Wad. `unwind` reverts unless the health factor is below this. */
+  triggerHf: bigint;
+  /** Wad. */
+  targetHf: bigint;
+}
+
 /** One endpoint's view of a position, all read at one block. */
 export interface Sample {
   rpc: string;
@@ -19,6 +43,8 @@ export interface Sample {
   usdcDebt: bigint;
   rescuerUsdc: bigint;
   rescuerAllowance: bigint;
+  /** Present in collateral mode. */
+  collateral?: CollateralSample;
 }
 
 export interface RpcFailure {
@@ -69,22 +95,66 @@ const COMPARED_FIELDS = [
   'rescuerAllowance',
 ] as const satisfies readonly (keyof Sample)[];
 
+/** Market and balance figures the collateral decision reads. */
+const COMPARED_COLLATERAL_FIELDS = [
+  'priceBase',
+  'liquidationThresholdBps',
+  'aTokenBalance',
+  'aTokenAllowance',
+] as const satisfies readonly (keyof CollateralSample)[];
+
+/** Settings, which are either the same everywhere or something is wrong. */
+const EXACT_COLLATERAL_FIELDS = [
+  'decimals',
+  'authorizedRescuer',
+  'maxSlippageBps',
+  'triggerHf',
+  'targetHf',
+] as const satisfies readonly (keyof CollateralSample)[];
+
 function withinDeviation(a: bigint, b: bigint, maxDeviationBps: bigint): boolean {
   const [low, high] = a < b ? [a, b] : [b, a];
   return (high - low) * 10_000n <= high * maxDeviationBps;
 }
 
+function spread(values: bigint[], maxDeviationBps: bigint): boolean {
+  const low = values.reduce((a, b) => (b < a ? b : a));
+  const high = values.reduce((a, b) => (b > a ? b : a));
+  return withinDeviation(low, high, maxDeviationBps);
+}
+
+function findCollateralDisagreement(samples: Sample[], maxDeviationBps: bigint): string | null {
+  const present = samples.filter((sample) => sample.collateral !== undefined);
+  if (present.length === 0) return null;
+  if (present.length !== samples.length) {
+    const seen = samples.map((sample) => `${sample.rpc}=${sample.collateral ? 'yes' : 'no'}`);
+    return `collateral read by some endpoints only: ${seen.join(' ')}`;
+  }
+  const seen = (field: keyof CollateralSample) =>
+    samples.map((sample) => `${sample.rpc}=${sample.collateral?.[field]}`).join(' ');
+  for (const field of COMPARED_COLLATERAL_FIELDS) {
+    const values = present.map((sample) => (sample.collateral as CollateralSample)[field]);
+    if (!spread(values, maxDeviationBps)) {
+      return `collateral.${field} differs by more than ${maxDeviationBps} bps: ${seen(field)}`;
+    }
+  }
+  for (const field of EXACT_COLLATERAL_FIELDS) {
+    const values = present.map((sample) =>
+      String((sample.collateral as CollateralSample)[field]).toLowerCase(),
+    );
+    if (new Set(values).size > 1) return `collateral.${field} differs: ${seen(field)}`;
+  }
+  return null;
+}
+
 function findDisagreement(samples: Sample[], maxDeviationBps: bigint): string | null {
   for (const field of COMPARED_FIELDS) {
-    const values = samples.map((sample) => sample[field]);
-    const low = values.reduce((a, b) => (b < a ? b : a));
-    const high = values.reduce((a, b) => (b > a ? b : a));
-    if (!withinDeviation(low, high, maxDeviationBps)) {
+    if (!spread(samples.map((sample) => sample[field]), maxDeviationBps)) {
       const seen = samples.map((sample) => `${sample.rpc}=${sample[field]}`).join(' ');
       return `${field} differs by more than ${maxDeviationBps} bps: ${seen}`;
     }
   }
-  return null;
+  return findCollateralDisagreement(samples, maxDeviationBps);
 }
 
 const ageSecs = (sample: Sample, nowMs: number): number =>

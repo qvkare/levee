@@ -18,6 +18,9 @@ export const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 const DEFAULT_POSITIONS_FILE = 'keeper/positions.json';
 
+/** `LeveeUnwind.authorize` takes `0 < maxSlippageBps <= 300`. */
+export const MAX_SLIPPAGE_BPS = 300;
+
 const positionsFileSchema = z.object({
   positions: z
     .array(
@@ -25,6 +28,10 @@ const positionsFileSchema = z.object({
         id: z.number().int().nonnegative(),
         trigger: z.string(),
         target: z.string(),
+        /** Spec section 9. Absent means reserve, as every position was before v0.2. */
+        mode: z.enum(['reserve', 'collateral']).optional(),
+        /** Collateral mode only. Must equal what the borrower set at the helper. */
+        max_slippage_bps: z.number().int().optional(),
       }),
     )
     .min(1),
@@ -62,16 +69,32 @@ export function parseNetwork(value: string | undefined): Network {
   return network;
 }
 
-function positionTarget(entry: { id: number; trigger: string; target: string }): PositionTarget {
-  const triggerWad = parseWad(entry.trigger);
-  const targetWad = parseWad(entry.target);
+type PositionEntry = z.infer<typeof positionsFileSchema>['positions'][number];
+
+function positionTarget(entry: PositionEntry): PositionTarget {
+  const { id, trigger, target } = entry;
+  const triggerWad = parseWad(trigger);
+  const targetWad = parseWad(target);
   if (triggerWad <= WAD) {
-    throw new Error(`position ${entry.id}: trigger ${entry.trigger} must be above 1, where Aave liquidates`);
+    throw new Error(`position ${id}: trigger ${trigger} must be above 1, where Aave liquidates`);
   }
   if (targetWad <= triggerWad) {
-    throw new Error(`position ${entry.id}: target ${entry.target} must be above trigger ${entry.trigger}`);
+    throw new Error(`position ${id}: target ${target} must be above trigger ${trigger}`);
   }
-  return { ...entry, triggerWad, targetWad };
+  const base = { id, trigger, target, triggerWad, targetWad };
+  const slippage = entry.max_slippage_bps;
+  if (entry.mode !== 'collateral') {
+    if (slippage !== undefined) {
+      throw new Error(`position ${id}: max_slippage_bps applies only to mode "collateral"`);
+    }
+    return base;
+  }
+  if (slippage === undefined || slippage <= 0 || slippage > MAX_SLIPPAGE_BPS) {
+    throw new Error(
+      `position ${id}: collateral mode needs max_slippage_bps above 0 and at most ${MAX_SLIPPAGE_BPS}, as the borrower set it at the helper`,
+    );
+  }
+  return { ...base, mode: 'collateral', maxSlippageBps: BigInt(slippage) };
 }
 
 export function parsePositionsFile(text: string) {

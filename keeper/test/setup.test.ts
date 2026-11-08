@@ -39,6 +39,7 @@ const views = (over: Partial<NearViews> = {}): NearViews => ({
   getPosition: async () => openPosition({ chain_id: 84532 }),
   rootPublicKey: async () => root,
   derivedPublicKey: async () => levee1,
+  getChain: async () => null,
   ...over,
 });
 

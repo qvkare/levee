@@ -30,7 +30,8 @@ const USAGE = `Usage: keeper <command>
 
   status                          Show each configured position. No keys needed.
   run                             Watch every position until interrupted.
-  rescue-once --id <n>            Run one pass for a position, as the loop would.
+  rescue-once --id <n>            Run one pass for a position, as the loop would, in
+                                  the mode its positions file entry gives.
               [--amount <units>]  Fire now for this many USDC base units, within caps.
   derive-address --id <n>         Derive a position's rescuer and check it live.
               [--contract <id>]   Levee account. Defaults to LEVEE_CONTRACT.
