@@ -126,7 +126,7 @@ All optional. Copy `.env.example` to `.dev.vars` for local Worker runs. In produ
 
 Run records, the claims ledger and the backtests are read at build time only. A Worker has none of those folders, so deploy after adding runs. Every figure the site states about Levee is worked out once, in `lib/proof-model.ts`, and `next.config.ts` inlines the result as `LEVEE_PROOF`, so prerendered pages and pages rendered on the Worker print the same numbers. Pages read it as `PROOF` from `lib/proof.ts`. Contract addresses and the key deletions are data in `lib/contracts.ts`. Tests hold the hop table, the backtest table, the caveats' figures and every contract link to the root README and the claims ledger, so the two cannot drift apart without a failing test.
 
-The repository is private, so `GITHUB_URL` in `lib/links.ts` is empty and nothing links to it. Set it, and the footer and the proof cards pick it up.
+`GITHUB_URL` in `lib/links.ts` is the public repository. The footer and the proof cards link to it.
 
 The mark is `public/levee-mark.svg`, and `public/levee-mark-profile.svg` is its dark form. `app/favicon.ico`, `app/icon.png` and `app/apple-icon.png` are rendered from those two files. `app/opengraph-image.png` is the link preview: the four lanes, the route of the replayed run ending at the helper's square, and the median of the collateral rescues, rendered by `node tools/og-image.ts` from the same figures. A test fails when its alt text no longer matches the run records, which means it is time to render it again.
 

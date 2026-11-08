@@ -9,8 +9,5 @@ export const CONTRACT_URL = nearAccountUrl(CONTRACT_ID);
 /** LeveeUnwind, the helper on Base Sepolia. */
 export const UNWIND_URL = baseAddressUrl(UNWIND);
 
-/**
- * The source repository. It is private for now, so this is empty and nothing links to it. Set it
- * when the repository opens, and the footer and /proof pick it up.
- */
-export const GITHUB_URL: string = "";
+/** The source repository, linked from the footer and the /proof cards. */
+export const GITHUB_URL: string = "https://github.com/qvkare/levee";

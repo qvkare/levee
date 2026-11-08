@@ -15,5 +15,5 @@ Spec: `docs/SPEC.md`. Read it before changing behaviour.
 ## Rules
 
 - Keys live in environment variables. Never commit them.
-- Commits are small, real and describe one change.
+- Commit one finished piece of work at a time, and describe it.
 - Failed runs stay in `evidence/`.
