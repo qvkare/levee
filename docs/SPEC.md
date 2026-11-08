@@ -9,6 +9,7 @@ Status: v0.1, working draft. Chain facts below were read from source or live RPC
 | Phase | Scope |
 |---|---|
 | Core | Aave v3 on Base and Arbitrum, USDC debt, NEAR contract, Chain Signatures rescuer address, deterministic keeper, public risk tool, evidence |
+| Collateral | Repay funded by selling a slice of the borrower's own collateral in one transaction, with no reserve. Section 9. The primary mode from v0.2 |
 | Reserve | Off-venue reserve in a NEAR Intents Agent API wallet with pinned destinations. Needs partner access |
 | Hyperliquid | Cross-margin top-ups up to a user-set loss limit. Separate gate, not part of the core |
 
@@ -25,6 +26,8 @@ Out of scope: TEEs, an LLM in the money path, pooling user funds, a token, tradi
 | Aave Pool | Pull USDC the rescuer approved | |
 
 The worst a stolen keeper key can do is repay the borrower's debt early, burn rescuer gas up to the fee ceiling, or burn the daily budget.
+
+In collateral mode (section 9) the worst case changes: a stolen keeper key can force the borrower to deleverage early, selling collateral at most `max_slippage_bps` worse than Aave's oracle, up to the daily cap. The borrower can stop it on the lending chain at once, without NEAR, by calling `revoke()` or setting the aToken allowance to zero.
 
 Caps bound signing, not landing. A signature already issued stays valid until its nonce is used, and pausing stops only new signatures. Such a signature can still only repay the registered borrower's debt, and it was already charged to the budget. An owner can burn it by landing any transaction at that nonce, for example `withdraw_float`.
 
@@ -282,3 +285,78 @@ No wallet and no login. Paste an address and see:
 - Do not say "never", "trustless", "guaranteed" or "within seconds" unless a table backs it.
 - Publish failure conditions: reserve empty, route slow, MPC down, a liquidator wins the race.
 - Privacy claims need a "hidden from whom" table.
+
+## 9. Repay from collateral
+
+Status: v0.2 design, 2026-11-08. Not built yet. Items marked UNVERIFIED must be checked before they are relied on.
+
+### Why
+
+The population backtest (`backtest/results/portfolio.md`) found that for one position, the same USDC repaid upfront protects as well as a reserve held for a rescue, and costs nothing to hold, while an idle reserve costs the USDC borrow rate. A rescue that needs no reserve avoids that cost: it repays part of the USDC debt by selling just enough of the borrower's collateral, in one transaction, before a liquidator can take the liquidation bonus. The position stays at the borrower's own address. The borrower grants a capped aToken allowance to an immutable helper, and nothing else.
+
+### Flow
+
+1. The keeper sees health factor below the trigger and computes the repay `R` (below).
+2. It calls `rescue_from_collateral(id, amount, fees)` on the NEAR contract.
+3. The contract checks the same rules as `rescue` (section 4, rules 1 to 6) and signs, from the position's rescuer address, a call to the helper: `LeveeUnwind.unwind(borrower, collateral, amount, pool_fee)`. `borrower`, `collateral` and `pool_fee` come from the position. The keeper supplies only the amount and fees.
+4. In one EVM transaction, the helper:
+   1. Caps `amount` at the borrower's current USDC variable debt.
+   2. Reads Aave's oracle for the collateral and USDC, and computes `max_in = amount × price(USDC) / price(collateral) × (10000 + max_slippage_bps) / 10000`, in collateral units.
+   3. Starts an exact-output swap on the Uniswap v3 pool for `(collateral, USDC, pool_fee)`, receiving `amount` USDC.
+   4. In the swap callback, checks that the caller is that pool and a swap is in progress, and that the collateral owed is at most `max_in`. It repays `amount` USDC with `Pool.repay(USDC, amount, 2, borrower)`, pulls exactly the owed collateral's aTokens from the borrower with `transferFrom`, and withdraws that collateral from Aave straight to the Uniswap pool to pay for the swap.
+   5. Emits `Unwound(borrower, rescuer, collateral, repaid, sold)`.
+
+Debt is repaid before collateral leaves, so the aToken transfer does not fail the health factor check even close to liquidation. No flash-loan premium is paid. Nothing stays in the helper.
+
+### Helper contract
+
+`evm/src/LeveeUnwind.sol`, one deployment per chain. Constructor takes the Aave `PoolAddressesProvider`, the USDC address and the Uniswap v3 factory. It has no owner, no upgrade, no admin method, no `delegatecall`, no arbitrary call and no ETH handling.
+
+```solidity
+// The borrower calls these from their own wallet.
+function authorize(address rescuer, uint16 maxSlippageBps) external; // 0 < maxSlippageBps <= 300
+function revoke() external;
+// Only the borrower's authorized rescuer can call this.
+function unwind(address borrower, address collateral, uint256 amount, uint24 poolFee)
+    external returns (uint256 repaid, uint256 sold);
+```
+
+`unwind` reverts unless `msg.sender` is the rescuer `borrower` authorized, the pool exists and the collateral owed is within `max_in`. A borrower's limits are their aToken allowance to the helper, `maxSlippageBps`, and the NEAR caps.
+
+UNVERIFIED: Uniswap v3 factory addresses on Base, Arbitrum and Base Sepolia; whether Aave's `withdraw(asset, amount, to)` to the pool inside the callback holds on every Pool revision in section 3; the gas `unwind` uses (expected 350k to 600k).
+
+### Contract changes
+
+- `ChainConfig` gains `unwind: String` (the helper address) and `gas_limit_unwind: u64`.
+- `Position` gains `collateral: Option<CollateralConfig>`, with `CollateralConfig { asset: String, pool_fee: u32 }`, set at `register` and immutable afterwards. `pool_fee` is one of 100, 500, 3000 or 10000.
+- New method `rescue_from_collateral(id, amount, fees)`, caller keeper, same rules and budget as `rescue`. It fails if the position has no collateral config. `amount` is USDC base units, charged to the same `max_per_rescue` and `max_per_day`. The callback `kind` is `unwind`.
+- `preview_rescue_from_collateral(id, amount, fees)`, a view, as `preview_rescue`.
+- The contract is immutable, so v0.2 is a new deployment with a new account. v0.1 stays live for its records.
+
+### Keeper
+
+Repay to reach target `T` when selling collateral with liquidation threshold `L_c` at a total cost `s` (swap fee plus slippage), with capacity `C × L` and debt `D`, all in Aave base currency:
+
+```
+R = (T × D − C × L) / (T − L_c × (1 + s))
+```
+
+Take `s` from the pool fee plus `max_slippage_bps`, so the target is reached even at the worst allowed price. Cap `R` by the position caps and the USDC debt. Also check that the collateral it implies, `R × (1 + s) / price(collateral)`, fits within the borrower's aToken balance and allowance to the helper. The rescuer needs ETH for gas only.
+
+### Evidence
+
+Run records gain `mode: "reserve" | "collateral"`, and, for collateral, `collateral`, `sold` and the swap's effective price against the oracle at that block. `make verify` checks `to` is the helper, the selector is `unwind`'s, `borrower` and `collateral` match the position, and the `Unwound` event agrees with the amounts.
+
+### Testnet
+
+Base Sepolia's Aave market uses its own test tokens, and they have no real DEX liquidity. Live runs therefore use a Uniswap v3 pool for Aave's test WETH and USDC that we create and seed at Aave's oracle price. The record says so, and it does not count as a measure of slippage. Slippage is measured in the backtest from historical Uniswap quotes.
+
+### Failure conditions
+
+| Condition | Effect |
+|---|---|
+| Pool price worse than oracle by more than `max_slippage_bps` | `unwind` reverts. Nothing moves. The keeper can retry with a smaller amount |
+| Pool too thin for the amount | Same as above |
+| Allowance or aToken balance too small | `unwind` reverts |
+| Collateral in isolation mode, or frozen or paused on Aave | `unwind` reverts |
+| The borrower revoked | `unwind` reverts |
