@@ -139,7 +139,7 @@ function Horizontal({ points, trigger, crisisId, empty, width }: Props & { width
 function Vertical({ points, trigger, crisisId, empty, width }: Props & { width: number }) {
   const top = 30;
   const x = 46;
-  const base = 560;
+  const base = points.length > 0 ? 560 : 320;
   // Labels are pushed down until they clear each other and the captions at the top. The line grows to fit them.
   let last = trigger === null ? top - 6 : top + 12;
   const rows = points.map((point) => {
@@ -202,8 +202,24 @@ export function DistanceLine(props: Props) {
   const { ref, width, measured } = useWidth<HTMLDivElement>({ width: props.fallbackWidth ?? 1328, viewport: 1440, narrow: false });
   const summary = props.points.map((point) => `${point.name} ${point.percent}${point.beyond ? `, beyond ${Math.round(SCALE_MAX * 100)}%` : ""}`).join(", ");
   return (
-    <div className="chart dist-frame" ref={ref} role="img" aria-label={props.points.length ? `Distance to liquidation: ${summary}.` : (props.empty ?? "No position to place.")} data-measured={measured || undefined}>
-      {width < 560 ? <Vertical {...props} width={width} /> : <Horizontal {...props} width={width} />}
+    <div className="chart dist-frame" ref={ref} role="img" aria-label={props.points.length ? `Distance to liquidation: ${summary}.` : (props.empty ?? "No position to place.")}>
+      {measured ? (
+        width < 560 ? (
+          <Vertical {...props} width={width} />
+        ) : (
+          <Horizontal {...props} width={width} />
+        )
+      ) : (
+        // Before the browser measures, both are drawn and the stylesheet shows the one that fits.
+        <>
+          <div className="dist-h">
+            <Horizontal {...props} width={props.fallbackWidth ?? 1328} />
+          </div>
+          <div className="dist-v">
+            <Vertical {...props} width={350} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

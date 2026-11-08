@@ -74,6 +74,9 @@ html {
 }
 
 body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
   margin: 0;
   background: var(--bg);
   color: var(--ink);
@@ -129,6 +132,10 @@ strong {
   outline: 3px solid var(--P);
   outline-offset: 3px;
   border-radius: 4px;
+}
+
+main {
+  flex: 1 0 auto;
 }
 
 .vh {
@@ -517,6 +524,7 @@ strong {
 
 .map {
   display: block;
+  max-width: 100%;
   overflow: visible;
 }
 
@@ -1124,8 +1132,24 @@ h2.big {
   min-width: 0;
 }
 
+/* Until the browser measures, a chart drawn at the server's width scales down to fit */
 .chart svg {
   display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.dist-v {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .dist-h {
+    display: none;
+  }
+  .dist-v {
+    display: block;
+  }
 }
 
 .grid {
@@ -1659,7 +1683,9 @@ h2.big {
 
 /* Tables */
 
+/* Positioned, so hidden labels inside a wide table stay inside it and cannot widen the page */
 .scroll {
+  position: relative;
   max-width: 100%;
   overflow-x: auto;
 }
@@ -1826,6 +1852,12 @@ th small {
   align-items: center;
   color: var(--ink-2);
   font-size: var(--t-s);
+}
+
+.read-top .who-line a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
 }
 
 .read-top .who-line .mono {
