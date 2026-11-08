@@ -20,7 +20,6 @@ export interface State {
   emode: number;
   /** getUserAccountData HF at the read block, or -1. */
   directHf: number;
-  holdings: Holdings;
   /** Collateral that counts: asset, and scaled supply × liquidation threshold under this eMode. */
   collAsset: number[];
   collWeight: number[];
@@ -48,8 +47,11 @@ export interface MemberPath {
 
 /** Points kept once HF moves this far from the last kept point below FAR. */
 const HF_TOLERANCE = 0.0015;
-/** Above every trigger in the grid, with margin. */
-const FAR = 1.4;
+/**
+ * The highest trigger in the grid. At or above it the keeper never fires, with or without
+ * repays already landed, so points there change nothing the simulation sees.
+ */
+const FAR = Math.max(...GRID.triggers);
 const DEBT_TOLERANCE = 0.002;
 const THRESHOLDS = [1, ...GRID.triggers];
 /** Rows are grouped in chunks for the skip test. */
@@ -157,6 +159,7 @@ export class PeriodModel {
   private decodeStates(): State[][] {
     const { reads, balances } = this.file;
     const out: State[][] = this.members.map(() => []);
+    const current: Holdings[] = [];
     let member = 0;
     let block = 0;
     let t = 0;
@@ -173,11 +176,13 @@ export class PeriodModel {
       const list = out[member]!;
       const code = reads.code[i]!;
       const previous = list[list.length - 1];
-      const holdings: Holdings = code === ReadCode.Partial && previous ? new Map(previous.holdings) : new Map();
+      // The running portfolio is kept only while decoding; a state keeps flat arrays.
+      const holdings: Holdings = code === ReadCode.Partial && previous ? new Map(current[member]) : new Map();
       for (let k = 0; k < reads.n[i]!; k++, offset++) {
         holdings.set(balances.asset[offset]!, { supply: balances.supply[offset]!, debt: balances.debt[offset]!, collateral: balances.collateral[offset]! === 1 });
       }
       for (const [asset, h] of holdings) if (h.supply === 0 && h.debt === 0) holdings.delete(asset);
+      current[member] = holdings;
       const emode = reads.emode[i]!;
       const lt = this.lt.get(emode) ?? this.lt.get(0)!;
       const state: State = {
@@ -188,7 +193,6 @@ export class PeriodModel {
         code,
         emode,
         directHf: reads.hf[i]!,
-        holdings,
         collAsset: [],
         collWeight: [],
         debtAsset: [],
@@ -293,7 +297,10 @@ export class PeriodModel {
    */
   build(member: number): MemberPath | null {
     const all = this.states[member]!;
-    const usdcOf = (s: State): number => s.holdings.get(this.usdc)?.debt ?? 0;
+    const usdcOf = (s: State): number => {
+      const i = s.debtAsset.indexOf(this.usdc);
+      return i < 0 ? 0 : s.debtAmount[i]!;
+    };
     const armIndex = all.findIndex((s) => usdcOf(s) > 0);
     if (armIndex < 0) return null;
     const arm = all[armIndex]!;
@@ -301,7 +308,8 @@ export class PeriodModel {
     const liquidated = liquidation !== null && liquidation.block > arm.applyBlock ? liquidation : null;
     const states = all.slice(armIndex).filter((s) => liquidated === null || s.applyBlock < liquidated.block);
 
-    const assets = [...new Set(states.flatMap((s) => [...s.holdings.keys()]))].sort((a, b) => a - b);
+    // Only assets that move HF: collateral that counts, and debt.
+    const assets = [...new Set(states.flatMap((s) => [...s.collAsset, ...s.debtAsset]))].sort((a, b) => a - b);
     const rows = this.rowsOf(assets);
     const points: TrackedPoint[] = [];
     let minHf = Infinity;

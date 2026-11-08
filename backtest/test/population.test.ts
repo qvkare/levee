@@ -138,7 +138,7 @@ describe('rebuilt member path, hand-worked', () => {
         close(at103[0]!.debt, 503);
         close(at103[0]!.usdcDebt, 503);
       });
-      it('keeps no more points once HF stays above 1.4, where no trigger acts', () => {
+      it('keeps no more points once HF stays above the highest trigger, where the keeper never acts', () => {
         assert.equal(zero.path.points.find((p) => p.block === 105), undefined);
       });
       it('reports the exact lowest HF', () => {

@@ -34,11 +34,12 @@ function pick<T>(items: T[], count: number, random: () => number): T[] {
   return out;
 }
 
-export async function fetchSample(): Promise<void> {
+export async function fetchSample(only?: { chain: ChainKey; period: string }): Promise<void> {
   const windowPrices = readWindowPrices();
   const calmPrices = readCalmPrices();
   const file: SampleFile = { rows: [] };
   for (const range of allRanges()) {
+    if (only && (range.chain !== only.chain || range.window !== only.period)) continue;
     const population = readPopulation(range.chain, range.window);
     const prices = [...windowPrices, ...calmPrices].find((p) => p.chain === range.chain && p.window === range.window)!;
     const market = marketsFor(range).find((m) => m.block === range.fromBlock)!;
@@ -105,8 +106,11 @@ export async function fetchSample(): Promise<void> {
       });
     }
   }
-  writeGz(SAMPLE_FILE, file);
+  // Written only from a run over every period, so the file is never partial.
+  if (!only) writeGz(SAMPLE_FILE, file);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) await fetchSample();
+if (import.meta.url === `file://${process.argv[1]}`) {
+  await fetchSample(process.argv[2] ? { chain: process.argv[2] as ChainKey, period: process.argv[3]! } : undefined);
+}
 
