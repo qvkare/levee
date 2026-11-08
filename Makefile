@@ -22,10 +22,10 @@ backtest:
 quote-dry:
 	node web/scripts/quote-route.ts
 
-# A real function-call key tries every method it should not reach, in near-sandbox.
+# Each kind of keeper key tries every method it should not reach, in near-sandbox.
 attack-demo:
 	contracts/build.sh
-	cargo test --manifest-path contracts/Cargo.toml -p levee --test sandbox a_function_call_key_limited_to_rescue_can_do_nothing_else -- --nocapture
+	cargo test --manifest-path contracts/Cargo.toml -p levee --test sandbox a_function_call_key_limited_to_rescue -- --nocapture
 
 test: test-contracts test-keeper test-evm test-web
 
