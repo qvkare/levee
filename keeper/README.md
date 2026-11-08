@@ -1,6 +1,13 @@
 # Levee keeper
 
-Watches Aave health factors, asks the Levee contract on NEAR to sign a repay when one crosses its trigger, broadcasts the signed transaction and writes a record of every attempt. It holds no EVM key. Its NEAR key is a function-call key limited to `rescue`. See `docs/SPEC.md` sections 2, 5 and 6.
+Watches Aave health factors, asks the Levee contract on NEAR to sign a repay when one crosses its trigger, broadcasts the signed transaction and writes a record of every attempt. It holds no EVM key. Its NEAR key is a function-call key limited to the keeper methods its positions use. See `docs/SPEC.md` sections 2, 5, 6 and 9.
+
+A position runs in one of two modes:
+
+| Mode | NEAR method | The repay is paid by |
+|---|---|---|
+| `collateral` | `rescue_from_collateral` | Selling a slice of the borrower's own collateral, in one `LeveeUnwind.unwind` call. The primary mode from v0.2 |
+| `reserve` | `rescue` | USDC held by the rescuer, through `Pool.repay` |
 
 Needs Node 22.22.2 or newer and pnpm 10. Run everything from the repo root.
 
@@ -29,7 +36,7 @@ The fixture is a run captured from the end-to-end test, so `replay` works before
 | `status` | Reads each position from every RPC and shows the quorum, caps and what the keeper would do. Sends nothing |
 | `run` | One pass per position every 5 seconds until interrupted |
 | `rescue-once --id <n>` | One pass for a position, deciding as the loop would |
-| `rescue-once --id <n> --amount <units>` | Fires now for that many USDC base units. The keeper may fire early, but the quorum and every cap still apply |
+| `rescue-once --id <n> --amount <units>` | Fires now for that many USDC base units, in the position's mode. The keeper may fire early, but the quorum and every cap still apply. In collateral mode the helper still refuses above the borrower's trigger |
 | `derive-address` | Derives a rescuer locally and checks it against the live `derived_public_key` |
 | `verify` | Checks `evidence/` against public RPCs. Same as `make verify`. Exits non-zero on any FAIL |
 | `replay <run>` | Repeats a recorded run offline. Takes a run id or a file path. Exits non-zero on a mismatch |
@@ -47,7 +54,7 @@ The CLI reads `.env` from the repo root.
 |---|---|---|
 | `NEAR_NETWORK` | all | `testnet` or `mainnet`. Defaults to `testnet` |
 | `LEVEE_CONTRACT` | `status`, `run`, `rescue-once` | The Levee account |
-| `KEEPER_ACCOUNT`, `KEEPER_PRIVATE_KEY` | `run`, `rescue-once` | Function-call key limited to `rescue` |
+| `KEEPER_ACCOUNT`, `KEEPER_PRIVATE_KEY` | `run`, `rescue-once` | Function-call key limited to `rescue_from_collateral`, `rescue`, or both. See "Keeper keys" in `contracts/README.md` |
 | `BASE_RPC_URLS`, `ARBITRUM_RPC_URLS` | `status`, `run`, `rescue-once` | Comma separated, at least two distinct endpoints |
 | `NEAR_RPC_URL` | optional | Defaults to a public endpoint for the network |
 | `KEEPER_CONFIG` | optional | Defaults to `keeper/positions.json` |
@@ -57,28 +64,61 @@ The CLI reads `.env` from the repo root.
 
 ```json
 {
-  "positions": [{ "id": 1, "trigger": "1.25", "target": "1.6" }],
+  "positions": [
+    { "id": 1, "trigger": "1.25", "target": "1.6", "mode": "collateral", "max_slippage_bps": 100 },
+    { "id": 2, "trigger": "1.25", "target": "1.6" }
+  ],
   "fee_ceilings": {
     "84532": { "max_fee_per_gas": "2000000000", "max_priority_fee_per_gas": "1000000000" }
   }
 }
 ```
 
-The borrower, chain and caps are read from `get_position`. `fee_ceilings` repeats the contract's `ChainConfig`, which has no view method, and must match it: the keeper clamps its bid to these values, and `rescue` rejects anything above the contract's.
+A position with no `mode` is in reserve mode, as every position was before v0.2. `max_slippage_bps` is for collateral mode only, and is required there: above 0 and at most 300, as `authorize` allows.
 
-Before a rescue can land:
+The borrower, chain and caps are read from `get_position`. `fee_ceilings` repeats the contract's fee ceilings and must match them: the keeper clamps its bid to these values, and the contract rejects anything above its own.
 
-- The rescuer needs USDC and gas on the lending chain. `derive-address` gives its address.
-- The rescuer needs an allowance to the Pool. `prepare_allowance` signs it, but a key limited to `rescue` cannot call that method, so the owner has to. The keeper treats the allowance as a cap and shows it in `status`.
-- The keeper key must allow enough gas. `rescue` attaches 300 Tgas, so give the key an unlimited allowance or a large one. Unused gas is refunded.
+Before a rescue can land, in either mode:
+
+- The rescuer needs gas on the lending chain. `derive-address` gives its address.
+- The keeper key must allow enough gas. A rescue attaches 300 Tgas, so give the key an unlimited allowance or a large one. Unused gas is refunded.
+
+In reserve mode only:
+
+- The rescuer needs USDC.
+- The rescuer needs an allowance to the Pool. `prepare_allowance` signs it, but a keeper key cannot call that method, so the owner has to. The keeper treats the balance and the allowance as caps and shows them in `status`.
+
+In collateral mode only:
+
+- The position was registered with a collateral config: the asset and the Uniswap fee tier.
+- The contract's `get_chain` names a `LeveeUnwind` helper for the chain.
+- The borrower called `authorize(rescuer, maxSlippageBps, triggerHf, targetHf)` on the helper for the derived rescuer, with the keeper's own `trigger`, `target` and `max_slippage_bps`, and approved the collateral's aToken to the helper.
+
+## Collateral mode
+
+The helper enforces the borrower's own settings: `unwind` reverts unless the health factor is below their trigger, and checks the result against their target. So the keeper acts on what the helper holds, and refuses to start, in `wirePosition`, unless every endpoint that answers reports the derived rescuer and the same trigger, target and slippage as the positions file. Each pass reads them again with the position, and a change since start stops the pass as `helper_config_mismatch`.
+
+Each sample also reads, at the same block, the collateral's oracle price, its own liquidation threshold and decimals from `getReserveData`, and the borrower's aToken balance and allowance to the helper. The quorum compares those within 0.5%, and the helper's settings exactly.
+
+The repay to reach target `T` is spec section 9's
+
+```
+R = (T × D − C × L) / (T − L_c × (1 + s))
+```
+
+with `s` the pool fee plus `max_slippage_bps`, the most the helper can be charged. It rounds as reserve mode does: `R` up in base currency, the USDC conversion up, then two base units for Aave's rounding. It is capped by `max_per_rescue`, the day's remaining budget, the USDC debt, and the USDC that the borrower's aToken balance, and separately their allowance to the helper, can pay for at `(1 + s)` over the oracle. The rescuer's USDC balance and allowance are not caps in this mode.
+
+After a successful unwind, the record takes `sold` and the swap's price from the helper's `Unwound` event, priced against Aave's oracle at the receipt's block. A reverted unwind is replayed with `eth_call` at its block to read the reason. The helper's above-trigger error means the health factor recovered between the read and inclusion: the run is `aborted` with `above_trigger`, a no-op that cost only gas. Any other revert is `failed`, `evm_reverted`, with the error selector.
+
+The helper's config view, its above-trigger error and the indexing of `Unwound` are not fixed by the spec. They sit in `src/unwind.ts`, each marked `TODO(merge)`, to be matched to `evm/src/LeveeUnwind.sol`.
 
 ## How a pass works
 
 1. Read the position from every RPC at one block each. At least two distinct endpoints on the right chain must be under 30 seconds old and agree within 0.5% on every number the decision uses. Any fresh endpoint can veto.
 2. Decide, in `src/decision.ts`. Pure, with the formula, Aave's rounding and the caps.
 3. Read the rescuer's nonce and fees, clamped to the ceilings.
-4. Call `rescue` with no deposit, since a function-call key cannot attach one, and wait for the signature.
-5. Assemble the transaction with viem. It is refused unless the signature recovers to the derived rescuer and every requested field matches.
+4. Call `rescue` or `rescue_from_collateral` with no deposit, since a function-call key cannot attach one, and wait for the signature.
+5. Assemble the transaction with viem. It is refused unless the signature recovers to the derived rescuer and every requested field matches: the Pool, USDC and borrower for a repay; the helper, borrower, collateral and fee tier for an unwind.
 6. Broadcast to every RPC, wait for the receipt, reread the health factor and write the record.
 
 ## Run records
@@ -89,9 +129,11 @@ Every attempt that wanted to act leaves `evidence/runs/<run-id>.json`. A file is
 |---|---|
 | `success` | The repay landed |
 | `failed` | An attempt was made and did not land. Includes reverts, timeouts and NEAR failures |
-| `aborted` | The keeper refused and nothing reached the lending chain. Includes quorum refusals, an empty rescuer and a refused signature |
+| `aborted` | The keeper refused and nothing reached the lending chain. Includes quorum refusals, an empty rescuer and a refused signature. Also `above_trigger`: the helper refused on chain because the health factor had recovered, so only gas was spent |
 
-In `run`, a refusal that repeats every 5 seconds is recorded once per 5 minutes per reason. A failure after the NEAR call is always recorded.
+In `run`, a refusal that repeats every 5 seconds is recorded once per 5 minutes per reason. Anything that reached the lending chain is always recorded.
+
+Records carry `mode`. A record without it predates v0.2 and is reserve mode. Collateral records also carry `collateral`, the asset, `sold`, from the `Unwound` event, and `swap`: what was repaid and sold, the oracle prices at the block, the effective price and how many basis points below the oracle it was.
 
 ## `verify` verdicts
 
@@ -101,7 +143,11 @@ In `run`, a refusal that repeats every 5 seconds is recorded once per 5 minutes 
 | `FAIL` | A check did not hold or could not be made. An unreachable RPC is a FAIL, because a claim only passes on proof |
 | `RECORDED` | On file but not proven here: a test `verify` did not run, a simulated run, or a failed run kept for the record |
 
-Beyond spec section 6, `verify` recomputes the on-chain transaction's signing hash and requires it to equal the `tx_hash` the contract returned, so a NEAR receipt and a repay cannot be unrelated transactions paired in a record.
+Beyond spec section 6, `verify` recomputes the on-chain transaction's signing hash and requires it to equal the `tx_hash` the contract returned, so a NEAR receipt and a repay cannot be unrelated transactions paired in a record. It also requires the contract's result to be of the run's kind, `rescue` or `unwind`.
+
+For a collateral run, `verify` checks the NEAR method is `rescue_from_collateral`, `to` is the helper named by the contract's `get_chain`, the selector is `unwind`'s, the decoded borrower, collateral and fee tier match the record and the registered position, and the amount is within caps. For a success it also requires exactly one `Unwound` event from the helper, agreeing on the borrower, the derived rescuer, the collateral and `sold`, with `repaid` above zero and at most the amount signed.
+
+`replay` recomputes the same for a collateral run, from the helper's settings in the recorded samples, and adds a `Swap` step that prices the recorded event again and a `Revert` step that checks the above-trigger reading.
 
 Until a real run exists, every claim is `RECORDED`, and `make verify` reports 0 PASS.
 
@@ -116,6 +162,8 @@ pnpm --filter keeper typecheck
 ```
 
 `test:e2e` needs `anvil` on the path and reads `BASE_FORK_RPC_URL`, defaulting to `https://mainnet.base.org`. It forks the block pinned in `evm/`, moves chain time up to the wall clock and takes about two minutes.
+
+Collateral mode has no fork test yet, because `LeveeUnwind` is not deployed anywhere. `test/collateral-*.test.ts` and `test/unwind.test.ts` run it against fakes of the helper's config view, its `Unwound` event and its revert, with the formula's numbers worked by hand.
 
 ### What is simulated
 
