@@ -23,7 +23,7 @@ import {
   assembleSignedTransaction,
   assertMatchesUnwindIntent,
 } from '../src/signature.js';
-import { ABOVE_TRIGGER_ERROR, ABOVE_TRIGGER_SELECTOR, unwindCalldata } from '../src/unwind.js';
+import { ABOVE_TRIGGER_ERROR, ABOVE_TRIGGER_SELECTOR, isAboveTrigger, unwindCalldata } from '../src/unwind.js';
 import {
   borrower,
   chain,
@@ -288,6 +288,7 @@ describe('the EVM reads behind collateral mode', () => {
     const data = encodeErrorResult({
       abi: parseAbi([`error ${ABOVE_TRIGGER_ERROR}`]),
       errorName: 'AboveTrigger',
+      args: [1_250_000_000_000_000_000n, 1_200_000_000_000_000_000n],
     });
     let block: unknown;
     rpc({
@@ -299,7 +300,9 @@ describe('the EVM reads behind collateral mode', () => {
 
     const result = await createEvmClient('https://evm.invalid').simulate(call, 1_001n);
 
-    expect(result).toMatchObject({ reverted: true, data: ABOVE_TRIGGER_SELECTOR });
+    expect(result).toMatchObject({ reverted: true, data });
+    expect(isAboveTrigger(result.reverted ? result.data : null)).toBe(true);
+    expect(data.startsWith(ABOVE_TRIGGER_SELECTOR)).toBe(true);
     expect(block).toBe('0x3e9');
   });
 

@@ -30,24 +30,19 @@ export const UNWOUND_TOPIC: Hex = keccak256(
   toBytes('Unwound(address,address,address,uint256,uint256)'),
 );
 
-/**
- * TODO(merge): name and ABI of the helper's per-borrower config view, from
- * `evm/src/LeveeUnwind.sol`. The keeper needs the authorized rescuer, the slippage
- * limit and the trigger and target health factors (wad, as Aave reports them). If
- * the view returns a struct or another order, change `helperConfigFrom` with it.
- */
+/** The helper's per-borrower config view, `authorizationOf` in `evm/src/LeveeUnwind.sol`. */
 export const HELPER_CONFIG_VIEW = {
-  functionName: 'configOf',
+  functionName: 'authorizationOf',
   abi: parseAbi([
-    'function configOf(address borrower) view returns (address rescuer, uint16 maxSlippageBps, uint256 triggerHf, uint256 targetHf)',
+    'function authorizationOf(address borrower) view returns (address rescuer, uint16 maxSlippageBps, uint64 triggerHf, uint64 targetHf)',
   ]),
 } as const;
 
 /**
- * TODO(merge): the custom error `unwind` reverts with when the borrower's health factor
- * is at or above their trigger. The name comes from `evm/src/LeveeUnwind.sol`.
+ * The custom error `unwind` reverts with when the borrower's health factor is at or
+ * above their trigger: `AboveTrigger(uint256 healthFactor, uint256 triggerHf)`.
  */
-export const ABOVE_TRIGGER_ERROR = 'AboveTrigger()';
+export const ABOVE_TRIGGER_ERROR = 'AboveTrigger(uint256,uint256)';
 
 export const ABOVE_TRIGGER_SELECTOR: Hex = toFunctionSelector(ABOVE_TRIGGER_ERROR);
 
@@ -118,34 +113,18 @@ export interface Unwound {
   sold: bigint;
 }
 
-/**
- * TODO(merge): spec section 9 names the fields but not which are indexed. The keeper
- * reads any prefix of the three addresses as indexed, chosen by the topic count, so
- * the usual declarations all decode. Narrow this to the helper's own declaration.
- */
-const UNWOUND_BY_INDEXED_COUNT = [
-  parseAbiItem(
-    'event Unwound(address borrower, address rescuer, address collateral, uint256 repaid, uint256 sold)',
-  ),
-  parseAbiItem(
-    'event Unwound(address indexed borrower, address rescuer, address collateral, uint256 repaid, uint256 sold)',
-  ),
-  parseAbiItem(
-    'event Unwound(address indexed borrower, address indexed rescuer, address collateral, uint256 repaid, uint256 sold)',
-  ),
-  parseAbiItem(
-    'event Unwound(address indexed borrower, address indexed rescuer, address indexed collateral, uint256 repaid, uint256 sold)',
-  ),
-] as const;
+/** As declared in `evm/src/LeveeUnwind.sol`: all three addresses are indexed. */
+const UNWOUND_EVENT = parseAbiItem(
+  'event Unwound(address indexed borrower, address indexed rescuer, address indexed collateral, uint256 repaid, uint256 sold)',
+);
 
 /** Decodes one `Unwound` log, or returns null if this log is not one. */
 export function decodeUnwound(log: EvmLog): Unwound | null {
   if (log.topics[0]?.toLowerCase() !== UNWOUND_TOPIC) return null;
-  const event = UNWOUND_BY_INDEXED_COUNT[log.topics.length - 1];
-  if (!event) return null;
+  if (log.topics.length !== 4) return null;
   try {
     const { args } = decodeEventLog({
-      abi: [event],
+      abi: [UNWOUND_EVENT],
       topics: log.topics as [Hex, ...Hex[]],
       data: log.data,
       strict: true,

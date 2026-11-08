@@ -74,25 +74,7 @@ describe('the Unwound event', () => {
     expect(decodeUnwound(unwoundLog(fields))).toEqual(fields);
   });
 
-  it('decodes with none indexed', () => {
-    const log = {
-      address: helper,
-      topics: [UNWOUND_TOPIC],
-      data: encodeAbiParameters(
-        [
-          { type: 'address' },
-          { type: 'address' },
-          { type: 'address' },
-          { type: 'uint256' },
-          { type: 'uint256' },
-        ],
-        [borrower, rescuer, weth, 5n, 6n],
-      ),
-    };
-    expect(decodeUnwound(log)).toEqual(fields);
-  });
-
-  it('decodes with only the borrower indexed', () => {
+  it('refuses an Unwound log that does not index all three addresses', () => {
     const log = {
       address: helper,
       topics: [UNWOUND_TOPIC, pad(borrower)],
@@ -101,7 +83,7 @@ describe('the Unwound event', () => {
         [rescuer, weth, 5n, 6n],
       ),
     };
-    expect(decodeUnwound(log)).toEqual(fields);
+    expect(decodeUnwound(log)).toBeNull();
   });
 
   it('ignores another event and a malformed one', () => {
