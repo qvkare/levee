@@ -34,9 +34,16 @@ interface DexEntry {
 const MAIN_DEX_ONLY: DexEntry[] = [{ dex: "", collateralToken: 0 }];
 let dexTable: { entries: DexEntry[]; expires: number } | null = null;
 
+/** Why a read failed, in words a reader can act on. */
+function failureReason(error: unknown): string {
+  if (error instanceof InfoError) return error.status === 429 ? "Hyperliquid rate limited this server" : `Hyperliquid answered ${error.status}`;
+  if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) return "Hyperliquid did not answer in time";
+  return "Hyperliquid did not answer";
+}
+
 /** The list of perp DEXs and what each settles in. It changes rarely, so it is kept for an hour. */
-async function readDexTable(): Promise<DexEntry[] | null> {
-  if (dexTable && dexTable.expires > Date.now()) return dexTable.entries;
+async function readDexTable(): Promise<{ entries: DexEntry[] } | { reason: string }> {
+  if (dexTable && dexTable.expires > Date.now()) return { entries: dexTable.entries };
   try {
     const [dexes, metas] = await Promise.all([
       info<Array<{ name: string } | null>>({ type: "perpDexs" }),
@@ -44,16 +51,18 @@ async function readDexTable(): Promise<DexEntry[] | null> {
     ]);
     const entries = dexes.map((entry, index) => ({ dex: entry?.name ?? "", collateralToken: metas[index]?.collateralToken ?? 0 }));
     dexTable = { entries, expires: Date.now() + DEX_TABLE_TTL_MS };
-    return entries;
-  } catch {
-    return null;
+    return { entries };
+  } catch (error) {
+    const reason = failureReason(error);
+    console.warn(`hyperliquid dex table: ${reason}`, error instanceof Error ? error.message : String(error));
+    return { reason };
   }
 }
 
 export async function readHyperliquidAccount(user: Address): Promise<{ account: HyperliquidAccount; failures: Failure[] }> {
   const source = "hyperliquid" as const;
   const table = await readDexTable();
-  const entries = table ?? MAIN_DEX_ONLY;
+  const entries = "entries" in table ? table.entries : MAIN_DEX_ONLY;
   const [abstraction, spot, ...states] = await Promise.allSettled([
     info<string>({ type: "userAbstraction", user }),
     info<RawSpot>({ type: "spotClearinghouseState", user }),
@@ -76,7 +85,7 @@ export async function readHyperliquidAccount(user: Address): Promise<{ account: 
   });
 
   const failures: Failure[] = [];
-  if (!table) failures.push({ source, message: "The list of Hyperliquid DEXs was not read, so only the main DEX is shown." });
+  if ("reason" in table) failures.push({ source, message: `${table.reason}, so the list of Hyperliquid DEXs was not read and only the main DEX is shown.` });
   if (missed.length) failures.push({ source, message: `These Hyperliquid DEXs did not answer, so their positions are missing: ${missed.join(", ")}.` });
   if (abstraction.status !== "fulfilled") failures.push({ source, message: "The Hyperliquid account mode was not read, so no margin ratio is shown." });
   if (spot.status !== "fulfilled") failures.push({ source, message: "The Hyperliquid spot balance was not read. A unified account shows no margin ratio without it." });
