@@ -209,3 +209,52 @@ describe('a member that was not liquidated', () => {
     close(out.repaid, 50);
   });
 });
+
+describe('a landed repay capped at the USDC debt on the path', () => {
+  const point = (t: number, block: number, capacity: number, debt: number, usdcDebt: number): TrackedPoint => ({ t, block, capacity, debt, usdcDebt });
+  // HF 1.10 at t=10: Levee sends 1000 - 1100/1.5 = 266.67, which lands at 70. By t=100 the
+  // borrower has repaid all its USDC itself and owes 800 of another stablecoin. HF 760/800 = 0.95.
+  // Liquidated in reality at block 3.
+  const path: TrackedPath = {
+    points: [point(0, 1, 1300, 1000, 1000), point(10, 2, 1100, 1000, 1000), point(100, 3, 760, 800, 0)],
+    liquidation: { block: 3, t: 100 },
+  };
+  const p: Params = { trigger: 1.2, target: 1.5, reserveShare: 0.3, delaySec: 60, cooldownSec: 60 };
+
+  it('is saved under the pre-registered rule, which keeps the repay off total debt', () => {
+    // 800 - 266.67 = 533.33, HF 1.425.
+    assert.equal(simulateTracked(path, p).saved, true);
+  });
+  it('is not saved when the repay counts only up to the USDC debt left, as upfront', () => {
+    assert.equal(simulateTracked(path, p, { capLanded: true }).saved, false);
+    assert.equal(survivesUpfront(path, 300), false);
+  });
+  it('never saves a position the same USDC repaid upfront would lose', () => {
+    let seed = 11;
+    const random = (): number => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let x = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+    };
+    let checked = 0;
+    for (let n = 0; n < 300; n++) {
+      const points: TrackedPoint[] = [];
+      let capacity = 1.05 + random() * 0.5;
+      let usdc = 0.4 + random() * 0.6;
+      for (let i = 0; i < 30; i++) {
+        capacity *= 1 + (random() - 0.55) * 0.08;
+        if (random() < 0.1) usdc *= random();
+        points.push(point(i * 30, i + 1, capacity * 1000, 1000, Math.min(usdc, 1) * 1000));
+      }
+      const liquidation = points[10 + Math.floor(random() * 19)]!;
+      const tracked: TrackedPath = { points, liquidation: { block: liquidation.block, t: liquidation.t } };
+      for (const reserveShare of [0.05, 0.2, 0.5]) {
+        if (!simulateTracked(tracked, { ...p, reserveShare }, { capLanded: true }).saved) continue;
+        assert.equal(survivesUpfront(tracked, reserveShare * 1000), true);
+        checked++;
+      }
+    }
+    assert.ok(checked > 50, `only ${checked} saved cases checked`);
+  });
+});

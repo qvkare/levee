@@ -85,14 +85,17 @@ function newBook(path: TrackedPath, trigger: number): Book {
  * One observation of one position. `reserve.unspent` is shared by every position that draws on
  * it. Returns false once the position has failed, after which it takes no further steps.
  */
-function step(book: Book, point: TrackedPoint, params: Params, reserve: { unspent: number }): boolean {
+function step(book: Book, point: TrackedPoint, params: Params, reserve: { unspent: number }, capLanded = false): boolean {
   if (point.t < book.armT) return true;
   if (book.inFlight && book.inFlight.landedAt < point.t) {
     book.landings.push(book.inFlight);
     book.landed += book.inFlight.amount;
     book.inFlight = null;
   }
-  const debt = Math.max(0, point.debt - book.landed);
+  // The pre-registered rule, like `simulate`, takes what landed off total debt for good. With
+  // `capLanded`, a repay counts only up to the USDC debt on the path at that point, as the upfront
+  // bound does: a borrower who later repaid its USDC itself would have had less of it to repay.
+  const debt = Math.max(0, point.debt - (capLanded ? Math.min(book.landed, point.usdcDebt) : book.landed));
   const hf = healthFactor(point.capacity, debt);
   const liquidation = book.path.liquidation;
   const atOrAfterLiquidation = liquidation !== null && point.block >= liquidation.block;
@@ -135,11 +138,11 @@ function outcomeOf(book: Book, reserve: number): TrackedOutcome {
 }
 
 /** One position, one reserve of `reserveShare` × debt at arming. */
-export function simulateTracked(path: TrackedPath, params: Params): TrackedOutcome {
+export function simulateTracked(path: TrackedPath, params: Params, options: { capLanded?: boolean } = {}): TrackedOutcome {
   const book = newBook(path, params.trigger);
   const reserve = params.reserveShare * trackedArming(path).debt;
   const shared = { unspent: reserve };
-  for (const point of path.points) if (!step(book, point, params, shared)) break;
+  for (const point of path.points) if (!step(book, point, params, shared, options.capLanded)) break;
   return outcomeOf(book, reserve);
 }
 
