@@ -1,0 +1,196 @@
+{
+  "run_id": "2026-11-08T10-19-54Z-base-sepolia-1",
+  "network": "testnet",
+  "position_id": 1,
+  "chain_id": 84532,
+  "borrower": "0x1BA01ceF25983F71e508f139Ecb10030b0403331",
+  "rescuer": "0x95ad19E5382ebEfF2C190ed1711515263efDc462",
+  "amount": "9098766",
+  "outcome": "success",
+  "failure_reason": null,
+  "health_factor_before": "1.48",
+  "health_factor_after": "1.803864",
+  "timestamps_ms": {
+    "detected": 1794133195746,
+    "near_included": 1794133197289,
+    "signed": 1794133203996,
+    "broadcast": 1794133204020,
+    "included": 1794133204484
+  },
+  "near_tx": "5mryKwGf42cbwSEB8KyHpFXtCJdQ8TTLUU4cJJkJ8tM7",
+  "evm_tx": "0x3a44e2340489a26642f8ffff5ab3203a9f2836adf3521b8180c98e49139b3c1f",
+  "evm_block": 56056678,
+  "near_contract": "levee-core-v2-1503.testnet",
+  "near_sender": "levee-keeper-1503.testnet",
+  "mode": "collateral",
+  "collateral": "0x4200000000000000000000000000000000000006",
+  "max_sold": "4109663749813753",
+  "sold": "4089217661506222",
+  "swap": {
+    "repaid": "9098766",
+    "sold": "4089217661506222",
+    "collateral_price_base": "223391516270",
+    "usdc_price_base": "99977300",
+    "effective_price_base": "222455768636",
+    "discount_bps": "41"
+  },
+  "trace": {
+    "trigger": "1.5",
+    "target": "1.8",
+    "manual_amount": null,
+    "quorum": {
+      "now_ms": 1794133195746,
+      "samples": [
+        {
+          "rpc": "https://sepolia.base.org",
+          "chain_id": 84532,
+          "block_number": "56056630",
+          "block_timestamp": "1794133194",
+          "health_factor": "1480000032901607927",
+          "total_collateral_base": "4647496906",
+          "total_debt_base": "2669170461",
+          "liquidation_threshold_bps": "8500",
+          "usdc_price_base": "99977300",
+          "usdc_debt": "26697765",
+          "rescuer_usdc": "0",
+          "rescuer_allowance": "0",
+          "collateral": {
+            "price_base": "223391516270",
+            "decimals": "18",
+            "liquidation_threshold_bps": "8500",
+            "a_token_balance": "20804267698687769",
+            "a_token_allowance": "10803697988208626",
+            "authorized_rescuer": "0x95ad19E5382ebEfF2C190ed1711515263efDc462",
+            "max_slippage_bps": "100",
+            "trigger_hf": "1500000000000000000",
+            "target_hf": "1800000000000000000",
+            "authorized_collateral": "0x4200000000000000000000000000000000000006",
+            "authorized_pool_fee": "3000",
+            "ltv_zero_collateral": null
+          }
+        },
+        {
+          "rpc": "https://base-sepolia-rpc.publicnode.com",
+          "chain_id": 84532,
+          "block_number": "56056630",
+          "block_timestamp": "1794133194",
+          "health_factor": "1480000032901607927",
+          "total_collateral_base": "4647496906",
+          "total_debt_base": "2669170461",
+          "liquidation_threshold_bps": "8500",
+          "usdc_price_base": "99977300",
+          "usdc_debt": "26697765",
+          "rescuer_usdc": "0",
+          "rescuer_allowance": "0",
+          "collateral": {
+            "price_base": "223391516270",
+            "decimals": "18",
+            "liquidation_threshold_bps": "8500",
+            "a_token_balance": "20804267698687769",
+            "a_token_allowance": "10803697988208626",
+            "authorized_rescuer": "0x95ad19E5382ebEfF2C190ed1711515263efDc462",
+            "max_slippage_bps": "100",
+            "trigger_hf": "1500000000000000000",
+            "target_hf": "1800000000000000000",
+            "authorized_collateral": "0x4200000000000000000000000000000000000006",
+            "authorized_pool_fee": "3000",
+            "ltv_zero_collateral": null
+          }
+        }
+      ],
+      "failures": [],
+      "refused": null
+    },
+    "caps": {
+      "max_per_rescue": "100000000",
+      "remaining_today": "435146103",
+      "rescuer_balance": "0",
+      "rescuer_allowance": "0",
+      "cooldown_remaining_secs": 0,
+      "paused": false
+    },
+    "decision": {
+      "action": "repay",
+      "reason": null,
+      "amount": "9098766",
+      "needed": "9098766",
+      "limited_by": "target",
+      "projected_health_factor": "1800000137117956658"
+    },
+    "fees": {
+      "nonce": 4,
+      "max_fee_per_gas": "11000000",
+      "max_priority_fee_per_gas": "1000000"
+    },
+    "rescue_result": {
+      "kind": "unwind",
+      "id": 1,
+      "unsigned_tx": "0x02f8ce83014a3404830f424083a7d8c0830f424094308a7b2872f6006522280026a750fcd1c5bd63d280b8a465afae080000000000000000000000001ba01cef25983f71e508f139ecb10030b0403331000000000000000000000000420000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000008ad60e0000000000000000000000000000000000000000000000000000000000000bb8000000000000000000000000000000000000000000000000000e99b7a7f435f9c0",
+      "tx_hash": "0xbc2ccda5ba90b1220e75ab64b3249ba6713190b4de09d06228f6c355d043ac7b",
+      "big_r": "0x026f5e60d79c71dadde31dc7080c4f5c512d189131ce9d0e139784ebcad67c6ca8",
+      "s": "0x1da2f37836f4cc3be633af606be8e9789d2345131175d292b35988557f1d88d9",
+      "recovery_id": 0
+    },
+    "signed_tx": "0x02f9011183014a3404830f424083a7d8c0830f424094308a7b2872f6006522280026a750fcd1c5bd63d280b8a465afae080000000000000000000000001ba01cef25983f71e508f139ecb10030b0403331000000000000000000000000420000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000008ad60e0000000000000000000000000000000000000000000000000000000000000bb8000000000000000000000000000000000000000000000000000e99b7a7f435f9c080a06f5e60d79c71dadde31dc7080c4f5c512d189131ce9d0e139784ebcad67c6ca8a01da2f37836f4cc3be633af606be8e9789d2345131175d292b35988557f1d88d9",
+    "broadcast": [
+      {
+        "rpc": "https://sepolia.base.org",
+        "ok": true,
+        "error": null
+      },
+      {
+        "rpc": "https://base-sepolia-rpc.publicnode.com",
+        "ok": true,
+        "error": null
+      }
+    ],
+    "receipt": {
+      "success": true,
+      "block_number": "56056678",
+      "gas_used": "528487",
+      "effective_gas_price": "6000000"
+    },
+    "collateral": {
+      "asset": "0x4200000000000000000000000000000000000006",
+      "helper": "0x308a7b2872F6006522280026a750fCD1c5Bd63D2",
+      "pool_fee": "3000"
+    },
+    "unwound": {
+      "log": {
+        "address": "0x308a7b2872F6006522280026a750fCD1c5Bd63D2",
+        "topics": [
+          "0x2742d12862bf82ecc5881f37809099194f609c4a5e33b4c57b597d3066c3577e",
+          "0x0000000000000000000000001ba01cef25983f71e508f139ecb10030b0403331",
+          "0x00000000000000000000000095ad19e5382ebeff2c190ed1711515263efdc462",
+          "0x0000000000000000000000004200000000000000000000000000000000000006"
+        ],
+        "data": "0x00000000000000000000000000000000000000000000000000000000008ad60e000000000000000000000000000000000000000000000000000e871f2e1f92ae"
+      },
+      "decimals": "18",
+      "collateral_price_base": "223391516270",
+      "usdc_price_base": "99977300"
+    },
+    "revert": null,
+    "quote": {
+      "quoter": "0xC5290058841028F1614F3A6F0F5816cAd0df5E27",
+      "amount": "9098766",
+      "pool_fee": "3000",
+      "tolerance_bps": "50",
+      "oracle_max_in": "4112809536963164",
+      "answers": [
+        {
+          "rpc": "https://sepolia.base.org",
+          "amount_in": "4089217661506222",
+          "error": null
+        },
+        {
+          "rpc": "https://base-sepolia-rpc.publicnode.com",
+          "amount_in": "4089217661506222",
+          "error": null
+        }
+      ],
+      "amount_in": "4089217661506222",
+      "max_sold": "4109663749813753"
+    }
+  }
+}

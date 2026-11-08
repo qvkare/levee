@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
+import {VmSafe} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {LeveeUnwind} from "../src/LeveeUnwind.sol";
 import {IAavePriceOracle} from "../src/interfaces/IAaveV3.sol";
 import {IUniswapV3Pool} from "../src/interfaces/IUniswapV3.sol";
 import {Deployments} from "../script/lib/Deployments.sol";
-import {IAaveFaucet, TestnetPoolMath} from "../script/lib/TestnetPool.sol";
+import {IAaveFaucet, INonfungiblePositionManager, TestnetPoolMath} from "../script/lib/TestnetPool.sol";
 import {SeedTestnetPool} from "../script/SeedTestnetPool.s.sol";
 import {ForkTarget, Targets} from "./lib/AaveFork.sol";
 import {UnwindTarget, UnwindTargets} from "./lib/UnwindFork.sol";
@@ -122,6 +123,39 @@ contract UnwindBaseSepoliaTest is UnwindPath {
         uint256 amount = keeperRepay(borrower, TARGET_HF, SLIPPAGE_BPS, SEED_FEE);
         Outcome memory o = unwindAndCheck(borrower, amount, SEED_FEE);
         assertGe(o.afterwards.healthFactor, TARGET_HF, "reaches the target at the new price");
+    }
+
+    /// `forge script` runs the script once and then simulates and sends each transaction
+    /// on later blocks. A mint deadline of the script's own block timestamp has passed by
+    /// then, and the first live run stopped there with "Transaction too old".
+    function test_seed_mintDeadline_leavesTimeToBroadcast() public {
+        vm.deal(deployer, SEED_WETH + 1 ether);
+        vm.warp(block.timestamp + 1 hours);
+        vm.startStateDiffRecording();
+        seeder.seedFrom(deployer, seedParams(seeded.mover));
+        VmSafe.AccountAccess[] memory accesses = vm.stopAndReturnStateDiff();
+
+        uint256 mints;
+        for (uint256 i; i < accesses.length; ++i) {
+            VmSafe.AccountAccess memory access = accesses[i];
+            if (
+                access.account != Deployments.BASE_SEPOLIA_POSITION_MANAGER
+                    || access.kind != VmSafe.AccountAccessKind.Call || access.data.length < 4
+                    || bytes4(access.data) != INonfungiblePositionManager.mint.selector
+            ) continue;
+            INonfungiblePositionManager.MintParams memory params =
+                abi.decode(withoutSelector(access.data), (INonfungiblePositionManager.MintParams));
+            assertGe(params.deadline, block.timestamp + 10 minutes, "the mint outlives the broadcast");
+            ++mints;
+        }
+        assertEq(mints, 1, "one mint");
+    }
+
+    function withoutSelector(bytes memory data) internal pure returns (bytes memory args) {
+        args = new bytes(data.length - 4);
+        for (uint256 i; i < args.length; ++i) {
+            args[i] = data[i + 4];
+        }
     }
 
     /// The other tiers for this pair exist on Base Sepolia, at prices others left. Picking

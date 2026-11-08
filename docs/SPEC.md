@@ -291,7 +291,7 @@ No wallet and no login. Paste an address and see:
 
 ## 9. Repay from collateral
 
-Status: v0.2, built and fork-tested on 2026-11-08, with an independent audit's findings fixed the same day. Not deployed yet. Items marked UNVERIFIED must be checked before they are relied on.
+Status: v0.2, built and fork-tested on 2026-11-08, with an independent audit's findings fixed the same day. Deployed on Base Sepolia and NEAR testnet the same day, with five live rescues and one refusal (subsection Testnet). Not on mainnet. Items marked UNVERIFIED must be checked before they are relied on.
 
 ### Why
 
@@ -396,6 +396,36 @@ Run records gain `mode: "reserve" | "collateral"`, and, for collateral, `collate
 ### Testnet
 
 Base Sepolia's Aave market uses its own test tokens, and they have no real DEX liquidity. Live runs therefore use a Uniswap v3 pool for Aave's test WETH and USDC that we create and seed at Aave's oracle price. The record says so, and it does not count as a measure of slippage. Slippage is measured in the backtest from historical Uniswap quotes.
+
+Deployed on 2026-11-08. The deployment and setup transactions are in `evm/README.md` and `contracts/README.md`, and each run's NEAR and Base Sepolia transactions are in its record.
+
+| Item | Value |
+|---|---|
+| `LeveeUnwind`, Base Sepolia | `0x308a7b2872F6006522280026a750fCD1c5Bd63D2`, source verified on Sourcify, exact match |
+| Levee v0.2 contract | `levee-core-v2-1503.testnet`, MPC `v1.signer-prod.testnet`, `gas_limit_unwind` 1,000,000 |
+| Position | Id 1. Borrower `0x1BA01ceF25983F71e508f139Ecb10030b0403331`, collateral WETH `0x4200000000000000000000000000000000000006`, `pool_fee` 3000, 100 USDC per rescue, 500 a day |
+| Rescuer | `0x95ad19E5382ebEfF2C190ed1711515263efDc462`, path `levee/v1/1` |
+| Keeper | `levee-keeper-1503.testnet`, key `ed25519:CDpEuXw2jkzsywk592Qo4HFRjA8oi27GcYVh2QLDJGXq`, limited to `rescue_from_collateral` on `levee-core-v2-1503.testnet` |
+| Borrower's `authorize` | Trigger 1.5, target 1.8, `max_slippage_bps` 100, WETH, 3000. aToken allowance to the helper 0.04 WETH |
+| Uniswap v3 pool | WETH/USDC 0.30%, `0x92266210FacF124f190fbad79AA230dfB85926Ce`. Positions 84797 to 84803 are ours, seeded at the oracle price by `SeedTestnetPool` |
+
+The contract keeps its full-access key, as v0.1 (`levee-core-1503.testnet`) still does. The mainnet lock above applies to mainnet.
+
+Runs, all on position 1 with the borrower's health factor pushed to 1.48 by a borrow:
+
+| Run | How | Outcome | Repaid, USDC | Health factor | Price against the oracle | Detection to Base inclusion |
+|---|---|---|---|---|---|---|
+| `2026-11-08T10-13-28Z-base-sepolia-1` | `rescue-once` | success | 21.87 | 1.48 to 1.8031 | 59 bps below | 7.9 s |
+| `2026-11-08T10-14-42Z-base-sepolia-1` | `rescue-once` | success | 17.56 | 1.48 to 1.8024 | 74 bps below | 7.6 s |
+| `2026-11-08T10-15-55Z-base-sepolia-1` | `run` loop | success | 14.10 | 1.48 to 1.8036 | 48 bps below | 9.2 s |
+| `2026-11-08T10-16-58Z-base-sepolia-1` | `run` loop | success | 11.33 | 1.48 to 1.8037 | 44 bps below | 8.2 s |
+| `2026-11-08T10-19-24Z-base-sepolia-1` | `rescue-once` | aborted, `quote_over_slippage_bound` | none | 1.48 | quote 135 bps below, bound 100 | nothing sent |
+| `2026-11-08T10-19-54Z-base-sepolia-1` | `rescue-once` | success | 9.10 | 1.48 to 1.8039 | 41 bps below | 8.7 s |
+
+- The price includes the 0.30% pool fee. It is the price of a pool we seeded, not a market's.
+- Each unwind landed just above the 1.8 target, as section "Keeper" predicts: the keeper sized for 130 bps and paid 41 to 74.
+- `unwind` used 528,445 to 545,639 gas, against the 1,000,000 limit. NEAR inclusion to MPC signature took 4.6 to 6.7 s.
+- The pool does not stay at the oracle price. Each sale moves it down, and others swap small amounts of test ETH for USDC through it, about one a minute when measured. Within minutes of a recentring it read 40 to 90 bps under the oracle. Each rescue was preceded by a rerun of the seed script with 0.001 WETH, which moves the pool back. The aborted run was taken without one, on a pool 93 bps under the oracle: the keeper refused before asking NEAR, and the next run, after a recentring, succeeded.
 
 ### Failure conditions
 

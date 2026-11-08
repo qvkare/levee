@@ -273,7 +273,7 @@ The largest sale the post-check allows, in multiples of the keeper's own amount,
 | `testFuzz_unwind_amountAndSlippage`, `testFuzz_unwind_triggerAndTarget` | 256 runs each per fork, every run held to the happy path's checks. Bands down to 0.005 |
 | `test_constructor_rejectsWrongArguments` | Deployment checks |
 
-Base Sepolia adds `test_baseSepolia_isPoolRevision10`, `test_seed_putsThePoolAtTheOraclePrice`, `test_seed_rerun_followsTheOracle`, `test_seed_rerunInsideFaucetTimelock_saysWhy` and `test_wrongFeeTier_stalePools_revert`.
+Base Sepolia adds `test_baseSepolia_isPoolRevision10`, `test_seed_putsThePoolAtTheOraclePrice`, `test_seed_rerun_followsTheOracle`, `test_seed_rerunInsideFaucetTimelock_saysWhy`, `test_seed_mintDeadline_leavesTimeToBroadcast` and `test_wrongFeeTier_stalePools_revert`.
 
 `UnwindPoolChoiceBase.t.sol` is the auditor's F2 on Base: an accomplice primes the near-empty 0.04% WETH/USDC pool 0.9% under the oracle, inside the borrower's bound, and the rescuer routes the sale through it. Before the fix it went through and the accomplice kept the bound; now it reverts with `TermsMismatch` and the authorized 0.05% pool still works.
 
@@ -406,8 +406,47 @@ forge script script/SeedTestnetPool.s.sol --rpc-url https://sepolia.base.org --b
 
 Funds and test tokens:
 
-- Base Sepolia ETH for `SEED_WETH_WEI` plus gas. A first run on the fork used 1.46M execution gas over about a dozen transactions, so budget 2M. The script wraps any WETH it lacks from the deployer's ETH and keeps the gas reserve.
+- Base Sepolia ETH for `SEED_WETH_WEI` plus gas. A first run on the fork used 1.46M execution gas over about a dozen transactions, so budget 2M. The first live run sent 11 transactions for 1,466,132 gas. The script wraps any WETH it lacks from the deployer's ETH and keeps the gas reserve.
 - Test USDC comes from Aave's faucet. The script asks it for any shortfall plus 10,000, which pays for moving the price up. The faucet allows one mint an hour per address, so a second run inside the hour needs the USDC already in the wallet. Otherwise it stops with `faucet timelock: wait an hour or lower SEED_USDC_UNITS`.
 - At the pinned block the 0.30% pool held 0.42 WETH and 497 test USDC of other people's liquidity. Moving its price up to the oracle buys at most that WETH, for test USDC.
 
-The defaults put 0.2 WETH and about 450 test USDC in a 6% range. By that position's virtual reserves, not measured, a 50 USDC unwind would cost about 0.65% with the fee, so keep live unwinds to tens of USDC under a 100 bps bound, or seed more. The oracle tracks the real ETH price and nobody arbitrages this pool, so run the script again shortly before each live unwind. A rerun moves the price through the existing position and adds to it. `UnwindBaseSepoliaTest` runs the same script before every test, from an address that holds only ETH.
+The defaults put 0.2 WETH and about 450 test USDC in a 6% range. By that position's virtual reserves, not measured, a 50 USDC unwind would cost about 0.65% with the fee, so keep live unwinds to tens of USDC under a 100 bps bound, or seed more. The oracle tracks the real ETH price and nobody arbitrages this pool back to it, so run the script again shortly before each live unwind. A rerun moves the price through the existing position and adds to it. `UnwindBaseSepoliaTest` runs the same script before every test, from an address that holds only ETH.
+
+Once the pool sits at the oracle price, other people's small swaps of test ETH for USDC go through it too, and each unwind is itself a sale. Live, it read 40 to 90 bps under the oracle within minutes of a recentring, so rerun the script with a small `SEED_WETH_WEI`, such as 0.001 WETH, right before each unwind.
+
+## Base Sepolia deployment
+
+Deployed and seeded on 2026-11-08 from the test EOA `0x1BA01ceF25983F71e508f139Ecb10030b0403331`, with the two scripts above. Hashes were read back from the chain.
+
+| Item | Value |
+|---|---|
+| `LeveeUnwind` | [`0x308a7b2872F6006522280026a750fCD1c5Bd63D2`](https://sepolia.basescan.org/address/0x308a7b2872F6006522280026a750fCD1c5Bd63D2) |
+| Deployment | [`0x9fc55b10…5e89`](https://sepolia.basescan.org/tx/0x9fc55b101d63e17e51e624cf22f64302a39a64d26e89f725a71ef2582f375e89), block 56,051,013, 2,198,239 gas |
+| Source | [Sourcify, exact match](https://repo.sourcify.dev/84532/0x308a7b2872F6006522280026a750fCD1c5Bd63D2) of this directory's `src/LeveeUnwind.sol`, solc 0.8.30, 200 runs, Cancun |
+| Constructor, read back | `ADDRESSES_PROVIDER()` `0xE4C23309117Aa30342BFaae6c95c6478e0A4Ad00`, whose `getPool()` is the section 3 Pool; `USDC()` `0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f`; `UNISWAP_V3_FACTORY()` `0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24`, 24,535 bytes, tick spacings 1, 10, 60, 200 |
+| Pool | WETH/USDC 0.30% [`0x92266210FacF124f190fbad79AA230dfB85926Ce`](https://sepolia.basescan.org/address/0x92266210FacF124f190fbad79AA230dfB85926Ce), `pool_fee` 3000 |
+| `PoolPriceMover` | `0x102515C4f468Fe26b99cEa5Da1A2Be56865EE2F1`, deployed by the first seed run and reused |
+
+Blockscout's verifier answered `Unable to verify` for the same input, and then rate-limited further attempts, so the verified source is on Sourcify.
+
+Seed runs. The first bought 0.2137 WETH of other people's liquidity for 157.69 test USDC while moving the pool from 252 to the oracle's 2,234.42 USDC per WETH; that WETH paid for the second run and for the borrower's collateral. Every later run first moved the price back, since others had traded through the pool in between.
+
+| Run | `SEED_WETH_WEI` | `moveTo` | Mint | Position |
+|---|---|---|---|---|
+| First, block 56,052,361 | 0.002 WETH, 0.002 ETH wrapped | [`0x7d1bdd1f…631f`](https://sepolia.basescan.org/tx/0x7d1bdd1fc25c5a53099a710779f61edac0fdc9add143b2d0ddb2eeb53ea9631f) | [`0xa50c9808…fd70`](https://sepolia.basescan.org/tx/0xa50c980847beb356c9674d6bc5190649b846897106a9a4964e8c4cf18d86fd70) | 84797 |
+| Second, block 56,052,754 | 0.1 WETH, from the wallet | [`0x2123ce8c…0114`](https://sepolia.basescan.org/tx/0x2123ce8c7e2e6775d8dba68409f752227a12f4f991ac09d2bc2ca3137bcd0114) | [`0xb925fc71…59ec`](https://sepolia.basescan.org/tx/0xb925fc71cd6a37a9fc227690f918680c8dcbdaead1e8d20018d80c734b9d59ec) | 84798, 0.0918 WETH and 223.44 USDC |
+| Before rescue 1, block 56,054,620 | 0.001 WETH | [`0x1a02211d…62a3`](https://sepolia.basescan.org/tx/0x1a02211d36e48f1c426f23c99a22a6b6e50ec0fe6ffb0fc4a5d7a381261f62a3) | [`0x0eb8c1e5…8c4e`](https://sepolia.basescan.org/tx/0x0eb8c1e5a4171c9b27efbd23f80c7f06639ff3077198d0896cb94d580d8c8c4e) | 84799 |
+| Before rescue 2, block 56,054,998 | 0.001 WETH | [`0xf6958cb0…24aa`](https://sepolia.basescan.org/tx/0xf6958cb02cbd49650c8c8ac5c6311d36983a2b7ce59a28c77b432ca9ce6024aa) | [`0x3aa16ae1…cef5`](https://sepolia.basescan.org/tx/0x3aa16ae15cef2fa3e109fca29bca84b1ae9e6f3d6eb3a2c995d3c7f559bbcef5) | 84800 |
+| Before rescue 3, block 56,055,293 | 0.001 WETH | [`0x7504a5df…1be6`](https://sepolia.basescan.org/tx/0x7504a5df7f3cd15a75a7f95c6528e50dd161fc306cd9ffe56a32c19e92f61be6) | [`0x52378142…98c0`](https://sepolia.basescan.org/tx/0x52378142dd66d85b1b907f307fe4fda55410d334d0c33685187a4098e68898c0) | 84801 |
+| Before rescue 4, block 56,055,688 | 0.001 WETH | [`0x12f76abf…db69`](https://sepolia.basescan.org/tx/0x12f76abfdda8c06b21825025be49450f2be1b3dcdcf58298dd5e7664d983db69) | [`0x89caa41e…df89`](https://sepolia.basescan.org/tx/0x89caa41e21f001c760fddaea48cec4c2ee9aed669556a06119d3eb210273df89) | 84802 |
+| Before rescue 5, block 56,056,616 | 0.001 WETH | [`0xbf086efd…db6f`](https://sepolia.basescan.org/tx/0xbf086efdc1c0d2010139ef14ce32abd41986fe1814de49bc7b26eb5a3d44db6f) | [`0xa4c63be4…ae46`](https://sepolia.basescan.org/tx/0xa4c63be4abb55597dcbf41cf79ec123b60dc35dae825cd571b989a134b14ae46) | 84803 |
+
+The pool is ours and seeded at the oracle price, so what an unwind paid in it is not a measure of slippage. The borrower's setup, the rescues and their NEAR side are in `docs/SPEC.md` section 9, "Testnet", and `contracts/README.md`.
+
+| Borrower step | Transaction |
+|---|---|
+| Approve and supply 0.035 WETH to Aave, on top of 0.015 already supplied | [`0xe2717a1c…af77`](https://sepolia.basescan.org/tx/0xe2717a1cd072293c73f8fb58ba8fa461b6cc19ba32732019c9694df729fdaf77), [`0xbd392996…b1b1`](https://sepolia.basescan.org/tx/0xbd3929965a319c52c0bb0ddf238f9a4b5fc38285eeceeb0f15b7f081ea97b1b1) |
+| `authorize(0x95ad…c462, 100, 1.5e18, 1.8e18, WETH, 3000)` | [`0x4b2f1a52…781a`](https://sepolia.basescan.org/tx/0x4b2f1a52846f3244d337a371c8f378fb5af8b355f1488017c965813bbd1d781a) |
+| Approve 0.04 aWETH (`0x73a5bB60b0B0fc35710DDc0ea9c407031E31Bdbb`) to the helper | [`0x769eb78d…3d42`](https://sepolia.basescan.org/tx/0x769eb78d01af8e5b16c4a663ed27f1b8781d3a0b81a49b0e942efc9929383d42) |
+| 0.0015 ETH to the rescuer for gas | [`0xdadbf319…1655`](https://sepolia.basescan.org/tx/0xdadbf31957e0d46bf47bfa28f97ecad34194f3f03a655166ad5689b03f941655) |
+| Borrows that took the health factor to 1.48 before each attempt | [`0x97bddc04…2e99`](https://sepolia.basescan.org/tx/0x97bddc04632626cfeb3b539b62e8be06c18500e3057327b338d6570ccb272e99), [`0xd991e429…1802`](https://sepolia.basescan.org/tx/0xd991e429bad8e0dbfe7d02d26e3e05bd9eb4519c2fb3a9602491850ea25e1802), [`0x7a232145…a02f`](https://sepolia.basescan.org/tx/0x7a232145eff0a912e1d556e8e51e50d62cb5b3fec3b90ac730841b342931a02f), [`0xaf8bda8c…f733`](https://sepolia.basescan.org/tx/0xaf8bda8c79f1d53d3e9c46c13ec154caf77e9ae75ec0e20ac4bc5a2cf236f733), [`0x2b49a1ae…8bd2`](https://sepolia.basescan.org/tx/0x2b49a1ae9a91123b0d1e7c9e0bb66cc5b05c362748acfa80ec2b270b03d28bd2) |

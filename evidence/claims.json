@@ -97,6 +97,61 @@
       "id": "live-rescue-from-the-loop",
       "claim": "The keeper loop detected a health factor below its trigger and completed the rescue with no manual step.",
       "run": "2026-11-07T19-27-57Z-base-sepolia-1"
+    },
+    {
+      "id": "live-unwind-base-sepolia",
+      "claim": "A keeper holding a key limited to rescue_from_collateral repaid real Aave debt on Base Sepolia by selling the borrower's own WETH collateral in one transaction, through LeveeUnwind, signed by the Levee v0.2 contract on NEAR testnet with Chain Signatures. No reserve was used. The Uniswap pool it sold in was seeded by us at Aave's oracle price, so its price is not a measure of slippage.",
+      "run": "2026-11-08T10-13-28Z-base-sepolia-1"
+    },
+    {
+      "id": "live-unwind-from-the-loop",
+      "claim": "In collateral mode, the keeper loop detected a health factor below the borrower's trigger and completed the unwind from collateral with no manual step.",
+      "run": "2026-11-08T10-15-55Z-base-sepolia-1"
+    },
+    {
+      "id": "live-unwind-refuses-quote-over-bound",
+      "claim": "On Base Sepolia, when the pool's quote for the sale was worse than the borrower's slippage bound against Aave's oracle, the keeper refused before asking NEAR to sign, and nothing was sent.",
+      "run": "2026-11-08T10-19-24Z-base-sepolia-1"
+    },
+    {
+      "id": "unwind-trigger-checked-on-chain",
+      "claim": "LeveeUnwind refuses to sell anything while the borrower's health factor is at or above the trigger they set.",
+      "test": {
+        "path": "evm/test/lib/UnwindPath.sol",
+        "name": "test_unwind_aboveTrigger_reverts"
+      }
+    },
+    {
+      "id": "unwind-price-bounded-by-oracle",
+      "claim": "LeveeUnwind refuses a sale worse than the borrower's slippage bound against Aave's oracle, here after a large sale pushed the pool 3% away.",
+      "test": {
+        "path": "evm/test/lib/UnwindPath.sol",
+        "name": "test_unwind_poolPushedOffOracle_reverts"
+      }
+    },
+    {
+      "id": "unwind-only-authorized-terms",
+      "claim": "LeveeUnwind sells only the collateral, in only the Uniswap pool, the borrower authorized.",
+      "test": {
+        "path": "evm/test/lib/UnwindPath.sol",
+        "name": "test_unwind_unauthorizedCollateralOrPool_reverts"
+      }
+    },
+    {
+      "id": "unwind-sandwich-bounded-by-max-sold",
+      "claim": "A sandwich around a published unwind costs the borrower about the keeper's quote tolerance more than the quote at most, not the borrower's whole slippage bound.",
+      "test": {
+        "path": "evm/test/lib/UnwindPath.sol",
+        "name": "test_sandwich_isBoundedByTheKeepersMaxSold"
+      }
+    },
+    {
+      "id": "collateral-key-limited",
+      "claim": "A keeper key limited to rescue_from_collateral is refused on every other contract method.",
+      "test": {
+        "path": "contracts/levee/tests/sandbox.rs",
+        "name": "a_function_call_key_limited_to_rescue_from_collateral_can_do_nothing_else"
+      }
     }
   ]
 }

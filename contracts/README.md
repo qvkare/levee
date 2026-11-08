@@ -105,20 +105,22 @@ The wasm imports host functions such as `promise_batch_action_deploy_contract`. 
 
 Needs near-cli-rs 0.31 (`near`), `jq`, `contracts/build.sh` run, the owner and keeper accounts in the keychain, and `LeveeUnwind` deployed on Base Sepolia. `ChainConfig.unwind` is required, so list only chains with a helper: Arbitrum Sepolia has none yet, and is left out.
 
+These are the values the deployment below used.
+
 ```sh
-LEVEE=levee-core-v2-1503.testnet        # new, unused
+LEVEE=levee-core-v2-1503.testnet
 OWNER=levee-owner-1503.testnet
 KEEPER=levee-keeper-1503.testnet
-UNWIND=0x...                            # LeveeUnwind on Base Sepolia
-BORROWER=0x...                          # the account whose USDC debt is repaid
-POOL_FEE=3000                           # fee tier of the WETH/USDC pool the helper swaps in
+UNWIND=0x308a7b2872F6006522280026a750fCD1c5Bd63D2   # LeveeUnwind on Base Sepolia
+BORROWER=0x1BA01ceF25983F71e508f139Ecb10030b0403331 # the account whose USDC debt is repaid
+POOL_FEE=3000                                       # fee tier of the WETH/USDC pool the helper swaps in
 ```
 
-Create the contract account, then fund it from the owner. The 206 KB wasm needs about 2.1 NEAR of storage, and the rest is a float for the 1 yoctoNEAR each signature costs.
+Create the contract account from the owner, which funds it. The 207 KB wasm needs about 2.1 NEAR of storage, and the rest is a float for the 1 yoctoNEAR each signature costs.
 
 ```sh
-near account create-account sponsor-by-faucet-service "$LEVEE" autogenerate-new-keypair save-to-keychain network-config testnet create
-near tokens "$OWNER" send-near "$LEVEE" '5 NEAR' network-config testnet sign-with-keychain send
+near account create-account fund-myself "$LEVEE" '4 NEAR' autogenerate-new-keypair save-to-keychain \
+  sign-as "$OWNER" network-config testnet sign-with-keychain send
 ```
 
 Deploy and initialise in one transaction. The fee ceilings and the other gas limits are v0.1's, read from `get_chain` on `levee-core-1503.testnet`. `gas_limit_unwind` is 1,000,000, as `evm/README.md` recommends: the helper used up to 595,000 gas on the forks, and the 63/64 rule in its nested calls needs headroom.
@@ -163,12 +165,12 @@ near contract call-function as-transaction "$LEVEE" register \
 near contract call-function as-read-only "$LEVEE" get_position json-args '{"id":1}' network-config testnet now
 ```
 
-Give the keeper a key for collateral mode only. The v0.1 key names `levee-core-1503.testnet`, so it cannot call v0.2 at all.
+Give the keeper a key for collateral mode only. The v0.1 key names `levee-core-1503.testnet`, so it cannot call v0.2 at all. The keeper reads its key from `KEEPER_PRIVATE_KEY`, so generate the pair locally, write the private key straight into a gitignored env file such as `.env.testnet-v2` in the repo root, and add only the public key:
 
 ```sh
 near account add-key "$KEEPER" grant-function-call-access --allowance unlimited \
   --contract-account-id "$LEVEE" --function-names rescue_from_collateral \
-  autogenerate-new-keypair save-to-keychain network-config testnet sign-with-keychain send
+  use-manually-provided-public-key "$KEEPER_PUBLIC_KEY" network-config testnet sign-with-keychain send
 ```
 
 On EVM, the borrower then calls the helper's `authorize` for the rescuer this prints, and approves the WETH aToken to the helper:
@@ -181,10 +183,26 @@ pnpm --silent --filter keeper keeper derive-address --id 1 --contract "$LEVEE" -
 authorize(rescuer, maxSlippageBps, triggerHf, targetHf, collateral, poolFee)
 ```
 
-`collateral` and `poolFee` must be the asset and `POOL_FEE` registered above: the helper refuses any other, so an unwind for this position reverts with `TermsMismatch` if they differ, and the keeper refuses to start. `authorize` itself checks that the asset is an Aave reserve other than USDC and that the Uniswap pool for that fee exists. The trigger, target and slippage limit are the borrower's, and the keeper reads them back and must match them too. From the borrower's wallet, with its own signing flags such as `--account`, for example:
+`collateral` and `poolFee` must be the asset and `POOL_FEE` registered above: the helper refuses any other, so an unwind for this position reverts with `TermsMismatch` if they differ, and the keeper refuses to start. `authorize` itself checks that the asset is an Aave reserve other than USDC and that the Uniswap pool for that fee exists. The trigger, target and slippage limit are the borrower's, and the keeper reads them back and must match them too. From the borrower's wallet, with its own signing flags such as `--account`, as the deployment below did:
 
 ```sh
 cast send "$UNWIND" "authorize(address,uint16,uint64,uint64,address,uint24)" \
-  "$RESCUER" 100 1250000000000000000 1600000000000000000 \
+  "$RESCUER" 100 1500000000000000000 1800000000000000000 \
   0x4200000000000000000000000000000000000006 "$POOL_FEE" --rpc-url https://sepolia.base.org
-``` On mainnet, finish with `near account delete-keys "$LEVEE" public-keys <key> network-config mainnet sign-with-keychain send` for every full-access key.
+```
+
+The rescuer needs Base Sepolia ETH for gas, and nothing else: five unwinds cost it 0.000016 ETH in all at 0.006 gwei. On mainnet, finish with `near account delete-keys "$LEVEE" public-keys <key> network-config mainnet sign-with-keychain send` for every full-access key.
+
+#### Deployed
+
+Run on 2026-11-08 with the steps above, from wasm SHA-256 `991dda79c3cff0138c871dbc4a9d96087450dd76dcf3ecf3892db8995003eab3`, which `view-account-summary` reports as the account's code hash.
+
+| Step | Result | NEAR transaction |
+|---|---|---|
+| Create `levee-core-v2-1503.testnet`, 4 NEAR from the owner | Created | [`7ZUAEtnx…uFzhd`](https://testnet.nearblocks.io/txns/7ZUAEtnxCTGZnnnKNjLMBQRd4URWge6V8yrtLs1uFzhd) |
+| Deploy and `new` | `get_chain(84532)` returns the config above, with `unwind` `0x308a7b2872f6006522280026a750fcd1c5bd63d2` | [`HMoJJjFR…9WgX`](https://testnet.nearblocks.io/txns/HMoJJjFRxbEBEhaHK1Aritk5Cy9sCE4rJ3LBeWti9WgX) |
+| `register` | Position 1, borrower `0x1ba0…3331`, keeper `levee-keeper-1503.testnet`, WETH at fee 3000, 100 USDC per rescue, 500 a day, no cooldown | [`4KgMnudS…LvX6`](https://testnet.nearblocks.io/txns/4KgMnudSMJNY43q42V3sD1LoySwyZzRcL3TGzrbxLvX6) |
+| `add-key` | `ed25519:CDpEuXw2jkzsywk592Qo4HFRjA8oi27GcYVh2QLDJGXq` on the keeper, `rescue_from_collateral` on `levee-core-v2-1503.testnet` only | [`3FYnnZeL…69QK`](https://testnet.nearblocks.io/txns/3FYnnZeL6B5RTByyu4JAh2gq757pRs3tHbsvj1H869QK) |
+| `derive-address --id 1` | Rescuer `0x95ad19E5382ebEfF2C190ed1711515263efDc462`, matching the live `derived_public_key` | |
+
+The contract account keeps its one full-access key: v0.1, `levee-core-1503.testnet`, still has one too, so neither testnet deployment is locked. The EVM side, the rescues and their records are in `evm/README.md` ("Base Sepolia deployment") and `docs/SPEC.md` section 9 ("Testnet").

@@ -53,6 +53,13 @@ contract SeedTestnetPool is Script {
     /// Test USDC minted on top of the liquidity, to pay for moving the price up.
     uint256 internal constant RECENTER_USDC_BUDGET = 10_000e6;
 
+    /// How long the mint stays valid after the block the script ran on. `forge script`
+    /// simulates and sends each transaction on later blocks, so a deadline of that block's
+    /// own timestamp has passed by then and the position manager refuses the mint with
+    /// "Transaction too old". The minimum amounts are zero, so the deadline guards nothing
+    /// the script relies on.
+    uint256 public constant MINT_DEADLINE = 30 minutes;
+
     address internal constant WETH = Deployments.BASE_SEPOLIA_WETH;
     address internal constant USDC = Deployments.BASE_SEPOLIA_USDC;
 
@@ -130,7 +137,7 @@ contract SeedTestnetPool is Script {
                 amount0Min: 0,
                 amount1Min: 0,
                 recipient: deployer,
-                deadline: block.timestamp
+                deadline: block.timestamp + MINT_DEADLINE
             })
         );
         IERC20(WETH).approve(address(manager), 0);

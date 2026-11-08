@@ -51,14 +51,17 @@ Everything below is on testnet. Nothing is deployed on any mainnet.
 
 | Contract | Network | Address | Source |
 |---|---|---|---|
-| Levee v0.1, reserve mode | NEAR testnet | [levee-core-1503.testnet](https://testnet.nearblocks.io/address/levee-core-1503.testnet) | `contracts/levee`, before collateral mode was added |
+| Levee v0.2, repay from collateral or from a reserve | NEAR testnet | [levee-core-v2-1503.testnet](https://testnet.nearblocks.io/address/levee-core-v2-1503.testnet) | `contracts/levee` |
+| LeveeUnwind, sells collateral to repay. No owner, no upgrade | Base Sepolia | [0x308a7b2872F6006522280026a750fCD1c5Bd63D2](https://sepolia.basescan.org/address/0x308a7b2872F6006522280026a750fCD1c5Bd63D2) | `evm/src/LeveeUnwind.sol`, verified on [Sourcify](https://repo.sourcify.dev/84532/0x308a7b2872F6006522280026a750fCD1c5Bd63D2) |
+| Levee v0.1, reserve mode only | NEAR testnet | [levee-core-1503.testnet](https://testnet.nearblocks.io/address/levee-core-1503.testnet) | `contracts/levee`, before collateral mode was added |
 
 ### Accounts Levee acts through
 
 | Account | Network | Address |
 |---|---|---|
-| Keeper, function-call key limited to `rescue` on v0.1 | NEAR testnet | [levee-keeper-1503.testnet](https://testnet.nearblocks.io/address/levee-keeper-1503.testnet) |
-| Rescuer for v0.1 position 1, derived from the contract by Chain Signatures | Base Sepolia | [0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971](https://sepolia.basescan.org/address/0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971) |
+| Keeper. One key limited to `rescue_from_collateral` on v0.2, one limited to `rescue` on v0.1 | NEAR testnet | [levee-keeper-1503.testnet](https://testnet.nearblocks.io/address/levee-keeper-1503.testnet) |
+| Rescuer for v0.2 position 1, derived from the contract by Chain Signatures | Base Sepolia | [0x95ad19E5382ebEfF2C190ed1711515263efDc462](https://sepolia.basescan.org/address/0x95ad19E5382ebEfF2C190ed1711515263efDc462) |
+| Rescuer for v0.1 position 1 | Base Sepolia | [0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971](https://sepolia.basescan.org/address/0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971) |
 
 ### Third-party contracts it calls
 
@@ -71,6 +74,7 @@ Everything below is on testnet. Nothing is deployed on any mainnet.
 | WETH | Base Sepolia | [0x4200000000000000000000000000000000000006](https://sepolia.basescan.org/address/0x4200000000000000000000000000000000000006) |
 | Uniswap v3 Factory | Base Sepolia | [0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24](https://sepolia.basescan.org/address/0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24) |
 | Uniswap v3 QuoterV2 | Base Sepolia | [0xC5290058841028F1614F3A6F0F5816cAd0df5E27](https://sepolia.basescan.org/address/0xC5290058841028F1614F3A6F0F5816cAd0df5E27) |
+| Uniswap v3 WETH/USDC 0.30% pool. Liquidity added by the team at Aave's oracle price, so its prices are not a market measure | Base Sepolia | [0x92266210FacF124f190fbad79AA230dfB85926Ce](https://sepolia.basescan.org/address/0x92266210FacF124f190fbad79AA230dfB85926Ce) |
 
 ## How a rescue runs
 
