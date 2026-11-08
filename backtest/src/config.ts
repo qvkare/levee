@@ -70,3 +70,40 @@ export const WINDOWS: Window[] = [
 ];
 
 export const toUnix = (iso: string): number => Math.floor(Date.parse(iso) / 1000);
+
+// The population, shared-reserve, calm-period and carry parts. The rules are in README.md,
+// committed before any Levee result for these parts was computed.
+
+/** Base has made one block every 2 seconds since genesis, so a block follows from a time. */
+export const BASE_GENESIS_TIME = 1_686_789_347;
+export const BASE_BLOCK_SEC = 2;
+export const baseBlockAt = (unix: number): number => Math.ceil((unix - BASE_GENESIS_TIME) / BASE_BLOCK_SEC);
+
+/** WETH on Base, whose AaveOracle price picks the calm period. */
+export const BASE_WETH = '0x4200000000000000000000000000000000000006';
+
+export const CALM_RULE = {
+  /** First and last UTC midnight read. */
+  fromIso: '2025-01-01T00:00:00Z',
+  toIso: '2026-11-01T00:00:00Z',
+  /** A day moving more than this breaks a run. */
+  maxDailyMove: 0.08,
+  /** Length of the calm period, taken from the centre of the longest run. */
+  days: 30,
+} as const;
+
+/** The calm period's id, next to the window ids. */
+export const CALM_ID = 'calm';
+
+/** First block with native USDC listed on each pool, found by binary search on getReserveData. */
+export const USDC_LISTED_BLOCK: Record<ChainKey, number> = { base: 8_242_475, arbitrum: 106_410_714 };
+
+/** Re-read grid, in blocks: 60 s in the crash windows and 300 s in the calm period. */
+export const REREAD_GRID_BLOCKS: Record<ChainKey, { crash: number; calm: number }> = {
+  base: { crash: 30, calm: 150 },
+  // Arbitrum averaged 0.249 s a block in both windows.
+  arbitrum: { crash: 240, calm: 1_200 },
+};
+
+/** Interest indexes and USDC rates are read this often inside each period. */
+export const INDEX_STEP_SEC = 3_600;

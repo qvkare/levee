@@ -9,6 +9,8 @@ export const POOL_ABI = parseAbi([
   'function getEModeCategoryCollateralConfig(uint8 id) view returns (uint16 ltv, uint16 liquidationThreshold, uint16 liquidationBonus)',
   'function getEModeCategoryCollateralBitmap(uint8 id) view returns (uint128)',
   'function getReserveData(address asset) view returns (uint256 configuration, uint128 liquidityIndex, uint128 currentLiquidityRate, uint128 variableBorrowIndex, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, uint16 id, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint128 accruedToTreasury, uint128 unbacked, uint128 isolationModeTotalDebt)',
+  'function getReserveNormalizedIncome(address asset) view returns (uint256)',
+  'function getReserveNormalizedVariableDebt(address asset) view returns (uint256)',
 ]);
 
 export const PROVIDER_ABI = parseAbi([
@@ -32,7 +34,10 @@ export const ERC20_ABI = parseAbi([
   'function symbol() view returns (string)',
   'function decimals() view returns (uint8)',
   'function balanceOf(address owner) view returns (uint256)',
+  'function totalSupply() view returns (uint256)',
 ]);
+
+export const MULTICALL3_ABI = parseAbi(['function getCurrentBlockTimestamp() view returns (uint256 timestamp)']);
 
 export const FEED_ABI = parseAbi([
   'function aggregator() view returns (address)',
