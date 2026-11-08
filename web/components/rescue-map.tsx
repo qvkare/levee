@@ -115,15 +115,18 @@ interface Sign {
   px: number;
   py: number;
   lines: SignLine[];
+  /** Where the sign goes instead when it would run off the right edge. */
+  instead?: Pick<Sign, "x" | "y" | "anchor" | "v">;
 }
 
 const sizeOf = (size: Size, viewport: number) => (size === "xxl" ? fluid(DISPLAY, viewport) : TYPE[size]);
 
-function SignBox({ sign, geo, onJump }: { sign: Sign; geo: Geo; onJump: (t: number) => void }) {
-  const sizes = sign.lines.map((line) => sizeOf(line.size, geo.viewport));
-  const heights = sign.lines.map((line, index) => (sizes[index] as number) * (line.lh ?? 1.25));
-  const inner = Math.max(...sign.lines.map((line, index) => textWidth(line.text, sizes[index] as number, line.weight, line.mono)));
-  const width = Math.ceil(inner + sign.px * 2 + 4);
+function SignBox({ sign: given, geo, onJump }: { sign: Sign; geo: Geo; onJump: (t: number) => void }) {
+  const sizes = given.lines.map((line) => sizeOf(line.size, geo.viewport));
+  const heights = given.lines.map((line, index) => (sizes[index] as number) * (line.lh ?? 1.25));
+  const inner = Math.max(...given.lines.map((line, index) => textWidth(line.text, sizes[index] as number, line.weight, line.mono)));
+  const width = Math.ceil(inner + given.px * 2 + 4);
+  const sign = given.instead && given.anchor === "start" && given.x + width > geo.W - 2 ? { ...given, ...given.instead } : given;
   const height = heights.reduce((total, value) => total + value, 0) + sign.py * 2 - 4;
   const wanted = sign.anchor === "end" ? sign.x - width : sign.x;
   const x = Math.max(2, Math.min(geo.W - width - 2, wanted));
@@ -212,7 +215,20 @@ function Drawing({ replay, times, geo, t, onJump, clip }: { replay: Replay; time
         { key: "first", from: -Infinity, jump: jumps.before, x: p0[0] + 8, y: p0[1] - 20, anchor: "end", v: "bottom", tone: firstTone, px: 14, py: 11, lines: firstLines },
         { key: "near", from: times.near, x: p2[0] + 16, y: (geo.lane(1) + geo.lane(2)) / 2, anchor: "start", v: "mid", tone: "plain", px: 12, py: 10, lines: [{ text: "Rescue call on NEAR", size: "s", weight: 800 }, { text: near, size: "xs", weight: 600, mono: true }] },
         { key: "signed", from: times.signed, jump: jumps.signed, x: p3[0] - 18, y: (geo.lane(2) + geo.lane(3)) / 2, anchor: "end", v: "mid", tone: "M", px: 12, py: 10, lines: [{ text: "Signed by MPC", size: "s", weight: 800 }, { text: signed, size: "xs", weight: 600, mono: true }] },
-        { key: "sent", from: times.sent, x: p4[0] + 18, y: (geo.lane(1) + geo.lane(2)) / 2, anchor: "start", v: "mid", tone: "plain", px: 12, py: 10, lines: [{ text: "Signer checked, sent", size: "s", weight: 800 }, { text: sentLine, size: "xs", weight: 600, mono: true }] },
+        {
+          key: "sent",
+          from: times.sent,
+          x: p4[0] + 18,
+          y: (geo.lane(1) + geo.lane(2)) / 2,
+          anchor: "start",
+          v: "mid",
+          tone: "plain",
+          px: 12,
+          py: 10,
+          lines: [{ text: "Signer checked, sent", size: "s", weight: 800 }, { text: sentLine, size: "xs", weight: 600, mono: true }],
+          // On a narrow map there is no room right of the route, so the sign sits left of it, between your position and the keeper.
+          instead: { x: p4[0] - 18, y: (geo.lane(0) + geo.lane(1)) / 2, anchor: "end", v: "mid" },
+        },
         { key: "after", from: times.included, jump: jumps.after, x: p5[0] + 26, y: p5[1] - 20, anchor: "end", v: "bottom", tone: "P", px: 16, py: 12, lines: afterLines },
       ]
     : [
@@ -237,9 +253,19 @@ function Drawing({ replay, times, geo, t, onJump, clip }: { replay: Replay; time
         {horizontal ? (
           <>
             <rect className="zone" x={zoneA[0]} y={geo.lane(0) - 22} width={zoneB[0] - zoneA[0]} height={geo.lane(3) - geo.lane(0) + 44} rx={6} />
-            <text className="t-xs w6 f-ink2" x={zoneA[0] + 8} y={geo.lane(3) + 40}>
-              Before the run, untimed
-            </text>
+            {/* In two lines when the zone is narrower than the label, so it stays clear of the 0 s tick. */}
+            {textWidth("Before the run, untimed", TYPE.xs, 600) + 16 <= zoneB[0] - zoneA[0] ? (
+              <text className="t-xs w6 f-ink2" x={zoneA[0] + 8} y={geo.lane(3) + 40}>
+                Before the run, untimed
+              </text>
+            ) : (
+              <text className="t-xs w6 f-ink2" x={zoneA[0] + 8} y={geo.lane(3) + 38}>
+                <tspan>Before the run,</tspan>
+                <tspan x={zoneA[0] + 8} dy={15}>
+                  untimed
+                </tspan>
+              </text>
+            )}
           </>
         ) : (
           <rect className="zone" x={geo.lane(0) - 16} y={zoneA[1]} width={geo.lane(3) - geo.lane(0) + 32} height={zoneB[1] - zoneA[1]} rx={6} />
