@@ -4,7 +4,7 @@
  * have decided differently, shows up as a mismatch.
  */
 import { isDeepStrictEqual } from 'node:util';
-import { type Hex, keccak256 } from 'viem';
+import { type Address, type Hex, keccak256 } from 'viem';
 import { chainInfo } from './chains.js';
 import { decide, decideManual, formatWad, parseWad } from './decision.js';
 import {
@@ -13,16 +13,21 @@ import {
   type Trace,
   capsFromTrace,
   decisionToTrace,
+  modeOf,
   sampleFromTrace,
+  swapToRecord,
 } from './evidence.js';
 import { DEFAULT_QUORUM, type QuorumResult, type Sample, evaluateQuorum } from './quorum.js';
-import { decisionInputFor } from './rescue.js';
+import { collateralDecisionInputFor, decisionInputFor } from './rescue.js';
 import {
+  type AssembledTransaction,
   SignatureRefused,
   assembleSignedTransaction,
   assertMatchesIntent,
+  assertMatchesUnwindIntent,
   decodeRepay,
 } from './signature.js';
+import { decodeUnwind, decodeUnwound, isAboveTrigger, swapPrice } from './unwind.js';
 
 export interface ReplayStep {
   title: string;
@@ -39,7 +44,7 @@ export interface ReplayResult {
 
 function headerStep(run: RunRecord): ReplayStep {
   const lines = [
-    `network ${run.network}, chain ${run.chain_id}, position ${run.position_id}`,
+    `network ${run.network}, chain ${run.chain_id}, position ${run.position_id}, ${modeOf(run)} mode`,
     `borrower ${run.borrower}`,
     `rescuer  ${run.rescuer}`,
     `outcome  ${run.outcome}${run.failure_reason ? ` (${run.failure_reason})` : ''}`,
@@ -78,20 +83,29 @@ function quorumStep(
   };
 }
 
-function decisionStep(trace: Trace, sample: Sample): ReplayStep | null {
+function decisionStep(run: RunRecord, trace: Trace, sample: Sample): ReplayStep | null {
   if (!trace.caps || !trace.decision) return null;
-  const input = decisionInputFor(
-    sample,
-    capsFromTrace(trace.caps),
-    parseWad(trace.trigger),
-    parseWad(trace.target),
-  );
+  const caps = capsFromTrace(trace.caps);
+  if (modeOf(run) === 'collateral' && (!trace.collateral || !sample.collateral)) {
+    return {
+      title: 'Decision',
+      ok: false,
+      lines: ['a collateral run without its collateral terms cannot be recomputed'],
+    };
+  }
+  const input = trace.collateral
+    ? collateralDecisionInputFor(sample, caps, BigInt(trace.collateral.pool_fee))
+    : decisionInputFor(sample, caps, parseWad(trace.trigger), parseWad(trace.target));
   const manual = trace.manual_amount;
   const replayed = decisionToTrace(
     manual === null ? decide(input) : decideManual(input, BigInt(manual)),
   );
 
-  const lines = [`trigger ${trace.trigger}, target ${trace.target}`];
+  const lines = [
+    trace.collateral
+      ? `trigger ${formatWad(input.trigger)}, target ${formatWad(input.target)} at the helper`
+      : `trigger ${trace.trigger}, target ${trace.target}`,
+  ];
   if (manual !== null) lines.push(`fired by hand for ${manual}`);
   lines.push(
     replayed.action === 'repay'
@@ -124,28 +138,39 @@ async function signatureStep(run: RunRecord, trace: Trace): Promise<ReplayStep |
   if (!trace.rescue_result) return null;
   const chain = chainInfo(run.chain_id);
   const lines: string[] = [];
-  // A rescue result in an aborted record means the gate refused it, so a pass here
-  // contradicts the record.
-  const refusedInRecord = run.outcome === 'aborted';
+  // A rescue result in an aborted record with nothing broadcast means the gate refused
+  // it, so a pass here contradicts the record. An abort after a broadcast, such as
+  // `above_trigger`, passed the gate.
+  const refusedInRecord = run.outcome === 'aborted' && run.evm_tx === null;
 
   try {
     const assembled = await assembleSignedTransaction(trace.rescue_result);
     lines.push(`recovered signer ${assembled.signer}`);
     if (trace.fees) {
-      assertMatchesIntent(assembled, {
+      const common = {
         chainId: run.chain_id,
-        pool: chain.pool,
-        usdc: chain.usdc,
-        borrower: run.borrower as Hex,
-        rescuer: run.rescuer as Hex,
+        borrower: run.borrower as Address,
+        rescuer: run.rescuer as Address,
         amount: BigInt(run.amount),
         nonce: trace.fees.nonce,
         maxFeePerGas: BigInt(trace.fees.max_fee_per_gas),
         maxPriorityFeePerGas: BigInt(trace.fees.max_priority_fee_per_gas),
-      });
+      };
+      if (modeOf(run) === 'collateral') {
+        if (!trace.collateral) {
+          throw new SignatureRefused('intent_mismatch', 'a collateral run with no collateral terms');
+        }
+        assertMatchesUnwindIntent(assembled, {
+          ...common,
+          helper: trace.collateral.helper as Address,
+          collateral: trace.collateral.asset as Address,
+          poolFee: BigInt(trace.collateral.pool_fee),
+        });
+      } else {
+        assertMatchesIntent(assembled, { ...common, pool: chain.pool, usdc: chain.usdc });
+      }
     }
-    const repay = decodeRepay(assembled.tx.data ?? '0x');
-    lines.push(`repay ${repay?.amount} of ${repay?.asset} on behalf of ${repay?.onBehalfOf}`);
+    lines.push(describeCall(assembled));
     const sameBytes = trace.signed_tx === null || trace.signed_tx === assembled.serialized;
     return { title: 'Signature', ok: sameBytes && !refusedInRecord, lines };
   } catch (error) {
@@ -157,6 +182,61 @@ async function signatureStep(run: RunRecord, trace: Trace): Promise<ReplayStep |
       lines,
     };
   }
+}
+
+function describeCall(assembled: AssembledTransaction): string {
+  const data = assembled.tx.data ?? '0x';
+  const unwind = decodeUnwind(data);
+  if (unwind) {
+    return `unwind ${unwind.amount} for ${unwind.borrower}, selling ${unwind.collateral} at fee ${unwind.poolFee}`;
+  }
+  const repay = decodeRepay(data);
+  return `repay ${repay?.amount} of ${repay?.asset} on behalf of ${repay?.onBehalfOf}`;
+}
+
+/** Collateral mode: the helper's account of the swap, priced again from the trace. */
+function swapStep(run: RunRecord, trace: Trace): ReplayStep | null {
+  if (!trace.unwound) return null;
+  const { log, decimals, collateral_price_base: collateralPrice, usdc_price_base: usdcPrice } =
+    trace.unwound;
+  const unwound = decodeUnwound({
+    address: log.address as Address,
+    topics: log.topics as Hex[],
+    data: log.data as Hex,
+  });
+  if (!unwound) {
+    return { title: 'Swap', ok: false, lines: ['the recorded log is not an Unwound event'] };
+  }
+  const lines = [
+    `repaid ${unwound.repaid} USDC units, sold ${unwound.sold} of ${unwound.collateral}`,
+  ];
+  let ok = run.sold === unwound.sold.toString();
+  if (collateralPrice !== null && usdcPrice !== null) {
+    const swap = swapToRecord(
+      swapPrice(unwound, BigInt(decimals), BigInt(collateralPrice), BigInt(usdcPrice)),
+    );
+    lines.push(
+      `effective price ${swap.effective_price_base} against oracle ${swap.collateral_price_base}, ${swap.discount_bps} bps below`,
+    );
+    ok = ok && isDeepStrictEqual(swap, run.swap);
+  } else {
+    lines.push('no oracle price on record');
+    ok = ok && (run.swap ?? null) === null;
+  }
+  return { title: 'Swap', ok, lines };
+}
+
+/** Collateral mode: why a reverted unwind reverted, and whether the record agrees. */
+function revertStep(run: RunRecord, trace: Trace): ReplayStep | null {
+  if (!trace.revert) return null;
+  const aboveTrigger = isAboveTrigger(trace.revert.data);
+  const lines = [
+    `revert data ${trace.revert.data ?? 'none'}: ${trace.revert.error}`,
+    aboveTrigger
+      ? 'the health factor was above the trigger again: a no-op'
+      : 'not the above-trigger refusal',
+  ];
+  return { title: 'Revert', ok: aboveTrigger === (run.failure_reason === 'above_trigger'), lines };
 }
 
 function broadcastStep(run: RunRecord, trace: Trace): ReplayStep | null {
@@ -207,7 +287,7 @@ export async function replayRun(run: RunRecord): Promise<ReplayResult> {
       const { step, result } = quorumStep(run, trace.quorum);
       steps.push(step);
       if (result.ok) {
-        const decision = decisionStep(trace, result.sample);
+        const decision = decisionStep(run, trace, result.sample);
         if (decision) steps.push(decision);
       }
     }
@@ -218,6 +298,8 @@ export async function replayRun(run: RunRecord): Promise<ReplayResult> {
       signature,
       broadcastStep(run, trace),
       receiptStep(run, trace),
+      swapStep(run, trace),
+      revertStep(run, trace),
     ];
     steps.push(...remaining.filter((step) => step !== null));
   }

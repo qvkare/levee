@@ -12,15 +12,16 @@ import { join } from 'node:path';
 import { type Address, type Hex, keccak256, serializeTransaction } from 'viem';
 import { z } from 'zod';
 import { type Network, chainInfo } from './chains.js';
-import { type InvalidRun, type RunRecord, SIMULATED, readRuns } from './evidence.js';
+import { type InvalidRun, type RunRecord, SIMULATED, modeOf, readRuns } from './evidence.js';
 import type { EvmReceipt, EvmTransaction } from './evm.js';
-import type { NearTxStatus, Position } from './near.js';
+import { type ChainConfig, type NearTxStatus, type Position, RESCUE_METHODS } from './near.js';
 import {
   REPAY_SELECTOR,
   VARIABLE_RATE_MODE,
   decodeRepay,
   rescueResultSchema,
 } from './signature.js';
+import { UNWIND_SELECTOR, decodeUnwind, unwoundEvents } from './unwind.js';
 
 export type Verdict = 'PASS' | 'FAIL' | 'RECORDED';
 
@@ -65,6 +66,8 @@ export interface NearLookup {
     blockHash: string,
   ): Promise<{ position: Position; asOf: 'block' | 'latest' }>;
   rescuerAddress(contract: string, id: number): Promise<Address>;
+  /** The contract's `get_chain`, which names the chain's `LeveeUnwind`. */
+  chain(contract: string, chainId: number): Promise<ChainConfig | null>;
 }
 
 export interface Lookups {
@@ -168,7 +171,7 @@ async function checkNear(
     checks.add('near_receipt', status.success, status.failure ?? 'every receipt succeeded');
   }
   checks.equal('near_contract', status.receiverId, run.near_contract);
-  checks.equal('near_method', status.methodName, 'rescue');
+  checks.equal('near_method', status.methodName, RESCUE_METHODS[modeOf(run)]);
 
   const args = status.args as { id?: unknown; amount?: unknown } | null;
   checks.equal('near_position', args?.id, run.position_id);
@@ -217,12 +220,86 @@ function checkRepayCall(checks: Checks, run: RunRecord, tx: EvmTransaction, posi
   );
 }
 
+/** Collateral mode: an `unwind` on the helper with the position's own terms. */
+function checkUnwindCall(
+  checks: Checks,
+  run: RunRecord,
+  tx: EvmTransaction,
+  position: Position | null,
+  helper: Address | null,
+) {
+  checks.equal('evm_chain', tx.chainId, run.chain_id);
+  if (helper) checks.address('evm_to', tx.to, helper);
+  else checks.add('evm_to', false, 'the contract names no LeveeUnwind helper for this chain');
+  checks.equal('evm_value', tx.value, 0n);
+  checks.equal('selector', tx.input.slice(0, 10).toLowerCase(), UNWIND_SELECTOR);
+
+  const unwind = decodeUnwind(tx.input);
+  if (!unwind) {
+    checks.add('unwind_args', false, 'calldata does not decode as unwind');
+    return;
+  }
+  checks.address('borrower', unwind.borrower, run.borrower);
+  checks.address('collateral', unwind.collateral, run.collateral ?? '');
+  checks.equal('amount', unwind.amount.toString(), run.amount);
+
+  if (!position) {
+    checks.add('amount_within_caps', false, 'no position to read the caps from');
+    return;
+  }
+  checks.address('borrower_registered', position.borrower, run.borrower);
+  if (position.collateral) {
+    checks.address('collateral_registered', unwind.collateral, position.collateral.asset);
+    checks.equal('pool_fee', unwind.poolFee, BigInt(position.collateral.pool_fee));
+  } else {
+    checks.add('collateral_registered', false, 'the position has no collateral config');
+  }
+  const withinCaps = unwind.amount <= position.max_per_rescue && unwind.amount <= position.max_per_day;
+  checks.add(
+    'amount_within_caps',
+    withinCaps,
+    `${unwind.amount} against max_per_rescue ${position.max_per_rescue}, max_per_day ${position.max_per_day}`,
+  );
+}
+
+/** The helper's own account of a successful unwind has to agree with the record. */
+function checkUnwound(
+  checks: Checks,
+  run: RunRecord,
+  receipt: EvmReceipt | null,
+  helper: Address | null,
+  rescuer: Address | null,
+) {
+  if (!helper) return;
+  const events = unwoundEvents(receipt?.logs ?? [], helper);
+  const [event] = events;
+  if (events.length !== 1 || !event) {
+    checks.add('unwound_event', false, `${events.length} Unwound events from ${helper}, expected 1`);
+    return;
+  }
+  checks.add('unwound_event', true, `one Unwound event from ${helper}`);
+  checks.address('unwound_borrower', event.borrower, run.borrower);
+  checks.address('unwound_collateral', event.collateral, run.collateral ?? '');
+  if (rescuer) checks.address('unwound_rescuer', event.rescuer, rescuer);
+  checks.add(
+    'unwound_repaid',
+    event.repaid > 0n && event.repaid <= BigInt(run.amount),
+    `${event.repaid}, at most ${run.amount}`,
+  );
+  checks.equal('unwound_sold', event.sold.toString(), run.sold ?? null);
+  if (run.swap) {
+    checks.equal('swap_repaid', event.repaid.toString(), run.swap.repaid);
+    checks.equal('swap_sold', event.sold.toString(), run.swap.sold);
+  }
+}
+
 async function checkEvm(
   checks: Checks,
   run: RunRecord,
   lookup: ChainLookup,
   near: NearFacts | null,
   rescuer: Address | null,
+  helper: Address | null,
 ): Promise<void> {
   if (!run.evm_tx) {
     checks.add('evm_tx', false, 'the record has no EVM transaction to resolve');
@@ -245,18 +322,22 @@ async function checkEvm(
   }
 
   if (rescuer) checks.address('evm_from', tx.from, rescuer);
-  checkRepayCall(checks, run, tx, near?.position ?? null);
+  const collateral = modeOf(run) === 'collateral';
+  if (collateral) checkUnwindCall(checks, run, tx, near?.position ?? null, helper);
+  else checkRepayCall(checks, run, tx, near?.position ?? null);
 
   // Ties the two chains together. Without it a successful NEAR receipt and a valid
   // repay could be unrelated transactions paired in a dishonest record.
   const result = rescueResultSchema.safeParse(near?.status.returnValue);
   if (result.success) {
     checks.equal('near_signed_evm_tx', signingHash(tx), normaliseHash(result.data.tx_hash));
+    checks.equal('near_kind', result.data.kind, collateral ? 'unwind' : 'rescue');
   } else {
     checks.add('near_signed_evm_tx', false, 'the NEAR transaction returned no rescue result');
   }
 
   if (run.outcome === 'success') {
+    if (collateral) checkUnwound(checks, run, receipt, helper, rescuer);
     checks.equal('evm_receipt', receipt?.success, true);
     if (run.evm_block !== null) {
       checks.equal('evm_block', receipt?.blockNumber, BigInt(run.evm_block));
@@ -306,8 +387,18 @@ export async function verifyRun(run: RunRecord, lookups: Lookups): Promise<RunVe
     checks.add('rescuer_derived', false, describeError(error));
   }
 
+  let helper: Address | null = null;
+  if (modeOf(run) === 'collateral' && (isSuccess || run.evm_tx)) {
+    try {
+      const config = await near.chain(run.near_contract, run.chain_id);
+      helper = config?.unwind ? (config.unwind as Address) : null;
+    } catch (error) {
+      checks.add('helper', false, describeError(error));
+    }
+  }
+
   if (isSuccess || run.evm_tx) {
-    await checkEvm(checks, run, lookups.chain(run.chain_id), facts, rescuer);
+    await checkEvm(checks, run, lookups.chain(run.chain_id), facts, rescuer, helper);
   }
 
   if (!checks.passed) return { ...base, verdict: 'FAIL', note: summary, checks: checks.list };

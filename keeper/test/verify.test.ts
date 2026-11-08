@@ -120,6 +120,7 @@ const lookupsFor = (state: World): Lookups => ({
     },
     position: async () => ({ position: openPosition(), asOf: state.asOf }),
     rescuerAddress: async () => state.derived,
+    chain: async () => null,
   }),
 });
 
