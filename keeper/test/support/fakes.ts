@@ -87,6 +87,7 @@ export const collateralOf = (
   targetHf: parseWad('1.6'),
   authorizedCollateral: weth,
   authorizedPoolFee: poolFee,
+  ltvZeroCollateral: null,
   ...over,
 });
 

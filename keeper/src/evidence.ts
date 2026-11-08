@@ -33,6 +33,8 @@ const collateralSampleSchema = z.object({
   /** Added with the audit fixes. A sample without them predates `authorize` naming them. */
   authorized_collateral: z.string().optional(),
   authorized_pool_fee: decimal.optional(),
+  /** Another enabled collateral at LTV 0, which blocks every unwind. */
+  ltv_zero_collateral: z.string().nullable().optional(),
 });
 
 const sampleSchema = z.object({
@@ -295,6 +297,7 @@ function collateralToTrace(sample: CollateralSample): z.infer<typeof collateralS
     target_hf: sample.targetHf.toString(),
     authorized_collateral: sample.authorizedCollateral,
     authorized_pool_fee: sample.authorizedPoolFee.toString(),
+    ltv_zero_collateral: sample.ltvZeroCollateral,
   };
 }
 
@@ -313,6 +316,7 @@ function collateralFromTrace(sample: z.infer<typeof collateralSampleSchema>): Co
     targetHf: BigInt(sample.target_hf),
     authorizedCollateral: (sample.authorized_collateral ?? ZERO_ADDRESS) as Address,
     authorizedPoolFee: BigInt(sample.authorized_pool_fee ?? '0'),
+    ltvZeroCollateral: (sample.ltv_zero_collateral ?? null) as Address | null,
   };
 }
 

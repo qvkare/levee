@@ -10,6 +10,7 @@ import {
   parseAbi,
 } from 'viem';
 import type { FeeQuote } from './fees.js';
+import { type AccountLtv, type EModeTerms, collateralIndexes, ltvOf, ltvZeroBlocker } from './ltv.js';
 import type { CollateralSample, Sample } from './quorum.js';
 import {
   type EvmLog,
@@ -27,6 +28,18 @@ const POOL_ABI = parseAbi([
   'function getUserAccountData(address user) view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)',
   // The newer getReserveVariableDebtToken is missing on Arbitrum Sepolia (revision 3).
   'function getReserveData(address asset) view returns (((uint256 data) configuration, uint128 liquidityIndex, uint128 currentLiquidityRate, uint128 variableBorrowIndex, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, uint16 id, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint128 accruedToTreasury, uint128 unbacked, uint128 isolationModeTotalDebt) reserve)',
+  'function getReservesList() view returns (address[])',
+  'function getConfiguration(address asset) view returns ((uint256 data))',
+  'function getUserConfiguration(address user) view returns ((uint256 data))',
+  'function getUserEMode(address user) view returns (uint256)',
+]);
+
+/** Aave v3.2 and later. The last two are v3.7 only, so a failure reads as zero. */
+const EMODE_ABI = parseAbi([
+  'function getEModeCategoryCollateralBitmap(uint8 id) view returns (uint128)',
+  'function getEModeCategoryCollateralConfig(uint8 id) view returns ((uint16 ltv, uint16 liquidationThreshold, uint16 liquidationBonus))',
+  'function getEModeCategoryLtvzeroBitmap(uint8 id) view returns (uint128)',
+  'function getIsEModeCategoryIsolated(uint8 id) view returns (bool)',
 ]);
 
 const PROVIDER_ABI = parseAbi(['function getPriceOracle() view returns (address)']);
@@ -164,6 +177,81 @@ function revertDataOf(error: unknown): Hex | null {
   return hex && /^0x[0-9a-fA-F]*$/.test(hex) ? hex : null;
 }
 
+/** The eMode terms Aave applies to `borrower`, or null outside eMode. */
+async function readEMode(
+  client: PublicClient,
+  pool: Address,
+  category: bigint,
+  blockNumber: bigint,
+): Promise<EModeTerms | null> {
+  if (category === 0n) return null;
+  const id = Number(category);
+  const [bitmap, config, ltvzero, isolated] = await client.multicall({
+    multicallAddress: MULTICALL3,
+    allowFailure: true,
+    blockNumber,
+    contracts: [
+      { address: pool, abi: EMODE_ABI, functionName: 'getEModeCategoryCollateralBitmap', args: [id] },
+      { address: pool, abi: EMODE_ABI, functionName: 'getEModeCategoryCollateralConfig', args: [id] },
+      { address: pool, abi: EMODE_ABI, functionName: 'getEModeCategoryLtvzeroBitmap', args: [id] },
+      { address: pool, abi: EMODE_ABI, functionName: 'getIsEModeCategoryIsolated', args: [id] },
+    ],
+  });
+  // Before v3.2 eMode had no per-asset bitmaps. The reserve LTVs then stand.
+  if (bitmap.status !== 'success' || config.status !== 'success') return null;
+  return {
+    category,
+    collateralBitmap: bitmap.result,
+    ltv: BigInt(config.result.ltv),
+    ltvzeroBitmap: ltvzero.status === 'success' ? ltvzero.result : 0n,
+    isolated: isolated.status === 'success' ? isolated.result : false,
+  };
+}
+
+/**
+ * Reads what Aave's LTV-0 rule needs, at `blockNumber`, and returns the collateral that
+ * would block `asset` from leaving the account, or null. See `src/ltv.ts`.
+ */
+export async function readLtvZeroBlocker(
+  client: PublicClient,
+  pool: Address,
+  borrower: Address,
+  asset: Address,
+  blockNumber: bigint,
+): Promise<Address | null> {
+  const [reserves, userConfiguration, category] = await client.multicall({
+    multicallAddress: MULTICALL3,
+    allowFailure: false,
+    blockNumber,
+    contracts: [
+      { address: pool, abi: POOL_ABI, functionName: 'getReservesList' },
+      { address: pool, abi: POOL_ABI, functionName: 'getUserConfiguration', args: [borrower] },
+      { address: pool, abi: POOL_ABI, functionName: 'getUserEMode', args: [borrower] },
+    ],
+  });
+  const indexes = collateralIndexes(reserves.length, userConfiguration.data);
+  const configurations = await client.multicall({
+    multicallAddress: MULTICALL3,
+    allowFailure: false,
+    blockNumber,
+    contracts: indexes.map((index) => ({
+      address: pool,
+      abi: POOL_ABI,
+      functionName: 'getConfiguration' as const,
+      args: [reserves[index] as Address] as const,
+    })),
+  });
+  const account: AccountLtv = {
+    reserves,
+    userConfiguration: userConfiguration.data,
+    reserveLtvBps: new Map(
+      indexes.map((index, i) => [index, ltvOf(configurations[i]?.data ?? 0n)] as const),
+    ),
+    eMode: await readEMode(client, pool, category, blockNumber),
+  };
+  return ltvZeroBlocker(asset, account);
+}
+
 async function readCollateral(
   client: PublicClient,
   query: PositionQuery & { collateral: NonNullable<PositionQuery['collateral']> },
@@ -186,6 +274,13 @@ async function readCollateral(
       },
     ],
   });
+  const ltvZeroCollateral = await readLtvZeroBlocker(
+    client,
+    query.pool,
+    query.borrower,
+    asset,
+    blockNumber,
+  );
   const aToken = reserve.aTokenAddress;
   const [aTokenBalance, aTokenAllowance] = await client.multicall({
     multicallAddress: MULTICALL3,
@@ -209,6 +304,7 @@ async function readCollateral(
     targetHf: helperConfig.targetHf,
     authorizedCollateral: helperConfig.collateral,
     authorizedPoolFee: helperConfig.poolFee,
+    ltvZeroCollateral,
   };
 }
 

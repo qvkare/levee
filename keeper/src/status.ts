@@ -78,7 +78,11 @@ export async function describePosition(wiring: Wiring, now: () => number): Promi
       lines.push(`  helper config differs: ${mismatch}`);
       return lines.join('\n');
     }
-
+    if (held.ltvZeroCollateral) {
+      lines.push(
+        `  blocked: ${held.ltvZeroCollateral} is enabled as collateral at LTV 0, so Aave refuses to let ${collateral.asset} leave first`,
+      );
+    }
   } else {
     lines.push(
       `  rescuer holds ${usdc(sample.rescuerUsdc)}, allowance ${usdc(sample.rescuerAllowance)}`,

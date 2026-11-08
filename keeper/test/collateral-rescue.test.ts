@@ -225,6 +225,35 @@ describe('the borrower’s settings at the helper', () => {
   });
 });
 
+describe('another collateral at LTV 0 in the account', () => {
+  const frozen: Address = '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf';
+
+  it('is recorded as the reason, and nothing is sent', async () => {
+    h = await collateralHarness();
+    setCollateral({ ltvZeroCollateral: frozen });
+
+    const run = recorded(await tick(h.ctx));
+
+    expect(run.outcome).toBe('aborted');
+    expect(run.failure_reason).toBe(
+      `ltv_zero_collateral: ${frozen} is enabled as collateral at LTV 0, so Aave lets no other collateral leave the account before it`,
+    );
+    expectNothingOnEitherChain();
+  });
+
+  it('does not matter while the position is healthy', async () => {
+    h = await collateralHarness();
+    for (const client of [h.a, h.b]) {
+      client.sample = sickSample(client.url, {
+        healthFactor: parseWad('1.3'),
+        collateral: collateralOf(h.mpc.address, { ltvZeroCollateral: frozen }),
+      });
+    }
+
+    expect(await tick(h.ctx)).toMatchObject({ status: 'idle', reason: 'healthy' });
+  });
+});
+
 describe('the keeper’s max_sold', () => {
   it('takes the position’s tolerance', async () => {
     h = await collateralHarness({ position: { ...collateralTarget, quoteToleranceBps: 10n } });

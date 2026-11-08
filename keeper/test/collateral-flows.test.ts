@@ -198,6 +198,21 @@ describe('wiring a position in collateral mode', () => {
 
     expect(await describePosition(wiring, now)).toContain('helper config differs: trigger');
   });
+
+  it('shows another collateral at LTV 0 in status', async () => {
+    const wiring = await wire();
+    for (const client of wiring.clients as ReturnType<typeof fakeEvm>[]) {
+      client.sample = sickSample(client.url, {
+        chainId: 84532,
+        collateral: collateralOf(derived, { ltvZeroCollateral: stranger }),
+      });
+    }
+    const now = () => Number(sickSample('x').blockTimestamp) * 1000 + 2_000;
+
+    expect(await describePosition(wiring, now)).toContain(
+      `blocked: ${stranger} is enabled as collateral at LTV 0`,
+    );
+  });
 });
 
 describe('replaying a collateral run', () => {

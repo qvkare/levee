@@ -631,6 +631,16 @@ async function run(
   if (!manual && sample.healthFactor >= trigger) {
     return { status: 'idle', reason: 'healthy', healthFactor: sample.healthFactor };
   }
+  // Aave would revert the aToken transfer with LtvValidationFailed, so the unwind would
+  // only burn gas. Only the borrower can clear it, by withdrawing or disabling the asset.
+  const blocker = sample.collateral?.ltvZeroCollateral;
+  if (ctx.collateral && blocker) {
+    return attempt.finish(
+      'aborted',
+      'ltv_zero_collateral',
+      `${blocker} is enabled as collateral at LTV 0, so Aave lets no other collateral leave the account before it`,
+    );
+  }
 
   let onContract: Position;
   try {

@@ -142,6 +142,7 @@ describe('the quorum in collateral mode', () => {
     ['decimals', { decimals: 8n }],
     ['authorized collateral', { authorizedCollateral: stranger }],
     ['authorized pool fee', { authorizedPoolFee: 3_000n }],
+    ['LTV-0 collateral', { ltvZeroCollateral: stranger }],
   ])('refuses any difference in the %s setting', (_name, over) => {
     const result = evaluateQuorum([withCollateral('a'), withCollateral('b', over)], [], options);
     expect(result).toMatchObject({ ok: false, reason: 'disagreement' });
@@ -176,16 +177,19 @@ describe('the record format', () => {
   it('keeps a collateral sample through the trace', () => {
     const sample = sickSample('a', { collateral: collateralOf(rescuer) });
     expect(sampleFromTrace(sampleToTrace(sample))).toEqual(sample);
+    const blocked = sickSample('a', { collateral: collateralOf(rescuer, { ltvZeroCollateral: stranger }) });
+    expect(sampleFromTrace(sampleToTrace(blocked))).toEqual(blocked);
   });
 
   it('reads a collateral sample from before authorize named the collateral', () => {
     const trace = sampleToTrace(sickSample('a', { collateral: collateralOf(rescuer) }));
-    const { authorized_collateral, authorized_pool_fee, ...older } =
+    const { authorized_collateral, authorized_pool_fee, ltv_zero_collateral, ...older } =
       trace.collateral as NonNullable<typeof trace.collateral>;
     const sample = sampleFromTrace({ ...trace, collateral: older });
     expect(sample.collateral).toMatchObject({
       authorizedCollateral: `0x${'00'.repeat(20)}`,
       authorizedPoolFee: 0n,
+      ltvZeroCollateral: null,
     });
   });
 

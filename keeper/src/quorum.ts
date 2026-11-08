@@ -30,6 +30,11 @@ export interface CollateralSample {
   authorizedCollateral: Address;
   /** The Uniswap v3 fee tier the borrower authorized at the helper. */
   authorizedPoolFee: bigint;
+  /**
+   * Another collateral enabled in the account at LTV 0, which makes Aave refuse to let
+   * this one leave first, so every unwind would revert. Null when there is none.
+   */
+  ltvZeroCollateral: Address | null;
 }
 
 /** One endpoint's view of a position, all read at one block. */
@@ -116,6 +121,7 @@ const EXACT_COLLATERAL_FIELDS = [
   'targetHf',
   'authorizedCollateral',
   'authorizedPoolFee',
+  'ltvZeroCollateral',
 ] as const satisfies readonly (keyof CollateralSample)[];
 
 function withinDeviation(a: bigint, b: bigint, maxDeviationBps: bigint): boolean {
