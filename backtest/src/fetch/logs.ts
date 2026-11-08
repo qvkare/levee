@@ -13,6 +13,8 @@ export interface RawLog {
   transactionHash: string;
   transactionIndex: string;
   logIndex: string;
+  /** Kept when the provider sends it. Tenderly does. */
+  blockTimestamp?: string;
 }
 
 export interface LogQuery {
@@ -41,7 +43,7 @@ async function fetchRange(rpc: Rpc, query: LogQuery, dir: string, from: number, 
       { ...(query.address ? { address: query.address } : {}), topics: query.topics, fromBlock: hex(from), toBlock: hex(to) },
     ]);
     if (!Array.isArray(logs)) throw new Error(`eth_getLogs returned ${typeof logs}`);
-    const slim = logs.map(({ address, topics, data, blockNumber, transactionHash, transactionIndex, logIndex }) => ({
+    const slim = logs.map(({ address, topics, data, blockNumber, transactionHash, transactionIndex, logIndex, blockTimestamp }) => ({
       address,
       topics,
       data,
@@ -49,6 +51,7 @@ async function fetchRange(rpc: Rpc, query: LogQuery, dir: string, from: number, 
       transactionHash,
       transactionIndex,
       logIndex,
+      ...(blockTimestamp ? { blockTimestamp } : {}),
     }));
     writeFileSync(file, JSON.stringify(slim));
   } catch (err) {

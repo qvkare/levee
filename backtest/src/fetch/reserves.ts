@@ -56,7 +56,7 @@ export const MARKETS_FILE = join(DERIVED_DIR, 'markets.json');
 const one = (target: string, abi: Abi, functionName: string, args?: readonly unknown[]): Call =>
   args ? { target, abi, functionName, args } : { target, abi, functionName };
 
-async function snapshot(rpc: Rpc, chain: ChainKey, window: string, block: number): Promise<MarketSnapshot> {
+export async function snapshot(rpc: Rpc, chain: ChainKey, window: string, block: number): Promise<MarketSnapshot> {
   const { pool } = CHAINS[chain];
   const [provider] = (await multicall(rpc, block, [one(pool, POOL_ABI, 'ADDRESSES_PROVIDER')])) as [string];
   const [oracle, dataProvider, assets] = (await multicall(rpc, block, [
