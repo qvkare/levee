@@ -20,7 +20,7 @@ import { LeveeNote, type Measured } from "./levee-note.tsx";
 import { useReading, type Phase } from "./use-reading.ts";
 
 /** A source's own message, less the closing line every failure shares. The unread line says that once. */
-// design-allow: matches the API's own wording so it can be removed from the page
+// Matches the API's own wording so it can be removed from the page.
 const cleaned = (message: string) => message.replace(/\s*[\w ]+ figures are missing, not zero\.$/, "").trim();
 
 function headline(line: Line, report: RiskReport, simulated: boolean): string {

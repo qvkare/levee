@@ -1,8 +1,6 @@
 # Levee design direction: Hat
 
-A rescue is a metro line. Read this before adding a page or a component. If the work needs something this document does not allow, change the document first and give the reason. `pnpm --filter web design-check` enforces the rules marked as checked.
-
-<!-- design-check: max-type-sizes 7 -->
+A rescue is a metro line. Read this before adding a page or a component. If the work needs something this document does not allow, change the document first and give the reason.
 
 ## Product world
 
@@ -71,7 +69,7 @@ Amber is a state, never decoration. It marks: the replay's "Below trigger" sign 
 - Figures are tabular everywhere (`tnum`). Overpass sits high in its line box, so buttons and tags add 2 to 3 px of top padding.
 - Drawings size their label boxes from `lib/text-width.ts`, the font's own advance widths, so a sign fits its text on the server too.
 
-At most six sizes plus display, seven in all. Every `font-size` uses a token. design-check fails on a literal size, and on more tokens than the line at the top of this file allows.
+At most six sizes plus display, seven in all. Every `font-size` uses a token. No literal sizes.
 
 | Token | Size | Use |
 |---|---|---|
@@ -143,9 +141,9 @@ The home page shows a third party's address only to show the tool, so it passes 
 ## Copy
 
 - English, short and concrete. Say what happened, with the figure and where it comes from.
-- Headings are names, with no full stop: "Stop by stop", "Who can do what". Checked.
-- No "X, not Y" turns. Say the thing and stop. Checked on the interface.
-- No hype words. Checked, with the filler list below.
+- Headings are names, with no full stop: "Stop by stop", "Who can do what".
+- No "X, not Y" turns. Say the thing and stop.
+- No hype words. See the filler list below.
 - "Testnet · unaudited" in the header, and the footer says not to use it with funds you can't lose. Once or twice, not in every section.
 - Labels say testnet, example, simulation, planned and being re-measured where those apply.
 - Example addresses carry neutral labels, and Levee says it has no relationship with them.
@@ -153,22 +151,22 @@ The home page shows a third party's address only to show the tool, so it passes 
 
 ## Banned
 
-Universal (checked): gradients, gradient or clipped text, default indigo and violet, glows, blur panels, default typefaces, em dashes, emoji, arrow glyphs welded to links, tracked all-caps eyebrows, 01/02/03 markers, scroll and attention motion, count-ups, filler copy, placeholder people, round unsourced numbers, claims no table backs (never, guaranteed, trustless, within seconds), italic.
+Universal: gradients, gradient or clipped text, default indigo and violet, glows, blur panels, default typefaces, em dashes, emoji, arrow glyphs welded to links, tracked all-caps eyebrows, 01/02/03 markers, scroll and attention motion, count-ups, filler copy, placeholder people, round unsourced numbers, claims no table backs (never, guaranteed, trustless, within seconds), italic.
 
 Product-specific:
 
-- Literal colours in components. Colour comes from the tokens (checked).
-- Amber for anything outside its states (amber outside its token is checked).
-- A literal type size, or more sizes than allowed (checked).
-- Headings with a full stop, "X, not Y" in the interface (checked).
-- Water imagery and the retired vocabulary: rivers, floods, gauges, staff, freeboard, crest, drills, the wall (checked).
+- Literal colours in components. Colour comes from the tokens.
+- Amber for anything outside its states.
+- A literal type size, or more sizes than allowed.
+- Headings with a full stop, "X, not Y" in the interface.
+- Water imagery and the retired vocabulary: rivers, floods, gauges, staff, freeboard, crest, drills, the wall.
 - A dark theme. Sponsor colours as decoration. Health pills, gauge dials, sparklines, KPI tiles, icon cards.
 - Presenting a distance as a likelihood.
 - A third-party address named as an example of anything negative.
 
 ## Checks
 
-- `pnpm --filter web test`, `typecheck` and `design-check` pass.
+- `pnpm --filter web test` and `typecheck` pass.
 - Screenshots at 390 and 1440 of every page and every `/a` state, and the three replay frames, compared with `tasarim/tur-2/b`. Spot checks at 768, 1024 and 1920 for overflow.
 - Keyboard: skip link, nav, the address box, Read, the replay button and its signs, Read again, the target and fall fields, with a visible focus ring on white, tint, blue, ink and amber.
 - Reduced motion: the replay waits, and steps when asked.

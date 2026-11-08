@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: "Levee", description: DESCRIPTION },
 };
 
-// design-allow: the browser chrome colour, which cannot read a CSS token
+// The browser chrome colour, which cannot read a CSS token.
 export const viewport: Viewport = { themeColor: "#ffffff", colorScheme: "light" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

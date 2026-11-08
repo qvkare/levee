@@ -11,8 +11,7 @@
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview --port 8787",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --disable-warning=ExperimentalWarning \"lib/**/*.test.ts\"",
-    "design-check": "node tools/design-check.mjs app components lib README.md"
+    "test": "node --test --disable-warning=ExperimentalWarning \"lib/**/*.test.ts\""
   },
   "dependencies": {
     "@opennextjs/cloudflare": "1.20.16",

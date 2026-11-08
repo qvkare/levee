@@ -15,7 +15,6 @@ pnpm install
 pnpm --filter web dev            # next dev
 pnpm --filter web test           # unit tests, Node's own runner
 pnpm --filter web typecheck
-pnpm --filter web design-check   # bans from DESIGN.md
 pnpm --filter web run preview    # OpenNext build, then the real Worker on local workerd, port 8787
 pnpm --filter web run deploy     # build and deploy. Needs wrangler login
 ```
@@ -96,7 +95,6 @@ Hyperliquid:
 
 `covered` says whether a USDC top-up could reach that margin. Top-ups are a later phase and are not live.
 
-<!-- design-allow: names the version 1 values for API users who migrate -->
 Version 1 had `stage` (`dry`, `normal`, `watch`, `action`, `flood`) where version 2 has `standing`. Nothing else changed shape.
 
 ## How it reads

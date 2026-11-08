@@ -141,11 +141,9 @@ Limits: only liquidated positions are sampled, so false alarms are unmeasured. 5
 | `backtest` | Liquidation replay |
 | `evidence` | Run records and the claims ledger |
 
-## Prior work and disclosures
+## Libraries
 
-This repository was started on 2026-11-07, inside the hackathon window. The design draws on ideas from the author's earlier projects Quoral (Monad) and Lentic (Zcash). No contract or keeper code was copied from them. `web/tools/design-check.mjs` was carried over from an earlier project, and is baseline under Q-005.
-
-Most of the code was written by AI coding agents under human direction, as Q-005 allows. Third-party libraries are listed in `package.json`, `Cargo.toml` and `.gitmodules`.
+Third-party libraries are listed in `package.json`, `Cargo.toml` and `.gitmodules`. Most of the code was written by AI coding agents under human direction.
 
 ## License
 

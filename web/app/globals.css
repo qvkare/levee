@@ -1,6 +1,6 @@
 /*
  * Levee, Hat: a rescue is a metro line with four lanes. See DESIGN.md before changing anything here.
- * Every colour, type size and space is a token below. design-check counts the type sizes.
+ * Every colour, type size and space is a token below.
  */
 
 :root {
@@ -35,7 +35,7 @@
   --amber-ink: #7a5300;
   --amber-ink-2: #9a6700;
 
-  /* Type: six sizes plus display. DESIGN.md lists them, and design-check holds the count */
+  /* Type: six sizes plus display. DESIGN.md lists them */
   --t-xs: 13px;
   --t-s: 15px;
   --t-m: 17px;
