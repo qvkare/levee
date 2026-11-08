@@ -377,3 +377,24 @@ export async function readNearTransaction(
   }
   throw new Error(`could not resolve NEAR transaction ${nearTx}: ${errors.join('; ')}`);
 }
+
+/**
+ * The public keys on an account at the final block, read with no keys. An empty list
+ * means nobody can sign for the account: the lock in spec section 4, "Mainnet lock".
+ */
+export async function readAccessKeys(rpcUrls: string[], accountId: string): Promise<string[]> {
+  const errors: string[] = [];
+  for (const url of rpcUrls) {
+    try {
+      const provider = new JsonRpcProvider({ url }, { retries: 1, wait: 200, backoff: 1.5 });
+      const list = await provider.viewAccessKeyList({
+        accountId,
+        finalityQuery: { finality: 'final' },
+      });
+      return list.keys.map((key) => String(key.public_key));
+    } catch (error) {
+      errors.push(`${url}: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  throw new Error(`could not read the access keys of ${accountId}: ${errors.join('; ')}`);
+}

@@ -158,6 +158,8 @@ Records carry `mode`. A record without it predates v0.2 and is reserve mode. Col
 
 Beyond spec section 6, `verify` recomputes the on-chain transaction's signing hash and requires it to equal the `tx_hash` the contract returned, so a NEAR receipt and a repay cannot be unrelated transactions paired in a record. It also requires the contract's result to be of the run's kind, `rescue` or `unwind`.
 
+A run claim can list `no_access_keys`, NEAR accounts that must have no keys. `verify` reads each one's `view_access_key_list` on the run's network, at the final block, and the claim fails if any key is left or a list cannot be read. `contracts-keyless-rescue-after` uses it for both testnet contract accounts.
+
 For a collateral run, `verify` checks the NEAR method is `rescue_from_collateral` and its `max_sold` is the record's, `to` is the helper named by the contract's `get_chain`, the selector is `unwind`'s, the decoded borrower, collateral, fee tier and `max_sold` match the record and the registered position, and the amount is within caps. For a success it also requires exactly one `Unwound` event from the helper, agreeing on the borrower, the derived rescuer, the collateral and `sold`, with `repaid` above zero and at most the amount signed, and `sold` at most `max_sold`.
 
 `replay` recomputes the same for a collateral run, from the helper's settings in the recorded samples, and adds a `Quote` step that chooses `max_sold` again from the recorded quotes and recomputes the oracle bound from the sample, a `Swap` step that prices the recorded event again and a `Revert` step that checks the above-trigger reading.

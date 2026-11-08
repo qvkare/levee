@@ -102,7 +102,7 @@ The worst a stolen keeper key can do is repay debt early, burn rescuer gas up to
 
 - **Chain Signatures.** The rescuer address on Base belongs to the contract. Without it, this design would need a hot key or a contract on every chain.
 - **Function-call keys.** The keeper's key is limited to `rescue` by the protocol. `make attack-demo` shows it.
-- **NEAR contract as the policy layer.** One policy controls rescuers on several chains, and it has no admin or upgrade path. Keys on the testnet deployment have not been removed yet; `it_still_works_with_every_key_deleted` covers a locked contract in the sandbox.
+- **NEAR contract as the policy layer.** One policy controls rescuers on several chains, and it has no admin or upgrade path. Both testnet contract accounts have no keys: the last full-access key was deleted on `levee-core-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/3u8yYEBB9eVJbRGjE27xiHru1aAA4W7Mh4C2rrsZ86fu)) and on `levee-core-v2-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA)); `it_still_works_with_every_key_deleted` covers a locked contract in the sandbox.
 
 - **NEAR Intents.** The site and `make quote-dry` take live confidential 1Click quotes for the reserve routes, with a partner key. No reserve moves through Intents yet: the reserve layer below is not built.
 

@@ -68,6 +68,8 @@ export interface NearLookup {
   rescuerAddress(contract: string, id: number): Promise<Address>;
   /** The contract's `get_chain`, which names the chain's `LeveeUnwind`. */
   chain(contract: string, chainId: number): Promise<ChainConfig | null>;
+  /** Public keys on an account now, from `view_access_key_list`. */
+  accessKeys(account: string): Promise<string[]>;
 }
 
 export interface Lookups {
@@ -81,9 +83,17 @@ const claimSchema = z
     claim: z.string().min(1),
     test: z.object({ path: z.string(), name: z.string() }).optional(),
     run: z.string().optional(),
+    /**
+     * NEAR accounts that must have no access keys, read now on the run's network. For a
+     * claim that a run worked on a contract nobody can sign for any more.
+     */
+    no_access_keys: z.array(z.string().min(1)).min(1).optional(),
   })
   .refine((claim) => (claim.test === undefined) !== (claim.run === undefined), {
     message: 'a claim maps to exactly one of test or run',
+  })
+  .refine((claim) => claim.no_access_keys === undefined || claim.run !== undefined, {
+    message: 'no_access_keys needs a run, whose network it is read on',
   });
 
 const claimsFileSchema = z.object({ claims: z.array(claimSchema) });
@@ -442,11 +452,40 @@ async function verifyTestClaim(
   return { ...base, verdict: 'RECORDED', note: `test exists, not run here: ${path} ${name}` };
 }
 
-function verifyRunClaim(claim: Claim, runs: Map<string, RunVerdict>): ClaimVerdict {
+async function verifyRunClaim(
+  claim: Claim,
+  runs: Map<string, RunVerdict>,
+  records: Map<string, RunRecord>,
+  lookups: Lookups,
+): Promise<ClaimVerdict> {
   const base = { id: claim.id, claim: claim.claim };
   const verdict = claim.run ? runs.get(claim.run) : undefined;
   if (!verdict) return { ...base, verdict: 'FAIL', note: `run ${claim.run} is not on file` };
-  return { ...base, verdict: verdict.verdict, note: `run ${verdict.runId}: ${verdict.note}` };
+  const note = `run ${verdict.runId}: ${verdict.note}`;
+  if (!claim.no_access_keys) return { ...base, verdict: verdict.verdict, note };
+
+  const network = records.get(verdict.runId)?.network;
+  if (network !== 'mainnet' && network !== 'testnet') {
+    return { ...base, verdict: 'FAIL', note: `${note}; a ${network} run names no live accounts` };
+  }
+  const near = lookups.near(network);
+  const problems: string[] = [];
+  for (const account of claim.no_access_keys) {
+    try {
+      const keys = await near.accessKeys(account);
+      if (keys.length > 0) problems.push(`${account} has access keys: ${keys.join(', ')}`);
+    } catch (error) {
+      problems.push(describeError(error));
+    }
+  }
+  if (problems.length > 0) {
+    return { ...base, verdict: 'FAIL', note: `${note}; ${problems.join('; ')}` };
+  }
+  return {
+    ...base,
+    verdict: verdict.verdict,
+    note: `${note}; no access keys on ${claim.no_access_keys.join(', ')}`,
+  };
 }
 
 async function readClaims(evidenceDir: string): Promise<Claim[]> {
@@ -465,13 +504,14 @@ export async function verifyEvidence(options: {
 
   const runVerdicts = await Promise.all(runs.map((run) => verifyRun(run, lookups)));
   const byId = new Map(runVerdicts.map((verdict) => [verdict.runId, verdict]));
+  const records = new Map(runs.map((run) => [run.run_id, run]));
 
   const claims = await readClaims(evidenceDir);
   const claimVerdicts = await Promise.all(
     claims.map((claim) =>
       claim.test
         ? verifyTestClaim({ ...claim, test: claim.test }, repoRoot)
-        : verifyRunClaim(claim, byId),
+        : verifyRunClaim(claim, byId, records, lookups),
     ),
   );
 

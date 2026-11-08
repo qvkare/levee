@@ -69,6 +69,9 @@ interface World {
   evmError?: Error;
   derived: Address;
   asOf: 'block' | 'latest';
+  /** Public keys per NEAR account. An account not listed has none. */
+  accessKeys?: Record<string, string[]>;
+  keysError?: Error;
 }
 
 const nearStatusFor = (tx: EvmTransaction): NearTxStatus => ({
@@ -121,6 +124,10 @@ const lookupsFor = (state: World): Lookups => ({
     position: async () => ({ position: openPosition(), asOf: state.asOf }),
     rescuerAddress: async () => state.derived,
     chain: async () => null,
+    async accessKeys(account) {
+      if (state.keysError) throw state.keysError;
+      return state.accessKeys?.[account] ?? [];
+    },
   }),
 });
 
@@ -452,6 +459,62 @@ describe('verifyEvidence', () => {
     const test = { path: 'evm/Repay.t.sol', name: 'test_repay' };
     await writeClaims([{ id: 'c1', claim: 'Doubled.', run: 'x', test }]);
     await expect(verify()).rejects.toThrow(/exactly one/);
+  });
+
+  describe('a run claim on accounts with no access keys', () => {
+    const accounts = ['levee.testnet', 'levee-v2.testnet'];
+
+    const writeLockedClaim = async () => {
+      const { run } = await writeRun(evidenceDir, successRun());
+      await writeClaims([
+        { id: 'c1', claim: 'It rescues with no keys.', run: run.run_id, no_access_keys: accounts },
+      ]);
+    };
+
+    it('passes when every listed account has none', async () => {
+      await writeLockedClaim();
+
+      const report = await verify();
+
+      expect(report.ok).toBe(true);
+      expect(report.claims[0]?.verdict).toBe('PASS');
+      expect(report.claims[0]?.note).toContain('no access keys on levee.testnet, levee-v2.testnet');
+    });
+
+    it('fails when one still has a key', async () => {
+      await writeLockedClaim();
+
+      const report = await verify(world({ accessKeys: { 'levee-v2.testnet': ['ed25519:Left'] } }));
+
+      expect(report.ok).toBe(false);
+      expect(report.claims[0]?.verdict).toBe('FAIL');
+      expect(report.claims[0]?.note).toContain('levee-v2.testnet has access keys: ed25519:Left');
+    });
+
+    it('fails when the keys cannot be read, because a claim only passes on proof', async () => {
+      await writeLockedClaim();
+
+      const report = await verify(world({ keysError: new Error('rpc down') }));
+
+      expect(report.claims[0]?.verdict).toBe('FAIL');
+      expect(report.claims[0]?.note).toContain('rpc down');
+    });
+
+    it('fails for a simulated run, which names no live account', async () => {
+      const { run } = await writeRun(evidenceDir, successRun({ network: 'simulated' }));
+      await writeClaims([
+        { id: 'c1', claim: 'Simulated.', run: run.run_id, no_access_keys: accounts },
+      ]);
+
+      expect((await verify()).claims[0]?.verdict).toBe('FAIL');
+    });
+
+    it('is refused on a test claim, which has no network to read on', async () => {
+      const test = { path: 'evm/Repay.t.sol', name: 'test_repay' };
+      await writeClaims([{ id: 'c1', claim: 'Locked.', test, no_access_keys: accounts }]);
+
+      await expect(verify()).rejects.toThrow(/no_access_keys needs a run/);
+    });
   });
 
   it('rejects a repo with no claims ledger', async () => {

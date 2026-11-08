@@ -152,6 +152,15 @@
         "path": "contracts/levee/tests/sandbox.rs",
         "name": "a_function_call_key_limited_to_rescue_from_collateral_can_do_nothing_else"
       }
+    },
+    {
+      "id": "contracts-keyless-rescue-after",
+      "claim": "Neither testnet contract account, levee-core-1503.testnet (v0.1) nor levee-core-v2-1503.testnet (v0.2), has an access key: the last full-access key on each was deleted in NEAR transactions 3u8yYEBB9eVJbRGjE27xiHru1aAA4W7Mh4C2rrsZ86fu and C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA, at blocks 276,764,277 and 276,764,289. A collateral rescue on v0.2 landed after that, its NEAR call at block 276,764,677.",
+      "run": "2026-11-08T10-39-36Z-base-sepolia-1",
+      "no_access_keys": [
+        "levee-core-1503.testnet",
+        "levee-core-v2-1503.testnet"
+      ]
     }
   ]
 }

@@ -191,7 +191,7 @@ cast send "$UNWIND" "authorize(address,uint16,uint64,uint64,address,uint24)" \
   0x4200000000000000000000000000000000000006 "$POOL_FEE" --rpc-url https://sepolia.base.org
 ```
 
-The rescuer needs Base Sepolia ETH for gas, and nothing else: five unwinds cost it 0.000016 ETH in all at 0.006 gwei. On mainnet, finish with `near account delete-keys "$LEVEE" public-keys <key> network-config mainnet sign-with-keychain send` for every full-access key.
+The rescuer needs Base Sepolia ETH for gas, and nothing else: six unwinds cost it 0.000019 ETH in all at 0.006 gwei. On mainnet, finish with `near account delete-keys "$LEVEE" public-keys <key> network-config mainnet sign-with-keychain send` for every full-access key.
 
 #### Deployed
 
@@ -204,5 +204,8 @@ Run on 2026-11-08 with the steps above, from wasm SHA-256 `991dda79c3cff0138c871
 | `register` | Position 1, borrower `0x1ba0…3331`, keeper `levee-keeper-1503.testnet`, WETH at fee 3000, 100 USDC per rescue, 500 a day, no cooldown | [`4KgMnudS…LvX6`](https://testnet.nearblocks.io/txns/4KgMnudSMJNY43q42V3sD1LoySwyZzRcL3TGzrbxLvX6) |
 | `add-key` | `ed25519:CDpEuXw2jkzsywk592Qo4HFRjA8oi27GcYVh2QLDJGXq` on the keeper, `rescue_from_collateral` on `levee-core-v2-1503.testnet` only | [`3FYnnZeL…69QK`](https://testnet.nearblocks.io/txns/3FYnnZeL6B5RTByyu4JAh2gq757pRs3tHbsvj1H869QK) |
 | `derive-address --id 1` | Rescuer `0x95ad19E5382ebEfF2C190ed1711515263efDc462`, matching the live `derived_public_key` | |
+| `delete-keys` on v0.1, `levee-core-1503.testnet` | Its only full-access key, `ed25519:AgX6NqakXdaJD4PzFABsTLxnKmEEisozd617LNVi8Ead`, deleted at block 276,764,277. No access key is left | [`3u8yYEBB…86fu`](https://testnet.nearblocks.io/txns/3u8yYEBB9eVJbRGjE27xiHru1aAA4W7Mh4C2rrsZ86fu) |
+| `delete-keys` on v0.2, `levee-core-v2-1503.testnet` | Its only full-access key, `ed25519:GRz6zN114TpPrRB5Go6zANhjC2csyW7kuLwUsWJV2ZdE`, deleted at block 276,764,289. No access key is left | [`C5aHVAah…zJJA`](https://testnet.nearblocks.io/txns/C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA) |
+| `rescue_from_collateral` after the deletion | Run `2026-11-08T10-39-36Z-base-sepolia-1`: the keeper's function-call key asked, the keyless contract signed through MPC, and the unwind repaid 7.31 USDC on Base Sepolia, health factor 1.48 to 1.8035 | [`EXWuscQy…oan3j`](https://testnet.nearblocks.io/txns/EXWuscQyobKfnFwUFvs7higAinm6RmRpCJ7ThLioan3j), block 276,764,677 |
 
-The contract account keeps its one full-access key: v0.1, `levee-core-1503.testnet`, still has one too, so neither testnet deployment is locked. The EVM side, the rescues and their records are in `evm/README.md` ("Base Sepolia deployment") and `docs/SPEC.md` section 9 ("Testnet").
+Both testnet contract accounts are now locked as a mainnet deployment would be: no key can sign for them, so only their own code acts for them, and the 1 yoctoNEAR each signature costs still comes from their balance. The claim `contracts-keyless-rescue-after` in `evidence/claims.json` names both accounts in `no_access_keys`, so `make verify` reads their key lists every time. The EVM side, the rescues and their records are in `evm/README.md` ("Base Sepolia deployment") and `docs/SPEC.md` section 9 ("Testnet").

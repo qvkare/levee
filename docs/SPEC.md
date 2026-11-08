@@ -260,7 +260,7 @@ The trigger, target and RPC list live off chain. No LLM is involved.
 - `trace` is optional. It holds the inputs and results of each step, so that `keeper replay` can repeat the run with no keys and no network.
 - `network` is `simulated` for a run on a local fork with a local key standing in for the MPC. A simulated run does not count as proof.
 
-Failures are recorded, not deleted. `evidence/claims.json` maps every public claim to a test or a run. It holds `{ "claims": [...] }`, and each claim has an `id`, the `claim` text, and exactly one of `test` (`{ "path", "name" }`) or `run` (a run id).
+Failures are recorded, not deleted. `evidence/claims.json` maps every public claim to a test or a run. It holds `{ "claims": [...] }`, and each claim has an `id`, the `claim` text, and exactly one of `test` (`{ "path", "name" }`) or `run` (a run id). A `run` claim may also list `no_access_keys`, NEAR accounts that must have no access keys: `make verify` reads each one's `view_access_key_list` on the run's network, now, and fails the claim if any key is left or the list cannot be read.
 
 `make verify` resolves each hash and checks: the NEAR receipt succeeded, the EVM `from` equals the derived rescuer, `to` equals the Pool, the selector is `0x573ade81`, the asset is USDC, `onBehalfOf` is the borrower and the amount is within caps. It also checks that the EVM transaction's signing hash equals the `tx_hash` the contract returned, which ties the NEAR receipt to that transaction.
 
@@ -291,7 +291,7 @@ No wallet and no login. Paste an address and see:
 
 ## 9. Repay from collateral
 
-Status: v0.2, built and fork-tested on 2026-11-08, with an independent audit's findings fixed the same day. Deployed on Base Sepolia and NEAR testnet the same day, with five live rescues and one refusal (subsection Testnet). Not on mainnet. Items marked UNVERIFIED must be checked before they are relied on.
+Status: v0.2, built and fork-tested on 2026-11-08, with an independent audit's findings fixed the same day. Deployed on Base Sepolia and NEAR testnet the same day, with six live rescues and one refusal, the last rescue after every key on the contract accounts was deleted (subsection Testnet). Not on mainnet. Items marked UNVERIFIED must be checked before they are relied on.
 
 ### Why
 
@@ -409,7 +409,14 @@ Deployed on 2026-11-08. The deployment and setup transactions are in `evm/README
 | Borrower's `authorize` | Trigger 1.5, target 1.8, `max_slippage_bps` 100, WETH, 3000. aToken allowance to the helper 0.04 WETH |
 | Uniswap v3 pool | WETH/USDC 0.30%, `0x92266210FacF124f190fbad79AA230dfB85926Ce`. Positions 84797 to 84803 are ours, seeded at the oracle price by `SeedTestnetPool` |
 
-The contract keeps its full-access key, as v0.1 (`levee-core-1503.testnet`) still does. The mainnet lock above applies to mainnet.
+Both testnet contract accounts are locked as "Mainnet lock" describes: the only full-access key on each was deleted, and neither has any access key left.
+
+| Account | Deleted key | NEAR transaction | Block |
+|---|---|---|---|
+| `levee-core-1503.testnet` (v0.1) | `ed25519:AgX6NqakXdaJD4PzFABsTLxnKmEEisozd617LNVi8Ead` | [`3u8yYEBB9eVJbRGjE27xiHru1aAA4W7Mh4C2rrsZ86fu`](https://testnet.nearblocks.io/txns/3u8yYEBB9eVJbRGjE27xiHru1aAA4W7Mh4C2rrsZ86fu) | 276,764,277 |
+| `levee-core-v2-1503.testnet` (v0.2) | `ed25519:GRz6zN114TpPrRB5Go6zANhjC2csyW7kuLwUsWJV2ZdE` | [`C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA`](https://testnet.nearblocks.io/txns/C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA) | 276,764,289 |
+
+The last run below came after both, its NEAR call at block 276,764,677. The claim `contracts-keyless-rescue-after` ties it to the key lists, which `make verify` reads.
 
 Runs, all on position 1 with the borrower's health factor pushed to 1.48 by a borrow:
 
@@ -421,11 +428,12 @@ Runs, all on position 1 with the borrower's health factor pushed to 1.48 by a bo
 | `2026-11-08T10-16-58Z-base-sepolia-1` | `run` loop | success | 11.33 | 1.48 to 1.8037 | 44 bps below | 8.2 s |
 | `2026-11-08T10-19-24Z-base-sepolia-1` | `rescue-once` | aborted, `quote_over_slippage_bound` | none | 1.48 | quote 135 bps below, bound 100 | nothing sent |
 | `2026-11-08T10-19-54Z-base-sepolia-1` | `rescue-once` | success | 9.10 | 1.48 to 1.8039 | 41 bps below | 8.7 s |
+| `2026-11-08T10-39-36Z-base-sepolia-1` | `rescue-once`, after the keys were deleted | success | 7.31 | 1.48 to 1.8035 | 50 bps below | 6.7 s |
 
 - The price includes the 0.30% pool fee. It is the price of a pool we seeded, not a market's.
 - Each unwind landed just above the 1.8 target, as section "Keeper" predicts: the keeper sized for 130 bps and paid 41 to 74.
 - `unwind` used 528,445 to 545,639 gas, against the 1,000,000 limit. NEAR inclusion to MPC signature took 4.6 to 6.7 s.
-- The pool does not stay at the oracle price. Each sale moves it down, and others swap small amounts of test ETH for USDC through it, about one a minute when measured. Within minutes of a recentring it read 40 to 90 bps under the oracle. Each rescue was preceded by a rerun of the seed script with 0.001 WETH, which moves the pool back. The aborted run was taken without one, on a pool 93 bps under the oracle: the keeper refused before asking NEAR, and the next run, after a recentring, succeeded.
+- The pool does not stay at the oracle price. Each sale moves it down, and others swap small amounts of test ETH for USDC through it, about one a minute when measured. Within minutes of a recentring it read 40 to 90 bps under the oracle, and 328 bps under after 40 minutes. Each rescue was preceded by a rerun of the seed script with 0.001 WETH, which moves the pool back. The aborted run was taken without one, on a pool 93 bps under the oracle: the keeper refused before asking NEAR, and the next run, after a recentring, succeeded.
 
 ### Failure conditions
 

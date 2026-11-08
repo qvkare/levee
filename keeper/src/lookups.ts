@@ -7,6 +7,7 @@ import {
   MPC_CONTRACTS,
   NEAR_RPC_URLS,
   createNearViews,
+  readAccessKeys,
   readNearTransaction,
 } from './near.js';
 import type { ChainLookup, Lookups, NearLookup } from './verify.js';
@@ -54,6 +55,7 @@ function nearLookup(network: Network, urls: string[]): NearLookup {
   const mpc = MPC_CONTRACTS[network];
   return {
     transaction: (nearTx, sender) => readNearTransaction(urls, nearTx, sender),
+    accessKeys: (account) => readAccessKeys(urls, account),
 
     async position(contract, id, blockHash) {
       const views = urls.map((rpcUrl) => createNearViews({ rpcUrl, contract, mpc }));

@@ -481,6 +481,7 @@ describe('verifying a collateral run', () => {
         asOf: 'block',
       }),
       rescuerAddress: async () => rescuer,
+      accessKeys: async () => [],
       chain: async () => ({
         chain_id: chain.chainId,
         pool: chain.pool,
