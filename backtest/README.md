@@ -6,6 +6,8 @@ Replays real Aave v3 liquidations on Base and Arbitrum against a simulated Levee
 
 **The answer** is in [`results/summary.md`](results/summary.md), with every number in `results/summary.json`. Read the limits below before quoting anything.
 
+**A second question.** Why would a borrower not simply repay the same USDC upfront? [`results/portfolio.md`](results/portfolio.md) and `results/portfolio.json` answer it over every native USDC borrower on both pools, liquidated or not, with one reserve shared across two chains, in a calm month as well as the two crashes, and with the interest the reserve costs.
+
 Everything here is read-only. It uses no keys and no funds, and no rescue in it has happened. A "saved" position is a simulation result.
 
 ## Findings
@@ -14,12 +16,26 @@ From 7,495 `LiquidationCall` events and $57.9M of liquidated debt: 5,977 positio
 
 1. **Reserve size is the main limit.** The saved share is 36% at R 10% of debt, 60% at 20%, 85% at 30% and 95% at 50%. At R 30%, 612 of the 745 misses ran out of reserve, and 22 lost the race. The median position needed 15% of debt and the 90th percentile 31%, so the saved share climbs steeply up to about R 30% and then flattens. Do not quote one reserve size alone.
 2. **Delay matters in a fast crash and hardly at all in a slow one.** Among positions armed above T, at R 30%, the 2025 window saved 60% at 10 s and 54% at 300 s on Arbitrum, and 74% and 58% on Base. The 2026 window saved 98% to 99% at every delay.
-3. **A low trigger is where the race is.** At T 1.05, R 30%, `too_slow` rises from 25 positions at 10 s to 324 at 300 s. A higher trigger loses fewer races because it fires earlier. It would also fire on positions that recover, and those false alarms are not measured here, because every position in this sample was liquidated.
+3. **A low trigger is where the race is.** At T 1.05, R 30%, `too_slow` rises from 25 positions at 10 s to 324 at 300 s. A higher trigger loses fewer races because it fires earlier. It would also fire on positions that recover. Those false alarms are not in this sample, because every position in it was liquidated. Finding 9 measures them over the whole population.
 4. **Many borrowers were already thin.** When the window opened, 54% of in-scope positions were below HF 1.20, 23% below 1.10 and 7% below 1.05. A trigger above current HF is an upfront repay, not a rescue. The results separate these: at R 30%, 2,102 of the 2,295 positions armed above 1.20 were saved (91.6%), and 165 of the 193 misses among them were in the 2025 window.
 5. **Plain collateral is a serious rival.** The same USDC supplied to Aave at the start, with no keeper, survives 30%, 51%, 69% and 96% at R 10%, 20%, 30% and 50%, against 36%, 60%, 85% and 95% for Levee. Levee's whole survival edge is that a repaid dollar does 1.28 times the work of a dollar of collateral, and only if it lands first. At R 50% the edge is gone, mostly because mixed debt runs out of USDC to repay.
 6. **Volatile alt collateral is out of reach.** On Arbitrum in the 2025 window, all 99 positions that needed over 50% of debt had ARB, AAVE or LINK as their largest collateral. The median need was 7% for WETH and 5% for WBTC. Repaying 50% at once still left 115 of 588 positions there liquidated.
 7. **Some moves give no warning.** On 2025-10-10 the AAVE feed on Base updated every 30 s or so and fell up to 19.3% in one update, taking positions from HF 1.07 to below 1 in a single block. No trigger can react to a price the oracle has not published. At T 1.05, six positions had no observation below T before the liquidation block.
 8. **Bonus avoided:** $2.42M of the $2.80M at risk at R 30%, and $1.06M, $1.41M, $1.91M and $2.62M at R 5%, 10%, 20% and 50%. Only $0.67M of the $2.42M is on positions armed above T, so most of it is an upfront repay rather than a race won. Collateral avoids $2.14M at R 30%. Most of the money sits on a few large positions: 144 positions of $100k or more carry $1.85M of the amount at risk.
+
+### Why not repay upfront?
+
+**For one position, the data say: repay upfront.** Across every address with native USDC debt on both pools, about 50,000 to 58,000 a period, the same 30% of debt repaid at arming saved at least as many liquidated positions as Levee once Levee's repay is counted the same way (731 against 720 in the 2025-10 crash, 3,541 against 3,541 in 2026-02, 191 against 189 in a calm month), avoided the same gross bonus to within 1%, and costs nothing to hold. Levee's reserve, idle with the rescuer as the spec has it today, costs the USDC borrow APR against that repay: $48 per $1,000 a year on Arbitrum and $57 on Base, averaged over 2025-01 to 2026-11. Each crash returned $5.50 (2025-10) and $6.44 (2026-02) of bonus avoided per $1,000 held, so it would take 8 to 10 such crashes a year to pay for a year of carry, and an upfront repay would have avoided that bonus anyway. What Levee does differently is spend less: members armed above T drew 13% of their reserve in the 2025-10 crash, 25% in 2026-02 and 9% in the calm month, and 74%, 84% and 99.5% of everything drawn went to members that survived anyway. That keeps the borrower's leverage, which is worth something only if the borrowed USDC earns more than it costs. This backtest does not measure that. Sharing one reserve across a borrower's Base and Arbitrum positions did not change the answer at R 30%, and at smaller R it saved more positions without reliably avoiding more bonus.
+
+Unless stated: T 1.20, G 1.50, R 30%, D 60 s. Details in [`results/portfolio.md`](results/portfolio.md).
+
+9. **Triggers fire mostly on positions that recover.** Of members armed above T 1.20 that later crossed it, 67% in 2025-10, 72% in 2026-02 and 97% in the calm month were neither liquidated nor ever below HF 1 on their path. A lower trigger fires less: at T 1.05 the false-alarm share was 27%, 32% and 80%. In the calm month, 7% of members armed above T 1.20 crossed it.
+10. **Where the reserve goes.** Over the whole population, Levee drew $44.0M of $206.6M held in 2025-10 (21%), $89.1M of $200.3M in 2026-02 (44%) and $31.6M of $177.7M in the calm month (18%), including members armed below T, whose repay fires at once. Members that were not liquidated drew $32.5M, $74.9M and $31.4M of that.
+11. **Levee saves no position upfront does not, counted the same way.** Uncapped, as the pre-registered rule counts it, Levee saved 16 positions in 2026-02 that upfront lost, and none the other way (3,557 against 3,541). In 2025-10 it saved 3 that upfront lost and lost 11 that upfront saved. 17 of those 19 Levee-only saves are borrowers outside the headline set that repaid all their USDC themselves before they were liquidated, and 2 are mixed-debt headline positions whose fixed USDC share of a falling total debt dropped below what Levee had repaid. In each, the rule counts Levee's repay against debt that was no longer there. With the repay capped at the USDC debt left, as upfront is, Levee's saves are a subset of upfront's, and a test holds that on random paths.
+12. **Carry against bonus.** The USDC borrow APR was 4.83% on Arbitrum and 5.67% on Base. Holding the population's reserve idle cost $74.9k over the two days of the 2025-10 window, $185.6k over the seven of 2026-02, and $747.7k over the calm month, against $1.14M, $1.29M and $25.8k of bonus avoided. A smaller reserve does more per dollar: at R 5% the break-even is 2.4 and 5.7 crashes a year. A reserve earning the USDC supply APR, which the spec does not do, would cost $15 to $16 per $1,000 a year, and 2.5 to 2.9 crashes a year would pay for it at R 30%.
+13. **Real two-chain borrowers exist, but few are liquidated.** 1,951, 1,978 and 2,007 addresses held USDC debt on both chains at the start of each period. 119 of them had a position liquidated in 2025-10 and 318 in 2026-02, so no synthetic pairs were needed.
+14. **Sharing one reserve.** At R 30% a shared reserve saved 111 of 144 liquidated positions in the real pairs in 2025-10, against 114 for the same budget repaid upfront and 113 for two separate reserves, and 398, 399 and 400 of 430 in 2026-02. Bonus avoided was the same to within $150. At R 5% sharing saved more (54 against 41, and 122 against 89) but in 2025-10 avoided less bonus, $239k against $319k: two Base positions of $1.7M each lost the whole budget to a larger Arbitrum partner that was liquidated anyway. First come, first served gives the reserve to whichever position falls first, not to the one it can save. With a 300 s route, the off-venue reserve that sharing across chains needs, it saved 106 instead of 111 in 2025-10.
+15. **Validation.** Rebuilt HF matches `getUserAccountData` at every read with $1 or more of debt to a worst error of 0.06%, and at a seeded sample of 7,856 member and block pairs to 0.024%. On the headline positions' committed direct reads, 100.0% are within 0.5%. Below $1 of debt, Aave's 8-decimal base currency moves HF by whole percents, so dust is left out of the error figures, not out of the results. An independent Python re-implementation reproduces the population figures.
 
 ## Run
 
@@ -36,7 +52,7 @@ pnpm --filter @levee/backtest typecheck
 pnpm --filter @levee/backtest fetch-data # rebuilds data/raw and data/derived from the chain
 ```
 
-`fetch-data` needs no key. It took about 90 minutes on free endpoints, with rate limits, and it resumes where it stopped. Raw responses are about 170 MB and git-ignored. The committed files in `data/derived` are enough to reproduce every result.
+`fetch-data` needs no key. The headline steps took about 90 minutes on free endpoints, with rate limits, and the population steps about four hours more. It resumes where it stopped. Raw responses are about 2.5 GB and git-ignored. The committed files in `data/derived` are enough to reproduce every result. `pnpm --filter @levee/backtest derive-portfolio` rebuilds the population files from `data/raw` alone.
 
 To add a window, add it to `WINDOWS` in `src/config.ts` and run `fetch-data`.
 
@@ -67,6 +83,18 @@ Measured on 2026-11-07. Free public endpoints change, and any of these may stop 
 | | PublicNode | Archive reads need a token |
 | | 1RPC, `arb1.arbitrum.io` | No state at these blocks for `eth_call` |
 | | Pocket Network on Base | State pruned for `eth_call` |
+
+Added on 2026-11-08 for the population parts:
+
+| Need | Source | Result |
+|---|---|---|
+| Every USDC `Borrow` since listing, Base | Tenderly public gateway (both hostnames), Sentio public RPC | 1,000 blocks per query: 33,575 queries, about 30 minutes |
+| | thirdweb | Also 1,000 blocks. Not used |
+| | dRPC, Nodies | Refused on the free plan: dRPC by range, Nodies above 50 blocks |
+| Every USDC `Borrow` since listing, Arbitrum | Tenderly public gateway, `arb1.arbitrum.io` | Accepted 1,000,000 blocks per query with a topic filter |
+| | Blast public | 10 blocks per query for logs. Not used for logs |
+| Action times | Tenderly public gateway | Returns `blockTimestamp` on every log, so actions are placed in time with no extra reads |
+| Hyperliquid account history | `api.hyperliquid.xyz/info` | `clearinghouseState` is the current state only. `portfolio` returns an account-value history with no margin. The `hyperliquid-archive` S3 bucket answers 403 without AWS credentials. No free historical source of account margin was found |
 
 Archive access exists, so health factor comes from the protocol itself. The fallback of rebuilding it from reserve data was not needed before a liquidation. It is used only after one, as described below.
 
@@ -159,6 +187,21 @@ These parts ask why a borrower would not simply repay the same USDC upfront. For
 
 Hyperliquid stays out of these parts. Its only source here has no account states over time.
 
+### Implementation notes
+
+Added after the method above was committed. They fix details it left open and change no rule.
+
+- The calm rule's Base block, `(midnight - 1686789347) / 2`, is rounded up: the first block at or after midnight, one second after it.
+- The re-read grid is counted in blocks: 30 and 150 blocks on Base, 240 and 1,200 on Arbitrum, which averaged 0.249 s a block in both windows.
+- A grid re-read covers the reserves named in the member's actions since its last read, plus its eMode. The reads at the start, at a newcomer's first read and before a first liquidation cover every reserve.
+- Balances are scaled by the indexes read in the same call, and grown with the hourly indexes between reads.
+- A newcomer is armed at its first read that shows USDC debt. An account that borrowed and repaid USDC between two grid points is never seen with debt and is left out.
+- A liquidation before a member was armed does not count.
+- A member liquidated outside the headline set has its gross bonus worked out as in the headline: first episode, eMode bonus where it applies, prices from the period's price file.
+- Reserve drawn counts every repay sent, including one still in flight when the period ends.
+- Thinning for the simulation keeps, below 1.30, every read, every crossing of 1.0 or a trigger, every low, and a point each time HF moves 0.15% or debt 0.2%. At or above 1.30, the highest trigger, the keeper never acts, so points there are left out, and runs of 256 price rows where a bound on HF stays at or above 1.30 are not evaluated at all. A test holds the results to those of a run that evaluates every row.
+- The synthetic draws use a fresh generator, seeded 20261108, for each window and each version.
+
 ## Assumptions
 
 1. **The infrastructure works.** Keeper, RPCs, NEAR and the MPC network all work through the worst minutes of the event, with a fixed delay D.
@@ -173,9 +216,21 @@ Hyperliquid stays out of these parts. Its only source here has no account states
 10. **Rescues do not move the market.** Fewer liquidations would mean less forced selling, which is not modelled, and it would help.
 11. **The real liquidator's timing is taken as given.** HF below 1 before that block is not fatal on its own, because no liquidator acted on the real position then.
 12. **Mixed debt keeps its USDC share** from the block before the liquidation.
-13. **Reserve costs are not modelled:** no yield forgone, gas, NEAR fees or MPC fees. The supply yield of the collateral baseline is left out too.
+13. **Reserve costs are not modelled in `summary.md`:** no yield forgone, gas, NEAR fees or MPC fees. The supply yield of the collateral baseline is left out too. `portfolio.md` adds the interest forgone; gas and fees stay out everywhere.
 14. **Parameters are read at the window start.** Thresholds, bonuses and eMode come from `data/derived/markets.json`.
 15. **The collateral baseline can always supply USDC.** It uses USDC's normal threshold of 0.78 and ignores supply caps, isolation mode and any eMode that would exclude USDC. The reserve is USDC, so the baseline does not fall with the crash. A reserve held in the position's own asset would do worse.
+
+For the population, shared-reserve, calm-period and carry parts, in addition:
+
+16. **Every member has Levee, with the same T and R.** Real borrowers would choose their own, and many would set T below their HF at arming.
+17. **A member keeps doing what it really did.** Its actions stay on the path, including repays it made because HF was low, and Levee's repays come on top. So a member that saved itself counts as a false alarm, which is what Levee would have spent on it.
+18. **A member that was not liquidated survives with Levee too.** A repay only raises HF.
+19. **The pre-registered rule takes a landed repay off total debt for good**, as the headline model does. If the borrower later repaid its USDC itself, that counts the same dollars twice. `portfolio.md` shows the effect with the repay capped at the USDC debt still on the path, which is how the upfront bound counts it.
+20. **Between an action and the next grid read, the old portfolio stands.** That is up to 60 s in the crash windows and 300 s in the calm period. Validation measures the error.
+21. **Interest follows hourly indexes,** interpolated in time. Thresholds and eMode are read at each period's first block.
+22. **One reserve for two chains repays on either chain within D.** That needs the off-venue reserve, which is not built and whose route time is not measured.
+23. **Carry is the USDC APR as a simple yearly rate.** An idle reserve earns nothing, as in the spec today. A drawn reserve stops costing carry; that is ignored, which overstates carry by at most the share drawn.
+24. **Synthetic pairs set how often both positions fall together by construction.** The two versions bracket it. Only real pairs say where it actually sits.
 
 ## Failure conditions
 
@@ -193,11 +248,21 @@ Hyperliquid stays out of these parts. Its only source here has no account states
 
 ## Limits
 
-- **Only liquidated positions are in the sample.** Borrowers who crossed T and recovered are not here, so false alarms are not measured. A real reserve also sits idle or gets spent on positions that would have survived anyway. Do not read bonus avoided as a return on all reserves held.
+- **Only liquidated positions are in the headline sample.** Borrowers who crossed T and recovered are not in `summary.md`, so false alarms are not measured there. Do not read its bonus avoided as a return on all reserves held. `portfolio.md` measures both over the whole population.
 - **Saved does not mean better off.** A saved position still holds the fallen collateral. Bonus avoided is what is measured, not the outcome of holding through the crash.
 - **Arming at the window start is a choice.** A borrower below T at arming gets a repay at once, which is an upfront repay and not a rescue. Results separate these.
 - **Counts are dominated by small positions.** 2,539 of the 5,008 in-scope positions owed under $1k, where a rescue is hard to justify, and 144 positions of $100k or more carry two thirds of the bonus at risk. Results are split by size.
 - **Two events, two chains, one protocol.** Both events are crashes, and other crashes may run faster or slower.
+
+For the population parts:
+
+- **Two crashes and one calm month.** That is too little to estimate how often crashes come, so carry is shown as break-evens, not as a yearly return. The calm month is December 2025 and includes the holidays.
+- **The value of keeping leverage is not measured.** Levee's one measured advantage over upfront is that it leaves most of the reserve unspent, so the borrower keeps its debt. That is worth something only if the borrowed USDC earns more than the borrow APR, and nothing here measures that. An upfront repay can also be borrowed again, which costs gas and is not modelled either.
+- **Counts are dominated by dust.** About half the members owed under $100, and most members with HF below 1 that were never liquidated are among them. Dollar figures are not affected. `portfolio.md` splits results by size.
+- **The shared-reserve results rest on few liquidations.** About 2,000 real addresses held USDC debt on both chains in each period, but only 144 liquidated positions in 2025-10 and 430 in 2026-02 sit in them, and a handful of large positions move the bonus figures. A shared reserve across chains also needs the off-venue reserve, which is not built.
+- **Arming every member at the period start, with the same T and R.** About 7% to 14% of members were below T 1.20 at the start. Their repay fires at once, as an upfront repay would. Results show the share drawn by members armed above T apart.
+- **The borrow scan may have missed a few dollars of debt.** On Base, members' USDC debt at each period start fell short of the debt token's `totalSupply` by $4.61 to $4.70, out of $230M to $345M, which is at most a few tiny borrowers. On Arbitrum the gap was $0.11.
+- **The re-read grid.** Between an action and the next grid read, a member's old portfolio stands, for up to 60 s in a crash and 300 s in the calm month. The random validation sample rarely lands in such a gap, so it bounds this error only loosely. The headline positions' direct reads, which cover the run-up to each liquidation, agree to 0.5% at 100.0% of points.
 
 ## Validation
 
@@ -215,6 +280,19 @@ Hyperliquid stays out of these parts. Its only source here has no account states
 
 To run the last check: `python3 backtest/scripts/verify_headline.py`. It shares no code with the TypeScript and takes a few minutes.
 
+For the population parts, `results/portfolio.md` has the full tables.
+
+| Check | Result |
+|---|---|
+| Members' USDC debt against the debt token's `totalSupply`, at each period start | Base short by $4.61 to $4.70 of $230M to $345M. Arbitrum short by $0.11 |
+| Rebuilt HF against `getUserAccountData` at every read, members with $1 or more of debt | 344,928 reads in six chain-periods. Worst error 0.059%, all within 0.5%. With dust included, 98.8% to 99.96% within 0.5% |
+| The same against a seeded sample: 200 random blocks per chain and period, 5 random members and 5 rebuilt at HF 1.0 to 1.4 at each | 7,856 reads with $1 or more of debt. Worst error 0.024%. Rebuilt and direct HF on the same side of every trigger in every read |
+| Rebuilt paths of headline positions against their committed direct reads | 1.24M points, 100.0% within 0.5%. Median 0.002% |
+| Skipping rows above the highest trigger, and thinning | `test/skip.test.ts`: on Arbitrum 2025-10, the same keeper outcomes as a run that evaluates every row |
+| Independent re-implementation of the population figures and the real-pair shared reserve | Every period and chain at T 1.20, R 30%: the same members, liquidations, saves by Levee and by upfront, crossings, false alarms and bonus to the dollar, and reserve held and drawn within $20, with no thinning. The same 111 of 144 and 398 of 430 liquidated positions saved by a shared reserve in the real pairs |
+
+To run it: `python3 backtest/scripts/verify_portfolio.py [--period 2025-10|2026-02|calm]`. It shares no code with the TypeScript, rebuilds every member's path from the committed files, runs the keeper rule on every point with no thinning, and checks the T 1.20, R 30% row of every period and chain. Counts and bonus must match exactly, and dollar sums within 0.5%. It takes about 25 minutes for all three periods.
+
 Tests cover the simulation, including a hand-worked position written out in `test/simulate.test.ts`, as well as scope, thinning, frozen paths and aggregation.
 
 ## Hyperliquid
@@ -231,6 +309,11 @@ Tests cover the simulation, including a hand-worked position written out in `tes
 | `src/derive.ts` | Raw data to compact committed files, and validation |
 | `src/frozen.ts` | Post-liquidation paths from portfolios and prices |
 | `src/run.ts` | `pnpm backtest` |
+| `src/sim/tracked.ts` | The keeper rule on population paths, and on several paths sharing one reserve |
+| `src/portfolio` | Population files, path rebuild, aggregation and Markdown for `portfolio.md` |
+| `src/calm.ts` | The calm-period rule |
 | `data/derived` | Committed inputs to the run |
+| `data/derived/portfolio` | Population files per chain and period, calm-period prices and markets, the validation sample |
+| `data/derived/daily.json`, `calm.json` | Daily WETH price and USDC rates, and the calm period the rule picked |
 | `data/raw` | Raw responses, git-ignored |
 | `results` | Outputs, committed |
