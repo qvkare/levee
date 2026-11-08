@@ -11,6 +11,41 @@ import {Deployments, UnwindArgs} from "../../script/lib/Deployments.sol";
 import {AaveFork} from "./AaveFork.sol";
 import {IERC20Like, IScaledBalance} from "./AaveInterfaces.sol";
 
+/// Uniswap v3-periphery QuoterV2, the call the keeper makes to set `maxSold`.
+interface IQuoterV2 {
+    struct QuoteExactOutputSingleParams {
+        address tokenIn;
+        address tokenOut;
+        uint256 amount;
+        uint24 fee;
+        uint160 sqrtPriceLimitX96;
+    }
+
+    function factory() external view returns (address);
+
+    // forge-lint: disable-next-line(mixed-case-function)
+    function WETH9() external view returns (address);
+
+    function quoteExactOutputSingle(QuoteExactOutputSingleParams memory params)
+        external
+        returns (uint256 amountIn, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate);
+}
+
+/// eMode reads, Aave v3.2 and later.
+interface IPoolEMode {
+    struct CollateralConfig {
+        uint16 ltv;
+        uint16 liquidationThreshold;
+        uint16 liquidationBonus;
+    }
+
+    function getUserEMode(address user) external view returns (uint256);
+
+    function getEModeCategoryCollateralConfig(uint8 id) external view returns (CollateralConfig memory);
+
+    function setUserEMode(uint8 categoryId) external;
+}
+
 /// What the unwind suites need beyond AaveFork's ForkTarget.
 struct UnwindTarget {
     address uniswapV3Factory;
@@ -71,6 +106,8 @@ abstract contract UnwindFork is AaveFork {
     uint64 internal constant TARGET_HF = 1.5e18;
     uint256 internal constant COLLATERAL = 10 ether;
     uint256 internal constant START_HF = 1.05e18;
+    /// The keeper's default headroom over a fresh QuoterV2 quote when it sets `maxSold`.
+    uint256 internal constant QUOTE_TOLERANCE_BPS = 50;
 
     /// Aave can round an aToken transfer by a base unit either way.
     uint256 internal constant ATOKEN_ROUNDING = 2;
@@ -79,6 +116,7 @@ abstract contract UnwindFork is AaveFork {
     LeveeUnwind internal helper;
     IUniswapV3Factory internal uniFactory;
     IUniswapV3Pool internal uniPool;
+    IQuoterV2 internal quoter;
 
     /// Before and after reads for one unwind, none of them from the helper.
     struct Reads {
@@ -95,7 +133,11 @@ abstract contract UnwindFork is AaveFork {
     }
 
     struct Outcome {
+        address user;
         uint256 amount;
+        /// The keeper's QuoterV2 quote for `amount`, and the cap it set from it.
+        uint256 quote;
+        uint256 maxSold;
         uint256 repaid;
         uint256 sold;
         uint256 gasUsed;
@@ -115,6 +157,7 @@ abstract contract UnwindFork is AaveFork {
 
         UnwindArgs memory args = Deployments.unwindArgs(block.chainid);
         helper = new LeveeUnwind(args.addressesProvider, args.usdc, args.uniswapV3Factory);
+        quoter = IQuoterV2(Deployments.quoterV2(block.chainid));
 
         preparePool();
         uniPool = IUniswapV3Pool(uniFactory.getPool(address(weth), address(usdc), ut.deepFee));
@@ -129,11 +172,23 @@ abstract contract UnwindFork is AaveFork {
         authorizeAndApprove(user, SLIPPAGE_BPS, TRIGGER_HF, TARGET_HF, COLLATERAL);
     }
 
+    /// Authorizes WETH on the deepest pool, as the site would by default.
     function authorizeAndApprove(address user, uint16 slippage, uint64 trigger, uint64 target, uint256 allowance)
         internal
     {
+        authorizeAndApprove(user, slippage, trigger, target, allowance, ut.deepFee);
+    }
+
+    function authorizeAndApprove(
+        address user,
+        uint16 slippage,
+        uint64 trigger,
+        uint64 target,
+        uint256 allowance,
+        uint24 fee
+    ) internal {
         vm.startPrank(user);
-        helper.authorize(rescuer, slippage, trigger, target);
+        helper.authorize(rescuer, slippage, trigger, target, address(weth), fee);
         aWeth.approve(address(helper), allowance);
         vm.stopPrank();
     }
@@ -145,10 +200,11 @@ abstract contract UnwindFork is AaveFork {
     }
 
     /// R = (T*D - C*L) / (T - L_c*(1 + s)) with s the pool fee plus the slippage bound,
-    /// converted to USDC at the oracle, rounded up, plus 2 base units.
+    /// converted to USDC at the oracle, rounded up, plus 2 base units. L_c is the one Aave
+    /// applies to this user's WETH, so a borrower in eMode is sized with the eMode one.
     function keeperRepay(address user, uint256 targetHf, uint16 slippage, uint24 fee) internal view returns (uint256) {
         (uint256 collateralBase, uint256 debtBase,, uint256 threshold,,) = pool.getUserAccountData(user);
-        uint256 lc = liquidationThresholdBps(address(weth));
+        uint256 lc = wethThresholdBpsFor(user);
         uint256 numerator = targetHf * debtBase - collateralBase * threshold * 1e14;
         uint256 denominator = targetHf - lc * 1e14 * (BPS + worstCostBps(slippage, fee)) / BPS;
         uint256 repayBase = (numerator + denominator - 1) / denominator;
@@ -162,19 +218,25 @@ abstract contract UnwindFork is AaveFork {
         return usdcValue * 1e18 / (USDC_UNIT * oracle.getAssetPrice(address(weth)) * BPS);
     }
 
-    /// The contract's post-check bound, recomputed here from Aave's account data.
+    /// The contract's post-check bound, recomputed here from Aave's account data: the
+    /// target, plus HF_MARGIN_BPS of the distance from the health factor before to the
+    /// target, plus one basis point of the collateral before the sale over the debt left,
+    /// plus what a worst-case sale would have spent beyond this one over the debt left.
     function healthFactorBound(
         uint256 repaid,
         uint256 sold,
+        uint256 healthFactorBefore,
+        uint256 collateralAfterBase,
         uint256 debtAfterBase,
         uint64 targetHf,
         uint16 slippage,
         uint24 fee
     ) internal view returns (uint256 bound) {
-        bound = uint256(targetHf) + uint256(targetHf) * helper.HF_MARGIN_BPS() / BPS;
+        bound = uint256(targetHf) + (uint256(targetHf) - healthFactorBefore) * helper.HF_MARGIN_BPS() / BPS;
         if (debtAfterBase == 0) return bound;
         uint256 repaidBase = repaid * oracle.getAssetPrice(address(usdc)) / USDC_UNIT;
         uint256 soldBase = sold * oracle.getAssetPrice(address(weth)) / 1e18;
+        bound += ((collateralAfterBase + soldBase) * WAD + debtAfterBase * BPS - 1) / (debtAfterBase * BPS);
         uint256 worstBase = repaidBase * (BPS + worstCostBps(slippage, fee)) / BPS;
         if (worstBase > soldBase) bound += (worstBase - soldBase) * WAD / debtAfterBase;
     }
@@ -183,15 +245,41 @@ abstract contract UnwindFork is AaveFork {
         return (IAavePool(address(pool)).getReserveData(asset).configuration >> 16) & 0xffff;
     }
 
+    /// WETH's liquidation threshold as Aave applies it to `user`: the eMode one if they
+    /// are in a category, which on these forks only a test puts them in.
+    function wethThresholdBpsFor(address user) internal view returns (uint256) {
+        uint256 category = IPoolEMode(address(pool)).getUserEMode(user);
+        if (category == 0) return liquidationThresholdBps(address(weth));
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return IPoolEMode(address(pool)).getEModeCategoryCollateralConfig(uint8(category)).liquidationThreshold;
+    }
+
+    // ---- the keeper's max_sold ---------------------------------------------------------
+
+    /// What QuoterV2 says the pool would take for exactly `amount` USDC, as the keeper
+    /// reads it just before asking NEAR to sign.
+    function quoteSale(uint256 amount, uint24 fee) internal returns (uint256 amountIn) {
+        (amountIn,,,) = quoter.quoteExactOutputSingle(
+            IQuoterV2.QuoteExactOutputSingleParams({
+                tokenIn: address(weth), tokenOut: address(usdc), amount: amount, fee: fee, sqrtPriceLimitX96: 0
+            })
+        );
+    }
+
+    /// The keeper's `maxSold`: a fresh quote plus QUOTE_TOLERANCE_BPS, rounded down.
+    function keeperMaxSold(uint256 amount, uint24 fee) internal returns (uint256) {
+        return quoteSale(amount, fee) * (BPS + QUOTE_TOLERANCE_BPS) / BPS;
+    }
+
     // ---- running and reading ----------------------------------------------------------
 
-    function unwindAs(address caller, address user, uint256 amount, uint24 fee)
+    function unwindAs(address caller, address user, uint256 amount, uint24 fee, uint256 maxSold)
         internal
         returns (uint256 repaid, uint256 sold, uint256 gasUsed)
     {
         vm.prank(caller);
         uint256 gasBefore = gasleft();
-        (repaid, sold) = helper.unwind(user, address(weth), amount, fee);
+        (repaid, sold) = helper.unwind(user, address(weth), amount, fee, maxSold);
         gasUsed = gasBefore - gasleft();
     }
 
@@ -217,15 +305,21 @@ abstract contract UnwindFork is AaveFork {
         returns (Outcome memory o)
     {
         IUniswapV3Pool uni = IUniswapV3Pool(uniFactory.getPool(address(weth), address(usdc), fee));
+        o.user = user;
         o.amount = amount;
+        o.quote = quoteSale(amount, fee);
+        o.maxSold = o.quote * (BPS + QUOTE_TOLERANCE_BPS) / BPS;
         o.before = read(user, uni);
         uint256 rescuerUsdc = usdc.balanceOf(rescuer);
         uint256 rescuerWeth = weth.balanceOf(rescuer);
 
         vm.recordLogs();
-        (o.repaid, o.sold, o.gasUsed) = unwindAs(rescuer, user, amount, fee);
+        (o.repaid, o.sold, o.gasUsed) = unwindAs(rescuer, user, amount, fee, o.maxSold);
         assertUnwoundEvent(vm.getRecordedLogs(), user, o.repaid, o.sold);
         o.afterwards = read(user, uni);
+        // Nothing moved the pool between the quote and the swap, so they agree exactly.
+        assertEq(o.sold, o.quote, "QuoterV2 predicted the sale");
+        assertLe(o.sold, o.maxSold, "sold more than maxSold");
 
         assertEq(usdc.balanceOf(rescuer), rescuerUsdc, "rescuer USDC moved");
         assertEq(weth.balanceOf(rescuer), rescuerWeth, "rescuer WETH moved");
@@ -260,12 +354,21 @@ abstract contract UnwindFork is AaveFork {
         // price times its liquidation threshold.
         uint256 soldBase = o.sold * wethPrice / 1e18;
         uint256 repaidBase = o.repaid * oracle.getAssetPrice(address(usdc)) / USDC_UNIT;
-        uint256 modelled = (o.before.collateralBase - soldBase) * liquidationThresholdBps(address(weth)) * 1e14
+        uint256 modelled = (o.before.collateralBase - soldBase) * wethThresholdBpsFor(o.user) * 1e14
             / (o.before.debtBase - repaidBase);
         assertApproxEqRel(o.afterwards.healthFactor, modelled, 1e10, "health factor matches repay-then-sell");
         assertLe(
             o.afterwards.healthFactor,
-            healthFactorBound(o.repaid, o.sold, o.afterwards.debtBase, targetHf, slippage, fee),
+            healthFactorBound(
+                o.repaid,
+                o.sold,
+                o.before.healthFactor,
+                o.afterwards.collateralBase,
+                o.afterwards.debtBase,
+                targetHf,
+                slippage,
+                fee
+            ),
             "landed past the bound"
         );
     }

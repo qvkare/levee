@@ -39,6 +39,7 @@ pub const ERR_POOL_FEE: &str = "pool_fee must be 100, 500, 3000 or 10000";
 pub const ERR_COLLATERAL_IS_USDC: &str =
     "the collateral cannot be USDC, which is what it is sold for";
 pub const ERR_NO_COLLATERAL: &str = "position has no collateral config";
+pub const ERR_ZERO_MAX_SOLD: &str = "max_sold must be above zero";
 
 /// The UTC day bucket of a block timestamp.
 pub fn utc_day(now: u64) -> u64 {
@@ -157,6 +158,17 @@ pub fn validate_collateral(
 /// What `rescue_from_collateral` may sell, or why it cannot run for this position.
 pub fn collateral_of(position: &Position) -> Result<&CollateralConfig, &'static str> {
     position.collateral.as_ref().ok_or(ERR_NO_COLLATERAL)
+}
+
+/// `max_sold`, the keeper's cap on the collateral an unwind may sell. The contract has
+/// no price to judge it by, so it only refuses zero, which the helper would refuse too.
+/// The helper also applies the borrower's slippage bound, so a larger cap cannot loosen
+/// that.
+pub fn check_max_sold(max_sold: u128) -> Result<(), &'static str> {
+    if max_sold == 0 {
+        return Err(ERR_ZERO_MAX_SOLD);
+    }
+    Ok(())
 }
 
 /// `tighten`: each value may stay the same or get stricter.
@@ -709,6 +721,14 @@ mod tests {
         let mut with = position();
         with.collateral = Some(collateral(WETH, 3_000));
         assert_eq!(collateral_of(&with), Ok(&collateral(WETH, 3_000)));
+    }
+
+    #[test]
+    fn max_sold_must_be_above_zero_and_has_no_upper_bound() {
+        assert_eq!(check_max_sold(0), Err(ERR_ZERO_MAX_SOLD));
+        for max_sold in [1, 52_000_000_000_000_000, u128::MAX] {
+            assert_eq!(check_max_sold(max_sold), Ok(()), "{max_sold}");
+        }
     }
 
     #[test]

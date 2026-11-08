@@ -13,6 +13,12 @@ export interface ChainInfo {
   rpcEnv: 'BASE_RPC_URLS' | 'ARBITRUM_RPC_URLS';
   /** Public endpoints `verify` can fall back on, so that it works with no setup. */
   publicRpcs: string[];
+  /**
+   * Uniswap v3 QuoterV2, which collateral mode quotes `max_sold` from. From Uniswap's
+   * deployments feed, developers.uniswap.org/deployments.json, and checked on chain:
+   * its `factory()` is the chain's Uniswap v3 factory. Absent where there is no helper.
+   */
+  quoterV2?: Address;
 }
 
 /** Spec section 3. */
@@ -25,6 +31,7 @@ export const CHAINS: Record<number, ChainInfo> = {
     usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     rpcEnv: 'BASE_RPC_URLS',
     publicRpcs: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com'],
+    quoterV2: '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a',
   },
   42161: {
     chainId: 42161,
@@ -34,6 +41,7 @@ export const CHAINS: Record<number, ChainInfo> = {
     usdc: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
     rpcEnv: 'ARBITRUM_RPC_URLS',
     publicRpcs: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum-one-rpc.publicnode.com'],
+    quoterV2: '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
   },
   84532: {
     chainId: 84532,
@@ -43,6 +51,7 @@ export const CHAINS: Record<number, ChainInfo> = {
     usdc: '0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f',
     rpcEnv: 'BASE_RPC_URLS',
     publicRpcs: ['https://sepolia.base.org', 'https://base-sepolia-rpc.publicnode.com'],
+    quoterV2: '0xC5290058841028F1614F3A6F0F5816cAd0df5E27',
   },
   421614: {
     chainId: 421614,

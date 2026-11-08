@@ -10,7 +10,7 @@ import type { Address } from 'viem';
 import type { Caps, Decision } from './decision.js';
 import type { CollateralSample, Sample } from './quorum.js';
 import { rescueResultSchema } from './signature.js';
-import type { SwapPrice } from './unwind.js';
+import type { QuoteAnswer, SwapPrice } from './unwind.js';
 
 /** `network` for a run that never touched a real chain or the real MPC. */
 export const SIMULATED = 'simulated';
@@ -30,6 +30,11 @@ const collateralSampleSchema = z.object({
   max_slippage_bps: decimal,
   trigger_hf: decimal,
   target_hf: decimal,
+  /** Added with the audit fixes. A sample without them predates `authorize` naming them. */
+  authorized_collateral: z.string().optional(),
+  authorized_pool_fee: decimal.optional(),
+  /** Another enabled collateral at LTV 0, which blocks every unwind. */
+  ltv_zero_collateral: z.string().nullable().optional(),
 });
 
 const sampleSchema = z.object({
@@ -126,6 +131,26 @@ const traceSchema = z.object({
     .optional(),
   /** A revert, replayed with `eth_call` at its block to read the reason. */
   revert: z.object({ data: hex.nullable(), error: z.string() }).nullable().optional(),
+  /**
+   * Collateral mode: the QuoterV2 answers `max_sold` was set from, just before the NEAR
+   * call, and the helper's oracle bound for the same amount. `replay` repeats the choice.
+   */
+  quote: z
+    .object({
+      quoter: z.string(),
+      amount: decimal,
+      pool_fee: decimal,
+      tolerance_bps: decimal,
+      oracle_max_in: decimal,
+      answers: z.array(
+        z.object({ rpc: z.string(), amount_in: decimal.nullable(), error: z.string().nullable() }),
+      ),
+      /** The quote used: the highest of those that agreed. */
+      amount_in: decimal.nullable(),
+      max_sold: decimal.nullable(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export type Trace = z.infer<typeof traceSchema>;
@@ -160,6 +185,8 @@ export const runRecordSchema = z.object({
   mode: z.enum(['reserve', 'collateral']).optional(),
   /** Collateral mode: the asset the helper may sell. */
   collateral: z.string().nullable().optional(),
+  /** Collateral mode: the cap on the collateral sold that the keeper sent, from a quote. */
+  max_sold: decimal.nullable().optional(),
   /** Collateral mode: collateral base units sold, from the helper's `Unwound` event. */
   sold: decimal.nullable().optional(),
   /** Collateral mode: what the swap paid against Aave's oracle at its block. */
@@ -268,8 +295,13 @@ function collateralToTrace(sample: CollateralSample): z.infer<typeof collateralS
     max_slippage_bps: sample.maxSlippageBps.toString(),
     trigger_hf: sample.triggerHf.toString(),
     target_hf: sample.targetHf.toString(),
+    authorized_collateral: sample.authorizedCollateral,
+    authorized_pool_fee: sample.authorizedPoolFee.toString(),
+    ltv_zero_collateral: sample.ltvZeroCollateral,
   };
 }
+
+const ZERO_ADDRESS: Address = '0x0000000000000000000000000000000000000000';
 
 function collateralFromTrace(sample: z.infer<typeof collateralSampleSchema>): CollateralSample {
   return {
@@ -282,6 +314,9 @@ function collateralFromTrace(sample: z.infer<typeof collateralSampleSchema>): Co
     maxSlippageBps: BigInt(sample.max_slippage_bps),
     triggerHf: BigInt(sample.trigger_hf),
     targetHf: BigInt(sample.target_hf),
+    authorizedCollateral: (sample.authorized_collateral ?? ZERO_ADDRESS) as Address,
+    authorizedPoolFee: BigInt(sample.authorized_pool_fee ?? '0'),
+    ltvZeroCollateral: (sample.ltv_zero_collateral ?? null) as Address | null,
   };
 }
 
@@ -373,4 +408,22 @@ export function decisionToTrace(decision: Decision): NonNullable<Trace['decision
     limited_by: decision.limitedBy,
     projected_health_factor: decision.projectedHealthFactor.toString(),
   };
+}
+
+export function quoteAnswersToTrace(answers: readonly QuoteAnswer[]) {
+  return answers.map((answer) => ({
+    rpc: answer.rpc,
+    amount_in: answer.amountIn === null ? null : answer.amountIn.toString(),
+    error: answer.error,
+  }));
+}
+
+export function quoteAnswersFromTrace(
+  answers: NonNullable<Trace['quote']>['answers'],
+): QuoteAnswer[] {
+  return answers.map((answer) => ({
+    rpc: answer.rpc,
+    amountIn: answer.amount_in === null ? null : BigInt(answer.amount_in),
+    error: answer.error,
+  }));
 }

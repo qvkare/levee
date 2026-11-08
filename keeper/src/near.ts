@@ -51,7 +51,7 @@ export interface RescueFees {
 
 export type RescueMode = 'reserve' | 'collateral';
 
-/** The keeper method for each mode. Both take the same arguments. */
+/** The keeper method for each mode. `rescue_from_collateral` also takes `max_sold`. */
 export const RESCUE_METHODS: Record<RescueMode, string> = {
   reserve: 'rescue',
   collateral: 'rescue_from_collateral',
@@ -63,6 +63,8 @@ export interface RescueRequest {
   fees: RescueFees;
   /** Absent means reserve, `rescue`. */
   mode?: RescueMode;
+  /** Collateral mode, and required there: the cap on the collateral sold. */
+  maxSold?: bigint;
 }
 
 export interface RescueOutcome {
@@ -93,11 +95,21 @@ export class NearRescueError extends Error {
   }
 }
 
-/** `rescue(id, amount, fees)` from spec section 4, and `rescue_from_collateral` from 9. */
-export function rescueArgs({ id, amount, fees }: RescueRequest) {
+/**
+ * `rescue(id, amount, fees)` from spec section 4, and
+ * `rescue_from_collateral(id, amount, max_sold, fees)` from section 9.
+ */
+export function rescueArgs({ id, amount, fees, mode, maxSold }: RescueRequest) {
+  if (mode === 'collateral' && maxSold === undefined) {
+    throw new Error('rescue_from_collateral needs max_sold');
+  }
+  if (mode !== 'collateral' && maxSold !== undefined) {
+    throw new Error('max_sold applies only to rescue_from_collateral');
+  }
   return {
     id,
     amount: amount.toString(),
+    ...(maxSold === undefined ? {} : { max_sold: maxSold.toString() }),
     fees: {
       nonce: fees.nonce,
       max_fee_per_gas: fees.maxFeePerGas.toString(),

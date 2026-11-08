@@ -173,21 +173,23 @@ proptest! {
     }
 
     #[test]
-    fn unwind_keeps_target_selector_borrower_collateral_and_fee(
+    fn unwind_keeps_target_selector_borrower_collateral_fee_and_max_sold(
         chain in chain(),
         borrower in borrower(),
         collateral in collateral(),
         amount in wide_u128(),
+        max_sold in wide_u128(),
         fees in fees(),
     ) {
         let mut position = position(&chain, borrower);
         position.collateral = Some(collateral.clone());
-        let unsigned = unwind_tx(&chain, &position, &collateral, amount, &fees).unsigned_bytes();
+        let unsigned =
+            unwind_tx(&chain, &position, &collateral, amount, max_sold, &fees).unsigned_bytes();
         let tx = assert_decodes_to(&unsigned, &chain, &fees, chain.gas_limit_unwind);
 
         prop_assert_eq!(tx.to, TxKind::Call(address(&chain.unwind)));
         prop_assert_eq!(tx.value, U256::ZERO);
-        prop_assert_eq!(tx.input.len(), 132);
+        prop_assert_eq!(tx.input.len(), 164);
         prop_assert_eq!(&tx.input[..4], SELECTOR_UNWIND);
         prop_assert_eq!(word_address(&tx.input[4..36]), address(&position.borrower));
         prop_assert_eq!(word_address(&tx.input[36..68]), address(&collateral.asset));
@@ -195,6 +197,7 @@ proptest! {
         // A uint24 word: the fee, and nothing above bit 24.
         prop_assert_eq!(&tx.input[100..129], &[0u8; 29][..]);
         prop_assert_eq!(U256::from_be_slice(&tx.input[100..132]), U256::from(collateral.pool_fee));
+        prop_assert_eq!(U256::from_be_slice(&tx.input[132..164]), U256::from(max_sold));
     }
 
     #[test]

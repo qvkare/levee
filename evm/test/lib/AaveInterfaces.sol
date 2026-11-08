@@ -44,6 +44,12 @@ interface IPool {
 
 interface IPoolAddressesProvider {
     function getPriceOracle() external view returns (address);
+
+    function getPriceOracleSentinel() external view returns (address);
+
+    function setPriceOracleSentinel(address sentinel) external;
+
+    function owner() external view returns (address);
 }
 
 interface IAaveOracle {
@@ -70,4 +76,5 @@ interface IAaveErrors {
     error NoDebtOfSelectedType();
     error NoExplicitAmountToRepayOnBehalf();
     error HealthFactorNotBelowThreshold();
+    error LtvValidationFailed();
 }

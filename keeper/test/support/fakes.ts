@@ -13,7 +13,7 @@ import {
 import { CHAINS } from '../../src/chains.js';
 import { parseWad } from '../../src/decision.js';
 import { runsDir } from '../../src/evidence.js';
-import type { EvmClient, EvmReceipt, SimulationResult } from '../../src/evm.js';
+import type { EvmClient, EvmReceipt, SaleQuote, SimulationResult } from '../../src/evm.js';
 import type { NearRescuer, Position, RescueRequest } from '../../src/near.js';
 import type { CollateralSample, Sample } from '../../src/quorum.js';
 import type { PositionTarget, RescueContext } from '../../src/rescue.js';
@@ -58,6 +58,8 @@ export const helper: Address = '0x5555555555555555555555555555555555555555';
 export const weth: Address = '0x4200000000000000000000000000000000000006';
 export const poolFee = 500n;
 export const wethPrice = 2_000n * 10n ** 8n;
+/** Stands in for QuoterV2. */
+export const quoter: Address = '0x7777777777777777777777777777777777777777';
 
 /** The keeper's collateral-mode settings, which the borrower's at the helper match. */
 export const collateralTarget: PositionTarget = {
@@ -83,6 +85,9 @@ export const collateralOf = (
   maxSlippageBps: 100n,
   triggerHf: parseWad('1.25'),
   targetHf: parseWad('1.6'),
+  authorizedCollateral: weth,
+  authorizedPoolFee: poolFee,
+  ltvZeroCollateral: null,
   ...over,
 });
 
@@ -91,6 +96,8 @@ export const helperConfigOf = (sample: CollateralSample): HelperConfig => ({
   maxSlippageBps: sample.maxSlippageBps,
   triggerHf: sample.triggerHf,
   targetHf: sample.targetHf,
+  collateral: sample.authorizedCollateral,
+  poolFee: sample.authorizedPoolFee,
 });
 
 const UNWOUND_ALL_INDEXED = parseAbiItem(
@@ -145,6 +152,9 @@ export interface FakeEvm extends EvmClient {
   /** Defaults to what the sample says the helper holds. */
   helperConfig: HelperConfig | Error | null;
   simulation: SimulationResult | Error;
+  /** QuoterV2's answer. By default the price of COLLATERAL_SALE, for any amount. */
+  quote: bigint | Error | ((sale: SaleQuote) => bigint);
+  quotes: SaleQuote[];
 }
 
 export function fakeEvm(url: string, sample: Sample | Error = sickSample(url)): FakeEvm {
@@ -158,6 +168,13 @@ export function fakeEvm(url: string, sample: Sample | Error = sickSample(url)): 
     prices: [wethPrice, 10n ** 8n],
     helperConfig: null,
     simulation: { reverted: false },
+    quote: (sale) => (sale.amount * COLLATERAL_SALE.sold) / COLLATERAL_SALE.repaid,
+    quotes: [],
+    async quoteExactOutput(_quoter, sale) {
+      fake.quotes.push(sale);
+      if (fake.quote instanceof Error) throw fake.quote;
+      return typeof fake.quote === 'function' ? fake.quote(sale) : fake.quote;
+    },
     async readSample() {
       if (fake.sample instanceof Error) throw fake.sample;
       return fake.sample;
@@ -210,6 +227,7 @@ export function fakeNear(
     /** Collateral mode: what the contract would put in `unwind`. */
     collateral?: Address;
     poolFee?: bigint;
+    maxSold?: bigint;
     /** The clock to stamp with, for a caller on real time. */
     now?: () => number;
   } = {},
@@ -234,6 +252,7 @@ export function fakeNear(
               collateral: behaviour.collateral ?? weth,
               amount: request.amount,
               poolFee: behaviour.poolFee ?? poolFee,
+              maxSold: behaviour.maxSold ?? (request.maxSold as bigint),
             })
           : repayCalldata(chain.usdc, request.amount, 2n, onBehalfOf),
         ...(unwind ? { gas: 600_000n } : {}),
@@ -311,7 +330,7 @@ export async function harness(over: Partial<RescueContext> = {}): Promise<Harnes
 export async function collateralHarness(over: Partial<RescueContext> = {}): Promise<Harness> {
   const h = await harness({
     position: collateralTarget,
-    collateral: { asset: weth, helper, poolFee },
+    collateral: { asset: weth, helper, poolFee, quoter },
     ...over,
   });
   for (const client of [h.a, h.b]) {
@@ -340,3 +359,6 @@ export const COLLATERAL_SALE = {
   repaid: 5_000n * 10n ** 6n,
   sold: 2_507_500_000_000_000_000n,
 } as const;
+
+/** The keeper's cap for that sale: the quote plus the default 50 bps, rounded down. */
+export const COLLATERAL_MAX_SOLD = (COLLATERAL_SALE.sold * 10_050n) / 10_000n;

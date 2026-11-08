@@ -2,7 +2,12 @@
 import { formatUnits } from 'viem';
 import { decide, formatWad } from './decision.js';
 import { DEFAULT_QUORUM, type Sample, readQuorum } from './quorum.js';
-import { capsFor, collateralDecisionInputFor, decisionInputFor } from './rescue.js';
+import {
+  capsFor,
+  collateralDecisionInputFor,
+  decisionInputFor,
+  helperConfigOfSample,
+} from './rescue.js';
 import type { Wiring } from './setup.js';
 import { helperConfigMismatch } from './unwind.js';
 
@@ -65,18 +70,18 @@ export async function describePosition(wiring: Wiring, now: () => number): Promi
       `  borrower holds ${units(held.aTokenBalance)} in aTokens, ${units(held.aTokenAllowance)} approved to the helper`,
     );
     const mismatch = helperConfigMismatch(
-      target,
-      {
-        rescuer: held.authorizedRescuer,
-        maxSlippageBps: held.maxSlippageBps,
-        triggerHf: held.triggerHf,
-        targetHf: held.targetHf,
-      },
+      { ...target, collateral: collateral.asset, poolFee: collateral.poolFee },
+      helperConfigOfSample(held),
       rescuer,
     );
     if (mismatch) {
       lines.push(`  helper config differs: ${mismatch}`);
       return lines.join('\n');
+    }
+    if (held.ltvZeroCollateral) {
+      lines.push(
+        `  blocked: ${held.ltvZeroCollateral} is enabled as collateral at LTV 0, so Aave refuses to let ${collateral.asset} leave first`,
+      );
     }
   } else {
     lines.push(

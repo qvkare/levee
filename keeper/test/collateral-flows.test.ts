@@ -65,6 +65,8 @@ describe('wiring a position in collateral mode', () => {
     maxSlippageBps: 100n,
     triggerHf: parseWad('1.25'),
     targetHf: parseWad('1.6'),
+    collateral: weth,
+    poolFee: 500n,
   };
   const wire = (
     nearViews = views(),
@@ -79,8 +81,28 @@ describe('wiring a position in collateral mode', () => {
   it('reads the asset and fee from the contract and the helper from get_chain', async () => {
     const wiring = await wire();
 
-    expect(wiring.collateral).toEqual({ asset: weth, helper, poolFee: 500n, helperConfig: agreed });
+    expect(wiring.collateral).toEqual({
+      asset: weth,
+      helper,
+      poolFee: 500n,
+      quoter: sepolia.quoterV2,
+      helperConfig: agreed,
+    });
     expect(wiring.rescuer).toBe(derived);
+  });
+
+  it('uses the QuoterV2 verified for each chain with a helper', () => {
+    expect(CHAINS[8453]?.quoterV2).toBe('0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a');
+    expect(CHAINS[42161]?.quoterV2).toBe('0x61fFE014bA17989E743c5F6cB21bF9697530B21e');
+    expect(CHAINS[84532]?.quoterV2).toBe('0xC5290058841028F1614F3A6F0F5816cAd0df5E27');
+  });
+
+  it('refuses a chain with no known QuoterV2', async () => {
+    const arbitrumSepolia = views({
+      getPosition: async () =>
+        openPosition({ chain_id: 421614, collateral: { asset: weth, pool_fee: 500 } }),
+    });
+    await expect(wire(arbitrumSepolia)).rejects.toThrow(/no Uniswap v3 QuoterV2/);
   });
 
   it('hands the collateral terms to the rescue context', async () => {
@@ -93,7 +115,7 @@ describe('wiring a position in collateral mode', () => {
       log: () => {},
     });
 
-    expect(ctx.collateral).toEqual({ asset: weth, helper, poolFee: 500n });
+    expect(ctx.collateral).toEqual({ asset: weth, helper, poolFee: 500n, quoter: sepolia.quoterV2 });
   });
 
   it('refuses a position registered without a collateral config', async () => {
@@ -112,6 +134,8 @@ describe('wiring a position in collateral mode', () => {
     ['target', { targetHf: parseWad('1.5') }, /target/],
     ['slippage limit', { maxSlippageBps: 300n }, /max_slippage_bps/],
     ['rescuer', { rescuer: stranger }, /authorized rescuer/],
+    ['collateral', { collateral: stranger }, /collateral .* registered on NEAR/],
+    ['pool fee', { poolFee: 3_000n }, /pool fee 3000 at the helper, 500 registered on NEAR/],
   ])('refuses to start when the helper has another %s', async (_name, change, message) => {
     await expect(wire(views(), { ...agreed, ...change })).rejects.toThrow(message);
   });
@@ -174,6 +198,21 @@ describe('wiring a position in collateral mode', () => {
 
     expect(await describePosition(wiring, now)).toContain('helper config differs: trigger');
   });
+
+  it('shows another collateral at LTV 0 in status', async () => {
+    const wiring = await wire();
+    for (const client of wiring.clients as ReturnType<typeof fakeEvm>[]) {
+      client.sample = sickSample(client.url, {
+        chainId: 84532,
+        collateral: collateralOf(derived, { ltvZeroCollateral: stranger }),
+      });
+    }
+    const now = () => Number(sickSample('x').blockTimestamp) * 1000 + 2_000;
+
+    expect(await describePosition(wiring, now)).toContain(
+      `blocked: ${stranger} is enabled as collateral at LTV 0`,
+    );
+  });
 });
 
 describe('replaying a collateral run', () => {
@@ -200,6 +239,7 @@ describe('replaying a collateral run', () => {
       'Quorum',
       'Decision',
       'Fees',
+      'Quote',
       'NEAR rescue',
       'Signature',
       'Broadcast',
@@ -254,6 +294,48 @@ describe('replaying a collateral run', () => {
     expect(await mismatched(run)).toEqual(['Revert']);
   });
 
+  it('recomputes max_sold from the recorded quotes', async () => {
+    h = await collateralHarness();
+    const result = await replayRun(await record());
+    const quote = result.steps.find((step) => step.title === 'Quote');
+    expect(quote?.ok).toBe(true);
+    expect(quote?.lines.join(' ')).toContain('max_sold 2520037500000000000');
+  });
+
+  it('catches an edited max_sold', async () => {
+    h = await collateralHarness();
+    const run = clone(await record());
+    run.max_sold = '9999999999999999999';
+    expect(await mismatched(run)).toEqual(['Quote', 'Signature']);
+  });
+
+  it('catches an edited quote', async () => {
+    h = await collateralHarness();
+    const run = clone(await record());
+    const answer = run.trace?.quote?.answers[0];
+    if (answer) answer.amount_in = '2600000000000000000';
+    expect(await mismatched(run)).toEqual(['Quote']);
+  });
+
+  it('catches an edited oracle bound', async () => {
+    h = await collateralHarness();
+    const run = clone(await record());
+    if (run.trace?.quote) run.trace.quote.oracle_max_in = '1';
+    expect(await mismatched(run)).toEqual(['Quote']);
+  });
+
+  it('repeats a refusal to quote', async () => {
+    h = await collateralHarness();
+    h.b.quote = new Error('timeout');
+    const run = await record();
+    expect(run.failure_reason).toMatch(/^quote_unavailable/);
+    const result = await replayRun(run);
+    expect(result.ok).toBe(true);
+    expect(result.steps.find((step) => step.title === 'Quote')?.lines.join(' ')).toContain(
+      'refused: quote_unavailable',
+    );
+  });
+
   it('catches an edited fee tier', async () => {
     h = await collateralHarness();
     const run = clone(await record());
@@ -283,8 +365,9 @@ describe('verifying a collateral run', () => {
   const rescuer: Address = '0x3333333333333333333333333333333333333333';
   const amount = 2_500_000n;
   const sold = 1_250_000_000_000_000n;
+  const maxSold = 1_256_250_000_000_000n;
   const evmHash: Hex = `0x${'ab'.repeat(32)}`;
-  const call = { borrower, collateral: weth, amount, poolFee: 500n };
+  const call = { borrower, collateral: weth, amount, poolFee: 500n, maxSold };
 
   const onChainTx = (over: Partial<EvmTransaction> = {}): EvmTransaction => ({
     hash: evmHash,
@@ -319,7 +402,7 @@ describe('verifying a collateral run', () => {
     signerId: 'keeper.testnet',
     receiverId: 'levee.testnet',
     methodName: 'rescue_from_collateral',
-    args: { id: 1, amount: amount.toString(), fees: {} },
+    args: { id: 1, amount: amount.toString(), max_sold: maxSold.toString(), fees: {} },
     blockHash: 'Block',
     returnValue: {
       kind: 'unwind',
@@ -353,6 +436,7 @@ describe('verifying a collateral run', () => {
     near_sender: 'keeper.testnet',
     mode: 'collateral',
     collateral: weth,
+    max_sold: maxSold.toString(),
     sold: sold.toString(),
     swap: {
       repaid: amount.toString(),
@@ -426,9 +510,12 @@ describe('verifying a collateral run', () => {
         'collateral',
         'collateral_registered',
         'pool_fee',
+        'max_sold',
+        'near_max_sold',
         'amount_within_caps',
         'unwound_event',
         'unwound_sold',
+        'unwound_within_max_sold',
         'unwound_rescuer',
         'near_signed_evm_tx',
       ]),
@@ -454,8 +541,43 @@ describe('verifying a collateral run', () => {
       ['collateral', 'collateral_registered'],
     ],
     ['another fee tier', changedTx({ input: unwindCalldata({ ...call, poolFee: 3_000n }) }), ['pool_fee']],
+    [
+      'a looser max_sold than the record',
+      changedTx({ input: unwindCalldata({ ...call, maxSold: maxSold + 1n }) }),
+      ['max_sold'],
+    ],
   ])('fails on %s', async (_name, state, expected) => {
     expect(await failed(run(), state)).toEqual(expected);
+  });
+
+  it('fails when the NEAR call asked for another max_sold', async () => {
+    const state = world();
+    state.near = {
+      ...state.near,
+      args: { ...(state.near.args as object), max_sold: (maxSold * 2n).toString() },
+    };
+    expect(await failed(run(), state)).toEqual(['near_max_sold']);
+  });
+
+  it('fails a collateral record with no max_sold', async () => {
+    expect(await failed(run({ max_sold: null }), world())).toEqual([
+      'near_max_sold',
+      'max_sold',
+      'unwound_within_max_sold',
+    ]);
+  });
+
+  /** The helper refuses such a sale, so a record of one is not to be believed. */
+  it('fails when the event sold more than the max_sold signed', async () => {
+    const tight = sold - 1n;
+    const state = changedTx({ input: unwindCalldata({ ...call, maxSold: tight }) });
+    state.near = {
+      ...state.near,
+      args: { ...(state.near.args as object), max_sold: tight.toString() },
+    };
+    expect(await failed(run({ max_sold: tight.toString() }), state)).toEqual([
+      'unwound_within_max_sold',
+    ]);
   });
 
   it('fails when the NEAR call was rescue rather than rescue_from_collateral', async () => {

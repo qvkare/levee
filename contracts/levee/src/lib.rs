@@ -146,15 +146,15 @@ enum Mode {
     /// `rescue`: `Pool.repay` from the rescuer's USDC.
     Reserve,
     /// `rescue_from_collateral`: `LeveeUnwind.unwind`, which sells the borrower's
-    /// collateral to repay.
-    Collateral,
+    /// collateral to repay, selling at most `max_sold` of it.
+    Collateral { max_sold: u128 },
 }
 
 impl Mode {
     fn kind(self) -> SignKind {
         match self {
             Mode::Reserve => SignKind::Rescue,
-            Mode::Collateral => SignKind::Unwind,
+            Mode::Collateral { .. } => SignKind::Unwind,
         }
     }
 }
@@ -174,10 +174,11 @@ fn checked_rescue(
             let reservation = policy::check_rescue(position, chain, amount, fees, now)?;
             Ok((reservation, txs::repay_tx(chain, position, amount, fees)))
         }
-        Mode::Collateral => {
+        Mode::Collateral { max_sold } => {
             let collateral = policy::collateral_of(position)?;
             let reservation = policy::check_rescue(position, chain, amount, fees, now)?;
-            let tx = txs::unwind_tx(chain, position, collateral, amount, fees);
+            policy::check_max_sold(max_sold)?;
+            let tx = txs::unwind_tx(chain, position, collateral, amount, max_sold, fees);
             Ok((reservation, tx))
         }
     }
@@ -404,12 +405,30 @@ impl Levee {
         self.keeper_rescue(Mode::Reserve, id, amount, fees)
     }
 
-    /// Signs `LeveeUnwind.unwind(borrower, collateral, amount, pool_fee)` within the
-    /// position's caps. Same rules, budget and cooldown as `rescue`: `amount` is USDC
-    /// base units, charged to the same `max_per_rescue` and `max_per_day`. Refused for
-    /// a position registered without a collateral config.
-    pub fn rescue_from_collateral(&mut self, id: u64, amount: U128, fees: Fees) -> Promise {
-        self.keeper_rescue(Mode::Collateral, id, amount, fees)
+    /// Signs `LeveeUnwind.unwind(borrower, collateral, amount, pool_fee, max_sold)`
+    /// within the position's caps. Same rules, budget and cooldown as `rescue`:
+    /// `amount` is USDC base units, charged to the same `max_per_rescue` and
+    /// `max_per_day`. Refused for a position registered without a collateral config.
+    ///
+    /// `max_sold` caps the collateral sold, in its base units. The keeper sets it from a
+    /// fresh quote so that a sandwich cannot take the borrower's whole slippage bound.
+    /// The contract cannot price it and only refuses zero. The helper applies the
+    /// borrower's bound as well, so a stolen keeper key can loosen the cap only up to it.
+    pub fn rescue_from_collateral(
+        &mut self,
+        id: u64,
+        amount: U128,
+        max_sold: U128,
+        fees: Fees,
+    ) -> Promise {
+        self.keeper_rescue(
+            Mode::Collateral {
+                max_sold: max_sold.0,
+            },
+            id,
+            amount,
+            fees,
+        )
     }
 
     /// Signs `USDC.transfer(borrower, amount)`. The destination is fixed.
@@ -499,8 +518,21 @@ impl Levee {
 
     /// The transaction `rescue_from_collateral` would sign now, failing with the same
     /// error it would, except for rule 1.
-    pub fn preview_rescue_from_collateral(&self, id: u64, amount: U128, fees: Fees) -> PreviewTx {
-        self.preview(Mode::Collateral, id, amount, fees)
+    pub fn preview_rescue_from_collateral(
+        &self,
+        id: u64,
+        amount: U128,
+        max_sold: U128,
+        fees: Fees,
+    ) -> PreviewTx {
+        self.preview(
+            Mode::Collateral {
+                max_sold: max_sold.0,
+            },
+            id,
+            amount,
+            fees,
+        )
     }
 
     pub fn get_chain(&self, chain_id: u64) -> Option<ChainConfig> {

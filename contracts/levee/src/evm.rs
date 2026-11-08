@@ -12,8 +12,8 @@ use crate::rlp;
 pub const SELECTOR_APPROVE: [u8; 4] = [0x09, 0x5e, 0xa7, 0xb3];
 pub const SELECTOR_TRANSFER: [u8; 4] = [0xa9, 0x05, 0x9c, 0xbb];
 pub const SELECTOR_REPAY: [u8; 4] = [0x57, 0x3a, 0xde, 0x81];
-/// `unwind(address,address,uint256,uint24)` on the `LeveeUnwind` helper.
-pub const SELECTOR_UNWIND: [u8; 4] = [0xd0, 0xcd, 0xa3, 0xc2];
+/// `unwind(address,address,uint256,uint24,uint256)` on the `LeveeUnwind` helper.
+pub const SELECTOR_UNWIND: [u8; 4] = [0x65, 0xaf, 0xae, 0x08];
 
 /// Aave `interestRateMode` for variable-rate debt.
 pub const VARIABLE_RATE_MODE: u128 = 2;
@@ -51,20 +51,23 @@ pub fn repay_calldata(asset: &Address, amount: u128, on_behalf_of: &Address) -> 
     data
 }
 
-/// `unwind(address,address,uint256,uint24)`. A `uint24` takes a whole word, like any
-/// static type. `pool_fee` is validated at `register`, so it always fits.
+/// `unwind(address,address,uint256,uint24,uint256)`. A `uint24` takes a whole word,
+/// like any static type. `pool_fee` is validated at `register`, so it always fits.
+/// `max_sold` is the keeper's cap on the collateral sold, in its base units.
 pub fn unwind_calldata(
     borrower: &Address,
     collateral: &Address,
     amount: u128,
     pool_fee: u32,
+    max_sold: u128,
 ) -> Vec<u8> {
-    let mut data = Vec::with_capacity(SELECTOR_LEN + 4 * WORD_LEN);
+    let mut data = Vec::with_capacity(SELECTOR_LEN + 5 * WORD_LEN);
     data.extend_from_slice(&SELECTOR_UNWIND);
     push_address_word(&mut data, borrower);
     push_address_word(&mut data, collateral);
     push_uint_word(&mut data, amount);
     push_uint_word(&mut data, u128::from(pool_fee));
+    push_uint_word(&mut data, max_sold);
     data
 }
 
@@ -169,14 +172,21 @@ mod tests {
     }
 
     #[test]
-    fn unwind_is_selector_borrower_collateral_amount_fee() {
-        let data = unwind_calldata(&BORROWER, &COLLATERAL, 2_500_000, 3_000);
-        assert_eq!(data.len(), 132);
+    fn unwind_is_selector_borrower_collateral_amount_fee_max_sold() {
+        let data = unwind_calldata(
+            &BORROWER,
+            &COLLATERAL,
+            2_500_000,
+            3_000,
+            1_116_000_000_000_000_000,
+        );
+        assert_eq!(data.len(), 164);
         assert_eq!(data[..4], SELECTOR_UNWIND);
         assert_eq!(data[4..36], address_word(&BORROWER)[..]);
         assert_eq!(data[36..68], address_word(&COLLATERAL)[..]);
         assert_eq!(data[68..100], word(2_500_000)[..]);
         assert_eq!(data[100..132], word(3_000)[..]);
+        assert_eq!(data[132..164], word(1_116_000_000_000_000_000)[..]);
     }
 
     /// The selector is the first four bytes of the keccak of the signature, computed
@@ -184,30 +194,38 @@ mod tests {
     #[test]
     fn the_unwind_selector_is_the_keccak_of_its_signature() {
         use sha3::{Digest, Keccak256};
-        let digest = Keccak256::digest(b"unwind(address,address,uint256,uint24)");
+        let digest = Keccak256::digest(b"unwind(address,address,uint256,uint24,uint256)");
         assert_eq!(digest[..4], SELECTOR_UNWIND);
         let repay = Keccak256::digest(b"repay(address,uint256,uint256,address)");
         assert_eq!(repay[..4], SELECTOR_REPAY);
     }
 
-    /// From `cast calldata "unwind(address,address,uint256,uint24)"
+    /// From `cast calldata "unwind(address,address,uint256,uint24,uint256)"
     /// 0x1234567890AbcdEF1234567890aBcdef12345678
-    /// 0x4200000000000000000000000000000000000006 2500000 3000`, cast 1.5.1.
+    /// 0x4200000000000000000000000000000000000006 2500000 3000 1116000000000000000`,
+    /// cast 1.5.1.
     #[test]
     fn unwind_matches_cast_byte_for_byte() {
         let expected = concat!(
-            "d0cda3c2",
+            "65afae08",
             "0000000000000000000000001234567890abcdef1234567890abcdef12345678",
             "0000000000000000000000004200000000000000000000000000000000000006",
             "00000000000000000000000000000000000000000000000000000000002625a0",
             "0000000000000000000000000000000000000000000000000000000000000bb8",
+            "0000000000000000000000000000000000000000000000000f7cd41651560000",
         );
         let borrower =
             crate::address::parse_address("0x1234567890abcdef1234567890abcdef12345678").unwrap();
         let weth =
             crate::address::parse_address("0x4200000000000000000000000000000000000006").unwrap();
         assert_eq!(
-            hex::encode(unwind_calldata(&borrower, &weth, 2_500_000, 3_000)),
+            hex::encode(unwind_calldata(
+                &borrower,
+                &weth,
+                2_500_000,
+                3_000,
+                1_116_000_000_000_000_000
+            )),
             expected
         );
     }
@@ -215,9 +233,16 @@ mod tests {
     #[test]
     fn unwind_encodes_every_allowed_fee_tier_as_a_word() {
         for fee in [100u32, 500, 3_000, 10_000] {
-            let data = unwind_calldata(&BORROWER, &COLLATERAL, 1, fee);
+            let data = unwind_calldata(&BORROWER, &COLLATERAL, 1, fee, 1);
             assert_eq!(data[100..132], word(u128::from(fee))[..]);
         }
+    }
+
+    #[test]
+    fn unwind_carries_the_largest_max_sold() {
+        let data = unwind_calldata(&BORROWER, &COLLATERAL, 1, 500, u128::MAX);
+        assert_eq!(data[132..148], [0u8; 16]);
+        assert_eq!(data[148..164], [0xff; 16]);
     }
 
     #[test]

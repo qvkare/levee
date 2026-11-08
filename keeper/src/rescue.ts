@@ -23,6 +23,7 @@ import {
   capsToTrace,
   decisionToTrace,
   runId,
+  quoteAnswersToTrace,
   sampleToTrace,
   swapToRecord,
   writeRun,
@@ -36,7 +37,13 @@ import {
   type Position,
   type RescueMode,
 } from './near.js';
-import { DEFAULT_QUORUM, type QuorumResult, type Sample, readQuorum } from './quorum.js';
+import {
+  type CollateralSample,
+  DEFAULT_QUORUM,
+  type QuorumResult,
+  type Sample,
+  readQuorum,
+} from './quorum.js';
 import {
   type AssembledTransaction,
   SignatureRefused,
@@ -45,9 +52,14 @@ import {
   assertMatchesUnwindIntent,
 } from './signature.js';
 import {
+  DEFAULT_QUOTE_TOLERANCE_BPS,
+  type MaxSoldChoice,
+  type QuoteAnswer,
+  chooseMaxSold,
   decodeUnwound,
   helperConfigMismatch,
   isAboveTrigger,
+  oracleMaxIn,
   swapPrice,
   unwoundEvents,
 } from './unwind.js';
@@ -63,6 +75,8 @@ export interface PositionTarget {
   mode?: RescueMode;
   /** Collateral mode: the borrower's slippage limit, as set at the helper. */
   maxSlippageBps?: bigint;
+  /** Collateral mode: headroom over a fresh quote for `max_sold`. Defaults to 50 bps. */
+  quoteToleranceBps?: bigint;
 }
 
 /** Collateral mode: what the contract signs for, read from it at start. */
@@ -73,6 +87,8 @@ export interface CollateralContext {
   helper: Address;
   /** Uniswap v3 fee tier, from `get_position`. */
   poolFee: bigint;
+  /** The chain's Uniswap v3 QuoterV2, which `max_sold` is quoted from. */
+  quoter: Address;
 }
 
 export interface RescueContext {
@@ -171,6 +187,16 @@ export function collateralDecisionInputFor(sample: Sample, caps: Caps, poolFee: 
   };
 }
 
+/** What the borrower set at the helper, as the sample read it. */
+export const helperConfigOfSample = (held: CollateralSample) => ({
+  rescuer: held.authorizedRescuer,
+  maxSlippageBps: held.maxSlippageBps,
+  triggerHf: held.triggerHf,
+  targetHf: held.targetHf,
+  collateral: held.authorizedCollateral,
+  poolFee: held.authorizedPoolFee,
+});
+
 const modeOf = (ctx: Pick<RescueContext, 'collateral'>): RescueMode =>
   ctx.collateral ? 'collateral' : 'reserve';
 
@@ -228,9 +254,10 @@ class Attempt {
     };
     if (ctx.collateral) {
       const { asset, helper, poolFee } = ctx.collateral;
-      Object.assign(this.record, { collateral: asset, sold: null, swap: null });
+      Object.assign(this.record, { collateral: asset, max_sold: null, sold: null, swap: null });
       Object.assign(this.trace, {
         collateral: { asset, helper, pool_fee: poolFee.toString() },
+        quote: null,
         unwound: null,
         revert: null,
       });
@@ -412,16 +439,75 @@ async function readRevert(
   return { data: result.data, error: result.error };
 }
 
+/**
+ * Collateral mode: `max_sold` from a fresh QuoterV2 quote on every endpoint, for the
+ * same pool and amount, plus the position's tolerance. Taken just before the NEAR call,
+ * because the NEAR contract publishes the signed transaction before it lands and a
+ * searcher could otherwise sandwich it up to the borrower's whole slippage bound.
+ */
+async function quoteMaxSold(
+  ctx: RescueContext,
+  attempt: Attempt,
+  sample: Sample,
+  amount: bigint,
+): Promise<MaxSoldChoice> {
+  const collateral = ctx.collateral as CollateralContext;
+  const held = sample.collateral as CollateralSample;
+  const toleranceBps = ctx.position.quoteToleranceBps ?? DEFAULT_QUOTE_TOLERANCE_BPS;
+  const bound = oracleMaxIn(amount, held, sample.usdcPriceBase);
+  const sale = {
+    tokenIn: collateral.asset,
+    tokenOut: ctx.chain.usdc,
+    amount,
+    fee: collateral.poolFee,
+  };
+  const settled = await Promise.allSettled(
+    ctx.clients.map((client) => client.quoteExactOutput(collateral.quoter, sale)),
+  );
+  const answers: QuoteAnswer[] = settled.map((result, index) => ({
+    rpc: ctx.clients[index]?.url ?? '',
+    amountIn: result.status === 'fulfilled' ? result.value : null,
+    error: result.status === 'rejected' ? describeError(result.reason) : null,
+  }));
+  const choice = chooseMaxSold(answers, {
+    amount,
+    toleranceBps,
+    minAnswers: DEFAULT_QUORUM.minEndpoints,
+    maxDeviationBps: DEFAULT_QUORUM.maxDeviationBps,
+    oracleMaxIn: bound,
+  });
+  attempt.trace.quote = {
+    quoter: collateral.quoter,
+    amount: amount.toString(),
+    pool_fee: collateral.poolFee.toString(),
+    tolerance_bps: toleranceBps.toString(),
+    oracle_max_in: bound.toString(),
+    answers: quoteAnswersToTrace(answers),
+    amount_in: choice.amountIn === null ? null : choice.amountIn.toString(),
+    max_sold: choice.ok ? choice.maxSold.toString() : null,
+  };
+  return choice;
+}
+
 async function signAndSubmit(
   ctx: RescueContext,
   attempt: Attempt,
   decision: Extract<Decision, { action: 'repay' }>,
+  sample: Sample,
 ): Promise<TickResult> {
   const { record, trace } = attempt;
   const { quotes, nonce } = await readFeesAndNonce(ctx);
   const fees = chooseFees(quotes, ctx.ceilings);
   if (!fees.ok) return attempt.finish('aborted', fees.reason, fees.detail);
   if (nonce === null) return attempt.finish('aborted', 'nonce_unavailable');
+
+  let maxSold: bigint | undefined;
+  if (ctx.collateral) {
+    const choice = await quoteMaxSold(ctx, attempt, sample, decision.amount);
+    if (!choice.ok) return attempt.finish('aborted', choice.reason, choice.detail);
+    maxSold = choice.maxSold;
+    record.max_sold = maxSold.toString();
+  }
 
   const rescueFees = {
     nonce,
@@ -440,7 +526,7 @@ async function signAndSubmit(
       id: ctx.position.id,
       amount: decision.amount,
       fees: rescueFees,
-      ...(ctx.collateral ? { mode: 'collateral' as const } : {}),
+      ...(ctx.collateral ? { mode: 'collateral' as const, maxSold } : {}),
     });
   } catch (error) {
     if (error instanceof NearRescueError) {
@@ -471,7 +557,13 @@ async function signAndSubmit(
     trace.signed_tx = assembled.serialized;
     if (ctx.collateral) {
       const { helper, asset, poolFee } = ctx.collateral;
-      assertMatchesUnwindIntent(assembled, { ...common, helper, collateral: asset, poolFee });
+      assertMatchesUnwindIntent(assembled, {
+        ...common,
+        helper,
+        collateral: asset,
+        poolFee,
+        maxSold: maxSold as bigint,
+      });
     } else {
       assertMatchesIntent(assembled, { ...common, pool: ctx.chain.pool, usdc: ctx.chain.usdc });
     }
@@ -528,17 +620,26 @@ async function run(
   let trigger = position.triggerWad;
   if (ctx.collateral) {
     if (!sample.collateral) return attempt.finish('aborted', 'collateral_unavailable');
-    const { authorizedRescuer, maxSlippageBps, triggerHf, targetHf } = sample.collateral;
     const mismatch = helperConfigMismatch(
-      position,
-      { rescuer: authorizedRescuer, maxSlippageBps, triggerHf, targetHf },
+      { ...position, collateral: ctx.collateral.asset, poolFee: ctx.collateral.poolFee },
+      helperConfigOfSample(sample.collateral),
       ctx.rescuer,
     );
     if (mismatch) return attempt.finish('aborted', 'helper_config_mismatch', mismatch);
-    trigger = triggerHf;
+    trigger = sample.collateral.triggerHf;
   }
   if (!manual && sample.healthFactor >= trigger) {
     return { status: 'idle', reason: 'healthy', healthFactor: sample.healthFactor };
+  }
+  // Aave would revert the aToken transfer with LtvValidationFailed, so the unwind would
+  // only burn gas. Only the borrower can clear it, by withdrawing or disabling the asset.
+  const blocker = sample.collateral?.ltvZeroCollateral;
+  if (ctx.collateral && blocker) {
+    return attempt.finish(
+      'aborted',
+      'ltv_zero_collateral',
+      `${blocker} is enabled as collateral at LTV 0, so Aave lets no other collateral leave the account before it`,
+    );
   }
 
   let onContract: Position;
@@ -566,7 +667,7 @@ async function run(
   ctx.log(
     `position ${position.id}: health factor ${formatWad(sample.healthFactor)} below ${formatWad(trigger)}, repaying ${decision.amount} from ${modeOf(ctx)} (limited by ${decision.limitedBy})`,
   );
-  return signAndSubmit(ctx, attempt, decision);
+  return signAndSubmit(ctx, attempt, decision, sample);
 }
 
 /**

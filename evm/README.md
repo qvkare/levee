@@ -21,6 +21,7 @@ forge test -vv --match-contract BaseCrashTest
 forge test -vv --match-contract UnwindBaseTest
 forge test -vv --match-contract UnwindArbitrumTest
 forge test -vv --match-contract UnwindBaseSepoliaTest
+forge test -vv --match-contract UnwindPoolChoiceBaseTest
 ```
 
 The crash comparison prints its table with:
@@ -41,7 +42,7 @@ The unwind suites read far more state: about a minute per suite on a cold cache.
 
 | Variable | Default | Used for |
 |---|---|---|
-| `BASE_FORK_RPC_URL` | `https://mainnet.base.org` | `BaseRepayTest`, `BaseCrashTest`, `UnwindBaseTest` |
+| `BASE_FORK_RPC_URL` | `https://mainnet.base.org` | `BaseRepayTest`, `BaseCrashTest`, `UnwindBaseTest`, `UnwindPoolChoiceBaseTest` |
 | `ARBITRUM_FORK_RPC_URL` | `https://arbitrum-one.public.blastapi.io` | `ArbitrumRepayTest`, `UnwindArbitrumTest` |
 | `BASE_SEPOLIA_FORK_RPC_URL` | `https://sepolia.base.org` | `UnwindBaseSepoliaTest` |
 
@@ -149,38 +150,61 @@ This is a forced price path that steps through the trigger before the crash. It 
 
 ```solidity
 // From the borrower's own wallet. 0 < maxSlippageBps <= 300, 1e18 < triggerHf < targetHf <= 3e18.
-function authorize(address rescuer, uint16 maxSlippageBps, uint64 triggerHf, uint64 targetHf) external;
+// collateral is an Aave reserve other than USDC, and the (collateral, USDC, poolFee) pool exists.
+function authorize(address rescuer, uint16 maxSlippageBps, uint64 triggerHf, uint64 targetHf,
+    address collateral, uint24 poolFee) external;
 function revoke() external;
 function authorizationOf(address borrower) external view
-    returns (address rescuer, uint16 maxSlippageBps, uint64 triggerHf, uint64 targetHf);
-// Only the borrower's rescuer, only while the health factor is below the trigger.
-function unwind(address borrower, address collateral, uint256 amount, uint24 poolFee)
+    returns (address rescuer, uint16 maxSlippageBps, uint64 triggerHf, uint64 targetHf,
+        address collateral, uint24 poolFee);
+// Only the borrower's rescuer, only for their collateral and pool, only below the trigger.
+function unwind(address borrower, address collateral, uint256 amount, uint24 poolFee, uint256 maxSold)
     external returns (uint256 repaid, uint256 sold);
 
-event Authorized(address indexed borrower, address indexed rescuer, uint16 maxSlippageBps, uint64 triggerHf, uint64 targetHf);
+event Authorized(address indexed borrower, address indexed rescuer, address indexed collateral,
+    uint24 poolFee, uint16 maxSlippageBps, uint64 triggerHf, uint64 targetHf);
 event Revoked(address indexed borrower, address indexed rescuer);
 event Unwound(address indexed borrower, address indexed rescuer, address indexed collateral, uint256 repaid, uint256 sold);
 ```
 
 | Call | Selector |
 |---|---|
-| `unwind(address,address,uint256,uint24)` | `0xd0cda3c2` |
-| `authorize(address,uint16,uint64,uint64)` | `0x544fc06e` |
+| `unwind(address,address,uint256,uint24,uint256)` | `0x65afae08` |
+| `authorize(address,uint16,uint64,uint64,address,uint24)` | `0x4d4bb5b7` |
+| `authorizationOf(address)` | `0xcc90b6bb` |
 | `revoke()` | `0xb6549f75` |
 
-`test_chainFacts` asserts all three. The constructor takes the Aave `PoolAddressesProvider`, USDC and the Uniswap v3 factory. The Pool and the oracle are read from the provider on every call.
+`test_chainFacts` asserts all four. The constructor takes the Aave `PoolAddressesProvider`, USDC and the Uniswap v3 factory. The Pool, the oracle and the price oracle sentinel are read from the provider on every call. The `Unwound` event and its topic did not change with the audit fixes.
 
 ### What `unwind` does
 
-1. Refuses a re-entered call, a caller who is not the borrower's rescuer, a zero amount, and USDC as collateral.
-2. Reads the health factor from `Pool.getUserAccountData` and refuses it at or above the borrower's trigger.
-3. Refuses collateral that is not an Aave reserve, or is inactive, frozen or paused. Caps `amount` at the USDC variable debt.
-4. Computes `maxIn = amount * price(USDC) / price(collateral) * (1 + maxSlippageBps)` in collateral base units from Aave's oracle, with one `mulDiv` that rounds down. Both prices are in the oracle's base currency, so its unit cancels. The decimals come from Aave's reserve configuration.
-5. Looks the pool up with `factory.getPool(collateral, USDC, poolFee)` and starts an exact-output swap for `amount` USDC to itself, with the price limit at the end of the range.
-6. In the callback, accepts only the pool it is swapping on, once: the pool address sits in transient storage and the callback clears it on entry. It requires exactly `amount` USDC received and collateral owed of at most `maxIn`. It repays `amount` with `Pool.repay(USDC, amount, 2, borrower)`, pulls the owed aTokens from the borrower with `transferFrom`, and withdraws its whole aToken balance from Aave to the pool.
-7. Reads the health factor again. It must have risen, and must not exceed the bound below.
+1. Refuses a re-entered call, a caller who is not the borrower's rescuer, a zero amount and a zero `maxSold`.
+2. Refuses any collateral or fee tier other than the ones the borrower authorized, with `TermsMismatch(collateral, poolFee)`.
+3. Reads the market's `PriceOracleSentinel` from the provider and, if one is set, refuses while `isLiquidationAllowed()` is false, with `PriceOracleSentinelRefused(sentinel)`.
+4. Reads the health factor from `Pool.getUserAccountData` and refuses it at or above the borrower's trigger.
+5. Refuses collateral that is not an Aave reserve, or is inactive or paused. Frozen collateral is sold. Caps `amount` at the USDC variable debt.
+6. Computes `maxIn = amount * price(USDC) / price(collateral) * (1 + maxSlippageBps)` in collateral base units from Aave's oracle, with one `mulDiv` that rounds down. Both prices are in the oracle's base currency, so its unit cancels. The decimals come from Aave's reserve configuration.
+7. Looks the pool up with `factory.getPool(collateral, USDC, poolFee)` and starts an exact-output swap for `amount` USDC to itself, with the price limit at the end of the range.
+8. In the callback, accepts only the pool it is swapping on, once: the pool address sits in transient storage and the callback clears it on entry. It requires exactly `amount` USDC received, collateral owed of at most `maxIn` (`SlippageExceeded`) and at most `maxSold` (`MaxSoldExceeded`). It repays `amount` with `Pool.repay(USDC, amount, 2, borrower)`, pulls the owed aTokens from the borrower with `transferFrom`, and withdraws its whole aToken balance from Aave to the pool.
+9. Reads the health factor again. It must have risen, and must not exceed the bound below.
 
 `maxSlippageBps` is all in: the pool fee counts against it. A 0.30% pool leaves 70 bps of a 100 bps bound for price impact and for the pool's distance from the oracle.
+
+### The rescuer's cap, `maxSold`
+
+The NEAR contract publishes the signed transaction before it lands, so a searcher can sandwich it. With only the borrower's oracle bound, the front-run could push the pool almost to that bound. The keeper therefore passes `maxSold`: a fresh Uniswap QuoterV2 `quoteExactOutputSingle` for the same pool and amount, taken just before it asks NEAR to sign, plus a tolerance of 50 bps by default. The helper takes the tighter of `maxSold` and `maxIn`, so the cap can only tighten the borrower's bound. A stolen keeper key can pass any `maxSold` and is still held to `maxSlippageBps`: the worst it can do is what it could before. The NEAR contract cannot price the cap and only refuses zero.
+
+The auditor's sandwich, at the largest front-run push that still lets the unwind through, with a 100 bps bound. Cost is the borrower's, against Aave's oracle. Profit is the searcher's best over ten pushes up to that one, at oracle prices:
+
+| Fork, pool, repaid | Honest cost | With `maxSold`: cost, searcher profit | Without: cost, searcher profit |
+|---|---|---|---|
+| Base, 0.05%, 12,421 USDC | 6.2 bps | 56.2 bps, -$2.98 | 99.9 bps, -$5.59 |
+| Base, 0.05%, 248,420 USDC | 70.7 bps | 100.0 bps, $674.35 | 100.0 bps, $674.35 |
+| Arbitrum, 0.05%, 12,423 USDC | 7.0 bps | 57.0 bps, -$36.73 | 100.0 bps, -$68.97 |
+| Arbitrum, 0.05%, 248,470 USDC | 20.6 bps | 70.7 bps, $810.94 | 99.9 bps, $1,291.51 |
+| Base Sepolia, seeded 0.30%, 12,727 USDC | 36.2 bps | 86.3 bps, -$24.72 | 99.9 bps, -$31.78 |
+
+The cap holds a sandwich to the tolerance: the borrower pays at most about 50 bps more than the quote said. Where the honest sale already costs within 50 bps of the bound, as for $248k on Base's thin 0.05% pool, the bound binds first and the cap adds nothing. A lower `quote_tolerance_bps` in the keeper's positions file narrows the window, at the cost of an unwind that reverts when the pool moves by more between the quote and inclusion. No pre-swap check of the pool's spot price against its TWAP was added: the cap bounds the same manipulation, and a fork cannot advance the observations of the Base Sepolia pool the seed script moves.
 
 ### The post-check bound
 
@@ -190,46 +214,76 @@ The keeper sizes the repay for the worst cost it allows, `s_w = maxSlippageBps +
 HF_after = T + R * L_c * (s_w - s) / D_after
 ```
 
-with `L_c` the collateral's liquidation threshold and `D_after` the debt left, both from Aave. `R * (s_w - s)` is what a worst-case swap would have spent less what this one did, which the helper knows exactly from the oracle and the swap. Taking `L_c` as 1 gives a bound that needs no reserve parameters and uses Aave's own account data, so Aave handles eMode and several collaterals:
+with `L_c` the collateral's liquidation threshold and `D_after` the debt left, both from Aave. `R * (s_w - s)` is what a worst-case swap would have spent less what this one did, which the helper knows exactly from the oracle and the swap. Taking `L_c` as 1 gives a term that needs no reserve parameters and uses Aave's own account data, so Aave handles eMode and several collaterals. Two terms go on top:
 
 ```
-bound = T * (1 + 1%) + (repaid * price(USDC) * (1 + s_w) - sold * price(collateral)) / D_after
+bound = T
+      + 2% * (T - HF_before)
+      + (C_after + sold * price(collateral)) * 1 bp / D_after
+      + (repaid * price(USDC) * (1 + s_w) - sold * price(collateral)) / D_after
 ```
 
-The 1% (`HF_MARGIN_BPS`) covers rounding in Aave's account data and an oracle update between the keeper's read and the transaction. A repay of the whole debt leaves an unbounded health factor and does not pass: no target up to 3.0 needs one. `test_unwind_overSaleHeadroom_isSmall` finds by bisection how far past the keeper's own amount a sale can go:
+- `HF_MARGIN_BPS`, 200, of the distance the unwind lifts the health factor. A sale past the keeper's amount buys health factor at about `(T - L_c(1 + s)) / D_after` per unit, and the keeper's `R` is `D * (T - HF_before) / (T - L_c(1 + s))`, so the over-sale this term allows is about 2% of `R` times `D_after / D`, whatever the band, the target or the liquidation threshold. The old margin, 1% of the target, did not have that property: for a narrow band its 0.0121 was larger than the whole move.
+- One basis point of the collateral before the sale over the debt left. Aave truncates the averaged liquidation threshold to whole basis points before and after the sale, so with several collaterals an honest unwind can land up to this much above the formula. With one collateral the average is exact and the term is slack.
 
-| Fork, pool | Largest sale allowed |
-|---|---|
-| Base, 0.30% | 1.0117 x the keeper's amount |
-| Arbitrum, 0.05% | 1.0121 x |
-| Base Sepolia, seeded 0.30% | 1.0117 x |
+A repay of the whole debt leaves an unbounded health factor and does not pass: no target up to 3.0 needs one. An honest keeper's unwind passes on a static oracle, which every fuzz run checks, bands as narrow as 0.005 included. A rise in the collateral's oracle price between the keeper's read and inclusion lifts the result by about the rise times `C * L / D_after`, and the margin is now smaller than before, so less of such a rise is absorbed. Past it the unwind reverts with `OverSold`: only gas is lost, the position is safer than the keeper read, and the next pass sizes again from a fresh read. On a narrow band a rise that large usually lifts the health factor above the trigger first, and the unwind reverts with `AboveTrigger` as it did before. Not measured on the forks.
+
+For bands narrower than about 0.01 the fixed one-basis-point term dominates the over-sale allowed, since it does not shrink with the band: the 1.20/1.21 case below allows 3.0%, of which about 0.7 points come from it.
+
+The largest sale the post-check allows, in multiples of the keeper's own amount, found by bisection to 1 bp with no cap from the rescuer. 10 WETH, 100 bps, deepest pool. The eMode cases use a category the test creates as pool admin, WETH collateral and USDC borrowable at LTV 94% and threshold 95%, because no category on these forks lets USDC be borrowed against a 95% threshold:
+
+| Case | Base, old | Base, new | Arbitrum, old | Arbitrum, new | Base Sepolia, old | Base Sepolia, new |
+|---|---|---|---|---|---|---|
+| WETH from 1.05, trigger 1.2, target 1.5 | 1.0119 | 1.0083 | 1.0124 | 1.0087 | 1.0118 | 1.0082 |
+| WETH from 1.19, trigger 1.20, target 1.21 | 1.5580 | 1.0296 | 1.5595 | 1.0304 | 1.5576 | 1.0302 |
+| eMode 95% from 1.02, trigger 1.03, target 1.05 | 1.2105 | 1.0212 | 1.2149 | 1.0223 | 1.2114 | 1.0222 |
+| eMode 95% from 1.05, trigger 1.2, target 1.5 | 1.0060 | 1.0041 | 1.0062 | 1.0044 | 1.0061 | 1.0042 |
+
+"Old" is the previous margin, run by putting it back in the source; the headroom tests fail on it.
 
 ### Tests
 
-`test/lib/UnwindPath.sol` runs unchanged on all three forks, through `UnwindBase.t.sol`, `UnwindArbitrum.t.sol` and `UnwindBaseSepolia.t.sol`. Every test that reaches the helper ends by asserting that it holds no USDC, WETH, aWETH, scaled aWETH, debt, USDC allowance or ETH.
+`test/lib/UnwindPath.sol` runs unchanged on all three forks, through `UnwindBase.t.sol`, `UnwindArbitrum.t.sol` and `UnwindBaseSepolia.t.sol`. Every test that reaches the helper ends by asserting that it holds no USDC, WETH, aWETH, scaled aWETH, debt, USDC allowance or ETH. Every keeper-sized unwind sets `maxSold` as the keeper does, from QuoterV2 plus 50 bps, and asserts the quote equals the sale exactly.
 
 | Test | Shows |
 |---|---|
-| `test_unwind_deepestPool_fromNearLiquidationToTarget` | 10 WETH at HF 1.05, a keeper-sized unwind to 1.5 on the deepest pool. Checks the event, the return values, debt, aWETH, allowance, both pool balances, the oracle bound, wallets, HF against a repay-then-sell model, and the post-check bound, all from reads that do not go through the helper |
-| `test_unwind_otherPool_fromNearLiquidationToTarget` | The same on the second real fee tier |
+| `test_unwind_deepestPool_fromNearLiquidationToTarget` | 10 WETH at HF 1.05, a keeper-sized unwind to 1.5 on the deepest pool. Checks the event, the return values, debt, aWETH, allowance, both pool balances, the oracle bound, `maxSold`, wallets, HF against a repay-then-sell model, and the post-check bound, all from reads that do not go through the helper |
+| `test_unwind_otherPool_fromNearLiquidationToTarget` | The same on the second real fee tier, authorized for it |
 | `test_unwind_justBelowTrigger_succeeds`, `test_unwind_aboveTrigger_reverts`, `test_unwind_withNoDebt_isAboveTrigger` | The trigger |
-| `test_unwind_largeOverSale_isBlocked`, `test_unwind_overSaleHeadroom_isSmall` | The post-check |
+| `test_unwind_largeOverSale_isBlocked`, `test_unwind_overSaleHeadroom_*`, `test_unwind_eMode95_keeperAmountPasses` | The post-check, and the table above |
 | `test_unwind_amountAboveDebt_isCappedThenBlocked` | The cap holds, the full repay it makes is refused, and nothing moves |
-| `test_authorize_*`, `testFuzz_authorize_healthFactorBounds` | Storage, events, `revoke`, every rejected value and the edges |
+| `test_authorize_*`, `testFuzz_authorize_healthFactorBounds` | Storage, events, `revoke`, every rejected value, USDC, a non-reserve and a fee tier with no pool, and the edges |
 | `test_unwind_byAnyoneButTheRescuer_reverts`, `test_unwind_afterRevoke_reverts`, `test_unwind_afterAllowanceRemoved_reverts` | Who can call, and both ways to stop it |
+| `test_unwind_unauthorizedCollateralOrPool_reverts` | L-1: USDC, another reserve, a non-reserve and every other fee tier, real pools included, all `TermsMismatch` |
+| `test_unwind_zeroMaxSold_reverts`, `test_unwind_saleAboveMaxSold_reverts`, `test_unwind_maxSoldCannotLoosenTheOracleBound` | M-1: the rescuer's cap, one unit under the quote, and a cap above the oracle bound |
+| `test_sandwich_isBoundedByTheKeepersMaxSold`, `test_sandwich_largeUnwind_isBoundedByTheKeepersMaxSold` | M-1: the auditor's sandwich, 10 and 200 WETH, the table above. The large one skips Base Sepolia, whose seeded pool is too small |
 | `test_unwind_slippageBoundBelowPoolCost_reverts` | A 1 bp bound against a real pool fee |
 | `test_unwind_poolPushedOffOracle_reverts` | A whale sale moves the pool 3% before the unwind |
-| `test_unwind_feeTierWithNoPool_reverts`, `test_unwind_poolTooThin_reverts` | No pool for the tier, and a real pool, created by the factory owner on the fork, too thin for the amount |
+| `test_unwind_poolTooThin_reverts` | A real pool, created by the factory owner on the fork and authorized, too thin for the amount |
 | `test_unwind_allowanceTooSmall_reverts`, `test_unwind_collateralBalanceTooSmall_reverts` | The borrower's limits |
-| `test_unwind_zeroAmount_reverts`, `test_unwind_wrongCollateral_reverts` | Inputs |
+| `test_unwind_zeroAmount_reverts` | Inputs |
 | `test_callback_fromFakePool_reverts`, `test_callback_fromTheRealPoolWithNoUnwind_reverts` | Spoofed callbacks |
 | `test_reentrancy_throughCollateralToken_isRefused` | The real WETH code is wrapped in place by a token that, while Aave pays the pool, tries to unwind a second borrower who authorized it, then calls the callback. It gets `Reentrancy()` and `UnexpectedCallback()`, and the honest unwind's numbers are exact |
-| `test_unwind_frozenCollateral_reverts`, `test_unwind_pausedCollateral_reverts` | As pool admin on the fork. Aave alone still lets frozen WETH be withdrawn |
+| `test_unwind_frozenCollateral_isSold` | L-2: frozen WETH, at LTV 0 on revisions 10 and 11, is sold to the target |
+| `test_unwind_pausedCollateral_reverts`, `test_unwind_inactiveCollateral_reverts` | Paused, as pool admin, and inactive, written into the Pool's storage since Aave refuses to deactivate a reserve with suppliers |
+| `test_unwind_otherCollateralAtLtvZero_isRefusedByAave` | L-2: the auditor's F3. A second collateral at LTV 0 makes Aave revert `LtvValidationFailed()`. The keeper detects it instead |
+| `test_unwind_sentinelRefusing_reverts_thenAllows` | I-3: none of the forks has a sentinel, so the provider's owner sets a mock one after deployment. The same unwind is refused, then passes |
 | `test_unwind_isolationModeBorrower` | Revision 10 only: a debt ceiling written into WETH's configuration, a borrower in isolation mode, and an unwind that releases the ceiling. Skipped on revision 11, which has no isolation mode |
-| `testFuzz_unwind_amountAndSlippage`, `testFuzz_unwind_triggerAndTarget` | 256 runs each per fork, every run held to the happy path's checks |
+| `test_unwind_donatedATokens_goToThePool`, `test_unwind_manySmallUnwinds_stopAtTheTrigger` | I-2 and the auditor's sequence test, below |
+| `testFuzz_unwind_amountAndSlippage`, `testFuzz_unwind_triggerAndTarget` | 256 runs each per fork, every run held to the happy path's checks. Bands down to 0.005 |
 | `test_constructor_rejectsWrongArguments` | Deployment checks |
 
 Base Sepolia adds `test_baseSepolia_isPoolRevision10`, `test_seed_putsThePoolAtTheOraclePrice`, `test_seed_rerun_followsTheOracle`, `test_seed_rerunInsideFaucetTimelock_saysWhy` and `test_wrongFeeTier_stalePools_revert`.
+
+`UnwindPoolChoiceBase.t.sol` is the auditor's F2 on Base: an accomplice primes the near-empty 0.04% WETH/USDC pool 0.9% under the oracle, inside the borrower's bound, and the rescuer routes the sale through it. Before the fix it went through and the accomplice kept the bound; now it reverts with `TermsMismatch` and the authorized 0.05% pool still works.
+
+Each regression test fails with its fix undone in the source and passes with it.
+
+### Known behaviour, left as is
+
+- **I-2, donated aTokens.** The helper withdraws its whole aToken balance in the callback, so that no scaled dust stays. aTokens anyone sends to the helper therefore go to the Uniswap pool with the next unwind of that collateral. Nobody can take them back, the borrower pays only for their own sale, and the helper still holds nothing afterwards. `test_unwind_donatedATokens_goToThePool` records it.
+- **A run of small unwinds.** A rescuer may split a sale into many small unwinds while the health factor is below the trigger. The run stops at the trigger, short of one honest unwind: 13 unwinds of a twentieth of the keeper's amount on Base. `test_unwind_manySmallUnwinds_stopAtTheTrigger` records it.
+- **A stolen keeper key** can still pass `maxSold` up to the borrower's bound and fire at the worst moment within it. The NEAR caps, the trigger, the post-check and the borrower's `revoke()` bound that.
 
 ### Recorded results
 
@@ -253,13 +307,13 @@ Cold storage, `forge test --isolate`:
 
 | Fork, pool | `unwind` gas |
 |---|---|
-| Base, 0.30% | 560,129 |
-| Base, 0.05% | 590,000 |
-| Arbitrum, 0.05% | 574,916 |
-| Arbitrum, 0.30% | 574,753 |
-| Base Sepolia, seeded 0.30% | 524,288 |
+| Base, 0.30% | 564,995 |
+| Base, 0.05% | 594,867 |
+| Arbitrum, 0.05% | 579,674 |
+| Arbitrum, 0.30% | 579,510 |
+| Base Sepolia, seeded 0.30% | 529,151 |
 
-`forge test --isolate --gas-report` gives 517,018 to 582,730 over the same calls. A `gas_limit_unwind` of 1,000,000 leaves about 70% headroom for the 63/64 rule in the nested Aave and Uniswap calls and for swaps that cross more ticks. On Arbitrum a transaction's gas also pays for its L1 data, which a fork does not model, so confirm that limit on testnet. Deployment simulated at 2.39M gas, Foundry's estimate with its margin, on all three chains.
+`forge test --isolate --gas-report` gives 521,847 to 587,563 over the same calls, about 4,800 more than before the audit fixes: the sentinel read, the second storage slot of the authorization and `maxSold`. `authorize` costs 112,047 to 114,286, with its reserve and pool checks. A `gas_limit_unwind` of 1,000,000 leaves about 70% headroom for the 63/64 rule in the nested Aave and Uniswap calls and for swaps that cross more ticks. A market with a sentinel adds its Chainlink read. On Arbitrum a transaction's gas also pays for its L1 data, which a fork does not model, so confirm that limit on testnet. Deployment costs 2,198,239 gas; Foundry's simulation, with its margin, estimates 2.85M to 2.89M on the three chains.
 
 ```sh
 forge test --isolate --match-test 'test_unwind_(deepest|other)Pool' -vv
@@ -270,11 +324,14 @@ forge test --isolate --match-test 'test_unwind_(deepest|other)Pool' -vv
 | Case | Result |
 |---|---|
 | `withdraw(asset, type(uint256).max, uniswapPool)` inside the swap callback | Works on revisions 10 and 11, and burns the whole scaled balance, so no aToken dust stays |
-| aToken `transferFrom` | Aave rounds in the receiver's favour and spends the allowance by the sender's real balance change. Pool overpayment, aWETH lost beyond `sold`, and allowance spent beyond `sold` all stayed within 2 wei. The keeper should expect an allowance a few wei above what it plans to sell |
-| Frozen reserve | Aave allows withdraw, and from v3.6 sets the reserve's LTV to 0. The helper refuses it, per section 9 |
+| aToken `transferFrom` | Aave rounds in the receiver's favour and spends the allowance by the sender's real balance change. Pool overpayment, aWETH lost beyond `sold`, and allowance spent beyond `sold` all stayed within 2 wei. The keeper should expect an allowance a few wei above what it plans to sell. An unlimited allowance is not spent |
+| Frozen reserve | Aave allows withdraw, and from v3.6 sets the reserve's LTV to 0. The helper sells it |
+| Another enabled collateral at LTV 0 | Aave lets only an LTV-0 asset leave first, and reverts any other aToken transfer with `LtvValidationFailed()`, `0x5b263df7` |
+| Price oracle sentinel | None set on the three markets at the pinned blocks; `getPriceOracleSentinel()` returns zero |
 | Isolation mode | Removed in Aave v3.7, Pool revision 11. On revision 10, Aave lets an isolated borrower be unwound and the repay releases the debt ceiling |
 | An exact-output swap through an empty range | Fills what it can and stops at the price limit: `PartialFill` |
 | A pool already at the bottom of its range | Uniswap reverts `SPL` |
+| QuoterV2 `quoteExactOutputSingle` just before the swap | Equals the collateral the swap takes, to the wei, on all three forks |
 
 ## Verified addresses
 
@@ -286,9 +343,18 @@ Read on chain at the pinned blocks. `script/lib/Deployments.sol` holds them, and
 | Arbitrum One | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | `0x1F98431c8aD98523631AE4a59f267346ea31F984` | 0.05% `0xC6962004f452bE9203591991D15f6b388e09E8D0`, 0.30% `0xc473e2aEE3441BF9240Be85eb122aBB059A3B57c` |
 | Base Sepolia | `0xE4C23309117Aa30342BFaae6c95c6478e0A4Ad00` | `0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24` | 0.30% `0x92266210FacF124f190fbad79AA230dfB85926Ce`, seeded by the script |
 
+The keeper quotes `maxSold` from Uniswap v3 QuoterV2. The helper never calls it.
+
+| Chain | QuoterV2 |
+|---|---|
+| Base | `0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a` |
+| Arbitrum One | `0x61fFE014bA17989E743c5F6cB21bF9697530B21e` |
+| Base Sepolia | `0xC5290058841028F1614F3A6F0F5816cAd0df5E27` |
+
 - PoolAddressesProvider: `bgd-labs/aave-address-book` at commit `d4c2848e`, files `src/AaveV3Base.sol`, `AaveV3Arbitrum.sol` and `AaveV3BaseSepolia.sol`. On each fork `provider.getPool()` returns the section 3 Pool, and `Pool.ADDRESSES_PROVIDER()` returns the provider.
 - Uniswap v3 factory: the official tables at `developers.uniswap.org/docs/protocols/v3/deployments`, v3-core 1.0.0. On chain each has 24,535 bytes of code and tick spacings 1, 10, 60 and 200 for fees 100, 500, 3000 and 10000.
 - Base Sepolia NonfungiblePositionManager `0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2`, from the same table. Its `factory()` returns the factory above.
+- QuoterV2: Uniswap's deployments feed, `developers.uniswap.org/deployments.json`, generated on 2026-11-04 from `Uniswap/contracts` at commit `036160f7`, which the deployments page links to. Read on 2026-11-08 with `cast` at the pinned blocks: each has 8,273 bytes of code, `factory()` returns the factory above and `WETH9()` the chain's WETH. On Base and Arbitrum it quoted 10,000 USDC out of the 0.05% pool at 4.453 WETH; on Base Sepolia, where the 0.30% pool is unseeded at that block, it reverted, and on the fork it quotes the seeded pool. `test_chainFacts` checks code, factory and WETH on every fork, and every keeper-sized unwind checks a quote against the sale. `Deployments.quoterV2` holds them.
 - Base Sepolia market: WETH is the chain's WETH9 predeploy `0x4200000000000000000000000000000000000006`, and USDC is Aave's test token `0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f`. The test token's `owner()` is Aave's faucet `0xD9145b5F45Ad4519c7ACcD6E0A4A82e83bB8A6Dc`, whose `getTokenConfig(USDC)` read 3,600 seconds and 1,000,000 tokens: one mint an hour per address, up to a million test USDC.
 - At the pinned Base Sepolia block every fee tier for this pair already had a pool, at prices others had left: 0.01% at 0.98 of the oracle price, 0.05% at the bottom of its range, 0.30% at 0.60 and 1% at 1.34.
 
@@ -315,7 +381,7 @@ Base or Arbitrum mainnet, from a Foundry keystore rather than a key in the envir
 forge script script/DeployUnwind.s.sol --rpc-url "$BASE_RPC" --account levee-deployer --broadcast
 ```
 
-Funds: ETH for about 1.8M gas. Nothing else.
+Funds: ETH for about 2.2M gas. Nothing else.
 
 ### SeedTestnetPool
 

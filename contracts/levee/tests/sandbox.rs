@@ -44,6 +44,8 @@ const BASE_WETH: &str = "0x4200000000000000000000000000000000000006";
 const POOL_FEE: u32 = 500;
 /// Not measured yet. Spec section 9 expects 350k to 600k.
 const GAS_LIMIT_UNWIND: u64 = 600_000;
+/// The keeper's cap on the collateral an unwind may sell, in WETH wei.
+const MAX_SOLD: u128 = 52_000_000_000_000_000;
 
 const MAX_FEE_CEILING: u128 = 2_000_000_000;
 const PRIORITY_CEILING: u128 = 100_000_000;
@@ -318,6 +320,7 @@ impl Harness {
         self.keeper_call(caller, "rescue_from_collateral", id, amount, nonce)
     }
 
+    /// `rescue_from_collateral` also takes the keeper's `max_sold`.
     fn keeper_call(
         &self,
         caller: &Account,
@@ -326,9 +329,13 @@ impl Harness {
         amount: u128,
         nonce: u64,
     ) -> CallTransaction {
+        let mut args = json!({ "id": id, "amount": amount.to_string(), "fees": fees(nonce) });
+        if method == "rescue_from_collateral" {
+            args["max_sold"] = json!(MAX_SOLD.to_string());
+        }
         caller
             .call(self.levee.id(), method)
-            .args_json(json!({ "id": id, "amount": amount.to_string(), "fees": fees(nonce) }))
+            .args_json(args)
             .gas(CALL_GAS)
     }
 
@@ -1189,7 +1196,7 @@ async fn a_function_call_key_limited_to_rescue_can_do_nothing_else() -> anyhow::
     let methods = [
         (
             "rescue_from_collateral",
-            json!({ "id": id, "amount": "1", "fees": fees(1) }),
+            json!({ "id": id, "amount": "1", "max_sold": "1", "fees": fees(1) }),
         ),
         (
             "prepare_allowance",
@@ -1463,6 +1470,7 @@ struct Vector {
     unwind: String,
     collateral: String,
     pool_fee: u32,
+    max_sold: String,
     borrower: String,
     nonce: u64,
     max_fee_per_gas: String,
@@ -1547,7 +1555,12 @@ async fn the_wasm_matches_every_cast_vector_byte_for_byte() -> anyhow::Result<()
         if let Some(preview_method) = preview_method {
             let preview: PreviewTx = levee
                 .view(preview_method)
-                .args_json(json!({ "id": id, "amount": vector.amount, "fees": fees }))
+                .args_json(json!({
+                    "id": id,
+                    "amount": vector.amount,
+                    "max_sold": vector.max_sold,
+                    "fees": fees,
+                }))
                 .await?
                 .json()?;
             assert_eq!(preview.unsigned_tx, vector.unsigned_tx, "{}", vector.name);
@@ -1575,7 +1588,12 @@ async fn the_wasm_matches_every_cast_vector_byte_for_byte() -> anyhow::Result<()
             ),
             "unwind" => (
                 "rescue_from_collateral",
-                json!({ "id": id, "amount": vector.amount, "fees": fees }),
+                json!({
+                    "id": id,
+                    "amount": vector.amount,
+                    "max_sold": vector.max_sold,
+                    "fees": fees,
+                }),
             ),
             other => panic!("unknown kind {other}"),
         };
@@ -1992,7 +2010,12 @@ async fn happy_path_a_rescue_from_collateral_ends_in_an_unwind_from_the_rescuer(
     let preview: PreviewTx = h
         .levee
         .view("preview_rescue_from_collateral")
-        .args_json(json!({ "id": id, "amount": "750000", "fees": fees(3) }))
+        .args_json(json!({
+            "id": id,
+            "amount": "750000",
+            "max_sold": MAX_SOLD.to_string(),
+            "fees": fees(3),
+        }))
         .await?
         .json()?;
 
@@ -2024,14 +2047,19 @@ async fn happy_path_a_rescue_from_collateral_ends_in_an_unwind_from_the_rescuer(
     assert_eq!(tx.gas_limit, GAS_LIMIT_UNWIND);
     assert_eq!(tx.to, TxKind::Call(parse_address(BASE_UNWIND)));
     assert_eq!(tx.value, U256::ZERO);
-    assert_eq!(tx.input.len(), 132);
-    assert_eq!(tx.input[..4], [0xd0, 0xcd, 0xa3, 0xc2]);
+    assert_eq!(tx.input.len(), 164);
+    assert_eq!(tx.input[..4], [0x65, 0xaf, 0xae, 0x08]);
     assert_eq!(word_address(&tx.input[4..36]), parse_address(BORROWER));
     assert_eq!(word_address(&tx.input[36..68]), parse_address(BASE_WETH));
     assert_eq!(U256::from_be_slice(&tx.input[68..100]), U256::from(750_000));
     assert_eq!(
         U256::from_be_slice(&tx.input[100..132]),
         U256::from(POOL_FEE)
+    );
+    // The keeper's cap goes in as given.
+    assert_eq!(
+        U256::from_be_slice(&tx.input[132..164]),
+        U256::from(MAX_SOLD)
     );
 
     // Charged to the same budget a rescue uses: 750,001 is within max_per_rescue but
@@ -2054,7 +2082,7 @@ async fn a_position_without_collateral_config_cannot_unwind() -> anyhow::Result<
     let preview = h
         .levee
         .view("preview_rescue_from_collateral")
-        .args_json(json!({ "id": id, "amount": "1", "fees": fees(0) }))
+        .args_json(json!({ "id": id, "amount": "1", "max_sold": "1", "fees": fees(0) }))
         .await
         .expect_err("no collateral to preview");
     assert!(
@@ -2070,6 +2098,42 @@ async fn a_position_without_collateral_config_cannot_unwind() -> anyhow::Result<
     // The reserve path is untouched.
     let rescued = h.signed(h.rescue(&h.keeper, id, 1, 0)).await?;
     assert!(rescued.is_success(), "{:?}", rescued.failures());
+    Ok(())
+}
+
+/// The contract cannot price `max_sold`, so it refuses only zero, before anything is
+/// reserved or reaches the signer. A call without it, as a keeper built for the old
+/// three-argument method would send, does not deserialise at all.
+#[tokio::test]
+async fn a_zero_or_missing_max_sold_is_refused() -> anyhow::Result<()> {
+    let h = Harness::unwarped().await?;
+    let id = h.register_with_collateral(CAPS).await?;
+
+    let zero = h
+        .keeper
+        .call(h.levee.id(), "rescue_from_collateral")
+        .args_json(json!({ "id": id, "amount": "1", "max_sold": "0", "fees": fees(0) }))
+        .gas(CALL_GAS)
+        .transact()
+        .await?;
+    assert_rejected(&zero, "max_sold must be above zero");
+
+    let missing = h
+        .keeper
+        .call(h.levee.id(), "rescue_from_collateral")
+        .args_json(json!({ "id": id, "amount": "1", "fees": fees(0) }))
+        .gas(CALL_GAS)
+        .transact()
+        .await?;
+    assert_rejected(&missing, "max_sold");
+
+    assert!(
+        h.requests().await?.is_empty(),
+        "something reached the signer"
+    );
+    let position = h.position(id).await?;
+    assert_eq!(position.spent_today, U128(0));
+    assert_eq!(position.last_rescue_at, 0);
     Ok(())
 }
 

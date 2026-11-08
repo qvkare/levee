@@ -45,10 +45,10 @@ cargo test --manifest-path contracts/Cargo.toml --workspace
 
 | Suite | Tests | What it covers |
 |---|---|---|
-| `levee` unit | 272 | Every rule on its boundaries, for `rescue` and `rescue_from_collateral`, and what leaves the contract: receipts, gas, deposits, logs, return values |
-| `levee/tests/vectors.rs` | 6 | Calldata, RLP and signing hash against `cast`, byte for byte, for all five kinds and every Uniswap fee tier |
-| `levee/tests/properties.rs` | 6 | Any amount, nonce and fee decodes in alloy to the same fields, and `to`, selector, asset, borrower, collateral and fee do not change. The daily budget holds under any interleaving |
-| `levee/tests/sandbox.rs` | 40 | The real wasm in near-sandbox against the mock signer |
+| `levee` unit | 278 | Every rule on its boundaries, for `rescue` and `rescue_from_collateral`, and what leaves the contract: receipts, gas, deposits, logs, return values |
+| `levee/tests/vectors.rs` | 6 | Calldata, RLP and signing hash against `cast`, byte for byte, for all five kinds, every Uniswap fee tier and `max_sold` from 1 to the largest u128 |
+| `levee/tests/properties.rs` | 6 | Any amount, `max_sold`, nonce and fee decodes in alloy to the same fields, and `to`, selector, asset, borrower, collateral and fee do not change. The daily budget holds under any interleaving |
+| `levee/tests/sandbox.rs` | 41 | The real wasm in near-sandbox against the mock signer |
 | `mock-signer` unit | 9 | That the mock enforces what the real `sign` enforces |
 
 The sandbox tests refuse a wasm older than its source, so run `build.sh` after any change.
@@ -63,7 +63,7 @@ The 24-hour rules run for real. `max_block_production_delay` is raised in the sa
 cargo test --manifest-path contracts/Cargo.toml -p levee --test sandbox gas_of_a_rescue -- --nocapture
 ```
 
-This runs `gas_of_a_rescue` and `gas_of_a_rescue_from_collateral`, prints each receipt and fails if the budget stops fitting. On near-sandbox 2.14.0, `rescue` burns 2.61 Tgas and `rescue_from_collateral` 2.61 to 2.62, against the 5 Tgas the minimum leaves the method. `docs/SPEC.md`, section "Gas", has the figures and the reasons for each constant.
+This runs `gas_of_a_rescue` and `gas_of_a_rescue_from_collateral`, prints each receipt and fails if the budget stops fitting. On near-sandbox 2.14.0, `rescue` burns 2.61 to 2.62 Tgas and `rescue_from_collateral`, with its `max_sold`, 2.63 to 2.64, against the 5 Tgas the minimum leaves the method. `on_signed` burns 1.73 and 1.76. `docs/SPEC.md`, section "Gas", has the figures and the reasons for each constant.
 
 ### Fixtures
 
@@ -71,7 +71,11 @@ This runs `gas_of_a_rescue` and `gas_of_a_rescue_from_collateral`, prints each r
 contracts/levee/fixtures/generate.sh
 ```
 
-This writes `tx_vectors.json`. It builds each vector from `cast calldata`, `cast to-rlp` and `cast keccak`, builds it again with `cast mktx --raw-unsigned`, and aborts if they differ. The `unwind` vectors use placeholder helper addresses, since the encoding does not depend on what is deployed there. `mpc_sign_response.json` is a real response read from the testnet signer, not generated.
+This writes `tx_vectors.json`. It builds each vector from `cast calldata`, `cast to-rlp` and `cast keccak`, builds it again with `cast mktx --raw-unsigned`, and aborts if they differ. The `unwind` vectors use placeholder helper addresses, since the encoding does not depend on what is deployed there, and encode `unwind(address,address,uint256,uint24,uint256)`, selector `0x65afae08`, with `max_sold` as the last word. `mpc_sign_response.json` is a real response read from the testnet signer, not generated.
+
+## `rescue_from_collateral`
+
+`rescue_from_collateral(id, amount, max_sold, fees)` and `preview_rescue_from_collateral(id, amount, max_sold, fees)`. `max_sold` is a `U128` string: the most collateral, in its base units, the helper may sell. The keeper sets it from a fresh Uniswap QuoterV2 quote plus a tolerance, so that a searcher who sees the signed transaction cannot sandwich it up to the borrower's whole slippage bound. The contract has no price to judge it by, so it refuses only zero, `max_sold must be above zero`, and encodes it as `unwind`'s fifth argument. It is not charged to the budget, which counts USDC. The helper applies the borrower's own bound as well, so a stolen keeper key can loosen the cap only up to that bound.
 
 ## Keeper keys
 
@@ -117,7 +121,7 @@ near account create-account sponsor-by-faucet-service "$LEVEE" autogenerate-new-
 near tokens "$OWNER" send-near "$LEVEE" '5 NEAR' network-config testnet sign-with-keychain send
 ```
 
-Deploy and initialise in one transaction. The fee ceilings and gas limits are v0.1's, read from `get_chain` on `levee-core-1503.testnet`. `gas_limit_unwind` is 600,000 until the helper's gas is measured on testnet.
+Deploy and initialise in one transaction. The fee ceilings and the other gas limits are v0.1's, read from `get_chain` on `levee-core-1503.testnet`. `gas_limit_unwind` is 1,000,000, as `evm/README.md` recommends: the helper used up to 595,000 gas on the forks, and the 63/64 rule in its nested calls needs headroom.
 
 ```sh
 near contract deploy "$LEVEE" use-file contracts/target/near/levee/levee.wasm \
@@ -133,7 +137,7 @@ near contract deploy "$LEVEE" use-file contracts/target/near/levee/levee.wasm \
       gas_limit_approve: 100000,
       gas_limit_repay: 300000,
       gas_limit_transfer: 100000,
-      gas_limit_unwind: 600000
+      gas_limit_unwind: 1000000
     }]
   }')" prepaid-gas '30 Tgas' attached-deposit '0 NEAR' \
   network-config testnet sign-with-keychain send
@@ -173,4 +177,14 @@ On EVM, the borrower then calls the helper's `authorize` for the rescuer this pr
 pnpm --silent --filter keeper keeper derive-address --id 1 --contract "$LEVEE" --network testnet
 ```
 
-`authorize` also takes the borrower's trigger and target health factors, which the keeper reads back and must match. On mainnet, finish with `near account delete-keys "$LEVEE" public-keys <key> network-config mainnet sign-with-keychain send` for every full-access key.
+```solidity
+authorize(rescuer, maxSlippageBps, triggerHf, targetHf, collateral, poolFee)
+```
+
+`collateral` and `poolFee` must be the asset and `POOL_FEE` registered above: the helper refuses any other, so an unwind for this position reverts with `TermsMismatch` if they differ, and the keeper refuses to start. `authorize` itself checks that the asset is an Aave reserve other than USDC and that the Uniswap pool for that fee exists. The trigger, target and slippage limit are the borrower's, and the keeper reads them back and must match them too. From the borrower's wallet, with its own signing flags such as `--account`, for example:
+
+```sh
+cast send "$UNWIND" "authorize(address,uint16,uint64,uint64,address,uint24)" \
+  "$RESCUER" 100 1250000000000000000 1600000000000000000 \
+  0x4200000000000000000000000000000000000006 "$POOL_FEE" --rpc-url https://sepolia.base.org
+``` On mainnet, finish with `near account delete-keys "$LEVEE" public-keys <key> network-config mainnet sign-with-keychain send` for every full-access key.

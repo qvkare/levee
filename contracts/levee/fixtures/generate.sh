@@ -30,12 +30,12 @@ from="0x000000000000000000000000000000000000dEaD"
 repay_sig="repay(address,uint256,uint256,address)"
 approve_sig="approve(address,uint256)"
 transfer_sig="transfer(address,uint256)"
-unwind_sig="unwind(address,address,uint256,uint24)"
+unwind_sig="unwind(address,address,uint256,uint24,uint256)"
 
 [ "$(cast sig "$repay_sig")" = "0x573ade81" ] || { echo "repay selector drifted" >&2; exit 1; }
 [ "$(cast sig "$approve_sig")" = "0x095ea7b3" ] || { echo "approve selector drifted" >&2; exit 1; }
 [ "$(cast sig "$transfer_sig")" = "0xa9059cbb" ] || { echo "transfer selector drifted" >&2; exit 1; }
-[ "$(cast sig "$unwind_sig")" = "0xd0cda3c2" ] || { echo "unwind selector drifted" >&2; exit 1; }
+[ "$(cast sig "$unwind_sig")" = "0x65afae08" ] || { echo "unwind selector drifted" >&2; exit 1; }
 
 # Decimal to the minimal big-endian hex RLP wants. Zero is the empty string.
 rlp_uint() {
@@ -54,12 +54,12 @@ rlp_uint() {
 
 vectors=()
 
-# add_vector name kind chain_id pool usdc nonce max_fee priority gas_limit amount [pool_fee]
+# add_vector name kind chain_id pool usdc nonce max_fee priority gas_limit amount [pool_fee max_sold]
 # The helper and collateral come from $unwind and $collateral, set per chain below.
 add_vector() {
   local name="$1" kind="$2" chain_id="$3" pool="$4" usdc="$5"
   local nonce="$6" max_fee="$7" priority="$8" gas_limit="$9" amount="${10}"
-  local pool_fee="${11:-500}"
+  local pool_fee="${11:-500}" max_sold="${12:-0}"
   local to value calldata
   local mktx_call=()
 
@@ -91,8 +91,8 @@ add_vector() {
     unwind)
       to="$unwind"
       value="0"
-      calldata="$(cast calldata "$unwind_sig" "$borrower" "$collateral" "$amount" "$pool_fee")"
-      mktx_call=("$to" "$unwind_sig" "$borrower" "$collateral" "$amount" "$pool_fee")
+      calldata="$(cast calldata "$unwind_sig" "$borrower" "$collateral" "$amount" "$pool_fee" "$max_sold")"
+      mktx_call=("$to" "$unwind_sig" "$borrower" "$collateral" "$amount" "$pool_fee" "$max_sold")
       ;;
     *)
       echo "unknown kind $kind" >&2
@@ -131,12 +131,13 @@ add_vector() {
     --arg name "$name" --arg kind "$kind" --argjson chain_id "$chain_id" \
     --arg pool "$pool" --arg usdc "$usdc" --arg borrower "$borrower" \
     --arg unwind "$unwind" --arg collateral "$collateral" --argjson pool_fee "$pool_fee" \
+    --arg max_sold "$max_sold" \
     --argjson nonce "$nonce" --arg max_fee_per_gas "$max_fee" \
     --arg max_priority_fee_per_gas "$priority" --argjson gas_limit "$gas_limit" \
     --arg amount "$amount" --arg to "$to" --arg value "$value" \
     --arg calldata "$calldata" --arg unsigned_tx "$unsigned" --arg signing_hash "$hash" \
     '{name: $name, kind: $kind, chain_id: $chain_id, pool: $pool, usdc: $usdc,
-      unwind: $unwind, collateral: $collateral, pool_fee: $pool_fee,
+      unwind: $unwind, collateral: $collateral, pool_fee: $pool_fee, max_sold: $max_sold,
       borrower: $borrower, nonce: $nonce, max_fee_per_gas: $max_fee_per_gas,
       max_priority_fee_per_gas: $max_priority_fee_per_gas, gas_limit: $gas_limit,
       amount: $amount, to: $to, value: $value, calldata: $calldata,
@@ -179,11 +180,12 @@ for chain in base arbitrum; do
   add_vector "repay-$chain-widest" repay "$chain_id" "$pool" "$usdc" 18446744073709551614 "$u128_max" "$u128_max" "$gas_repay" "$u128_max"
   add_vector "value-$chain-widest" value "$chain_id" "$pool" "$usdc" 18446744073709551614 "$two_to_the_100" "$two_to_the_100" "$gas_transfer" "$u128_max"
 
-  # Repay from collateral, once in each Uniswap v3 fee tier.
-  add_vector "unwind-$chain-typical" unwind "$chain_id" "$pool" "$usdc" 11 100000000 1000000 "$gas_unwind" 2500000 500
-  add_vector "unwind-$chain-smallest" unwind "$chain_id" "$pool" "$usdc" 0 1 1 "$gas_unwind" 1 100
-  add_vector "unwind-$chain-nonce-128" unwind "$chain_id" "$pool" "$usdc" 128 256 255 "$gas_unwind" 256 3000
-  add_vector "unwind-$chain-widest" unwind "$chain_id" "$pool" "$usdc" 18446744073709551614 "$u128_max" "$u128_max" "$gas_unwind" "$u128_max" 10000
+  # Repay from collateral, once in each Uniswap v3 fee tier. The last argument is
+  # max_sold: 2.5 USDC of WETH at about $2,240 plus 50 bps, then the edges.
+  add_vector "unwind-$chain-typical" unwind "$chain_id" "$pool" "$usdc" 11 100000000 1000000 "$gas_unwind" 2500000 500 1121000000000000
+  add_vector "unwind-$chain-smallest" unwind "$chain_id" "$pool" "$usdc" 0 1 1 "$gas_unwind" 1 100 1
+  add_vector "unwind-$chain-nonce-128" unwind "$chain_id" "$pool" "$usdc" 128 256 255 "$gas_unwind" 256 3000 256
+  add_vector "unwind-$chain-widest" unwind "$chain_id" "$pool" "$usdc" 18446744073709551614 "$u128_max" "$u128_max" "$gas_unwind" "$u128_max" 10000 "$u128_max"
 done
 
 printf '%s\n' "${vectors[@]}" | jq -s \

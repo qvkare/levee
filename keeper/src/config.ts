@@ -13,6 +13,7 @@ import type { FeeCeilings } from './fees.js';
 import { parseUrlList } from './lookups.js';
 import { MPC_CONTRACTS, NEAR_RPC_URLS } from './near.js';
 import type { PositionTarget } from './rescue.js';
+import { DEFAULT_QUOTE_TOLERANCE_BPS } from './unwind.js';
 
 export const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -20,6 +21,9 @@ const DEFAULT_POSITIONS_FILE = 'keeper/positions.json';
 
 /** `LeveeUnwind.authorize` takes `0 < maxSlippageBps <= 300`. */
 export const MAX_SLIPPAGE_BPS = 300;
+
+/** A tolerance over the quote beyond the borrower's own bound would do nothing. */
+export const MAX_QUOTE_TOLERANCE_BPS = MAX_SLIPPAGE_BPS;
 
 const positionsFileSchema = z.object({
   positions: z
@@ -32,6 +36,11 @@ const positionsFileSchema = z.object({
         mode: z.enum(['reserve', 'collateral']).optional(),
         /** Collateral mode only. Must equal what the borrower set at the helper. */
         max_slippage_bps: z.number().int().optional(),
+        /**
+         * Collateral mode only: headroom over a fresh QuoterV2 quote when the keeper
+         * sets `max_sold`. Defaults to 50 bps.
+         */
+        quote_tolerance_bps: z.number().int().optional(),
       }),
     )
     .min(1),
@@ -83,9 +92,13 @@ function positionTarget(entry: PositionEntry): PositionTarget {
   }
   const base = { id, trigger, target, triggerWad, targetWad };
   const slippage = entry.max_slippage_bps;
+  const tolerance = entry.quote_tolerance_bps;
   if (entry.mode !== 'collateral') {
     if (slippage !== undefined) {
       throw new Error(`position ${id}: max_slippage_bps applies only to mode "collateral"`);
+    }
+    if (tolerance !== undefined) {
+      throw new Error(`position ${id}: quote_tolerance_bps applies only to mode "collateral"`);
     }
     return base;
   }
@@ -94,7 +107,17 @@ function positionTarget(entry: PositionEntry): PositionTarget {
       `position ${id}: collateral mode needs max_slippage_bps above 0 and at most ${MAX_SLIPPAGE_BPS}, as the borrower set it at the helper`,
     );
   }
-  return { ...base, mode: 'collateral', maxSlippageBps: BigInt(slippage) };
+  if (tolerance !== undefined && (tolerance < 0 || tolerance > MAX_QUOTE_TOLERANCE_BPS)) {
+    throw new Error(
+      `position ${id}: quote_tolerance_bps must be from 0 to ${MAX_QUOTE_TOLERANCE_BPS}`,
+    );
+  }
+  return {
+    ...base,
+    mode: 'collateral',
+    maxSlippageBps: BigInt(slippage),
+    quoteToleranceBps: tolerance === undefined ? DEFAULT_QUOTE_TOLERANCE_BPS : BigInt(tolerance),
+  };
 }
 
 export function parsePositionsFile(text: string) {

@@ -5,14 +5,17 @@ import { RESCUE_METHODS } from '../src/near.js';
 import { type TickResult, tick } from '../src/rescue.js';
 import { ABOVE_TRIGGER_SELECTOR, decodeUnwind } from '../src/unwind.js';
 import {
+  COLLATERAL_MAX_SOLD,
   COLLATERAL_SALE,
   type Harness,
   borrower,
   chain,
   collateralHarness,
   collateralOf,
+  collateralTarget,
   fakeNear,
   helper,
+  quoter,
   sickSample,
   unwoundLog,
   weth,
@@ -52,8 +55,23 @@ describe('a rescue from collateral that works', () => {
 
     const [request] = h.near.requests;
     // The target needs $8,084.89, and the position allows $5,000 a rescue.
-    expect(request).toMatchObject({ id: 1, amount: MAX_PER_RESCUE, mode: 'collateral' });
+    expect(request).toMatchObject({
+      id: 1,
+      amount: MAX_PER_RESCUE,
+      mode: 'collateral',
+      maxSold: COLLATERAL_MAX_SOLD,
+    });
     expect(RESCUE_METHODS.collateral).toBe('rescue_from_collateral');
+  });
+
+  it('quotes the position’s own pool for the amount on every endpoint', async () => {
+    h = await collateralHarness();
+
+    await tick(h.ctx);
+
+    const sale = { tokenIn: weth, tokenOut: chain.usdc, amount: MAX_PER_RESCUE, fee: 500n };
+    expect(h.a.quotes).toEqual([sale]);
+    expect(h.b.quotes).toEqual([sale]);
   });
 
   it('broadcasts an unwind on the helper with the position’s own terms', async () => {
@@ -70,6 +88,8 @@ describe('a rescue from collateral that works', () => {
       collateral: weth,
       amount: MAX_PER_RESCUE,
       poolFee: 500n,
+      // The quote, 2.5075 WETH, plus 50 bps.
+      maxSold: 2_520_037_500_000_000_000n,
     });
   });
 
@@ -94,6 +114,21 @@ describe('a rescue from collateral that works', () => {
       },
     });
     expect(run.evm_tx).toBe(parseTransactionKeccak(h.a.broadcasts[0]));
+    expect(run.max_sold).toBe(COLLATERAL_MAX_SOLD.toString());
+    expect(run.trace?.quote).toEqual({
+      quoter,
+      amount: MAX_PER_RESCUE.toString(),
+      pool_fee: '500',
+      tolerance_bps: '50',
+      // 2.5 WETH at the oracle, plus the borrower's 100 bps.
+      oracle_max_in: '2525000000000000000',
+      answers: [
+        { rpc: h.a.url, amount_in: COLLATERAL_SALE.sold.toString(), error: null },
+        { rpc: h.b.url, amount_in: COLLATERAL_SALE.sold.toString(), error: null },
+      ],
+      amount_in: COLLATERAL_SALE.sold.toString(),
+      max_sold: COLLATERAL_MAX_SOLD.toString(),
+    });
     expect(run.trace?.collateral).toEqual({ asset: weth, helper, pool_fee: '500' });
     expect(run.trace?.unwound?.decimals).toBe('18');
     expect(run.trace?.decision).toMatchObject({ limited_by: 'max_per_rescue' });
@@ -153,6 +188,8 @@ describe('the borrower’s settings at the helper', () => {
     ['a different slippage limit', { maxSlippageBps: 300n }],
     ['another rescuer', { authorizedRescuer: '0x4444444444444444444444444444444444444444' }],
     ['a revoked rescuer', { authorizedRescuer: `0x${'00'.repeat(20)}` as Address }],
+    ['another collateral', { authorizedCollateral: '0x4444444444444444444444444444444444444444' }],
+    ['another pool fee', { authorizedPoolFee: 3_000n }],
   ])('stop the keeper on %s, before NEAR is asked', async (_name, change) => {
     h = await collateralHarness();
     setCollateral(change);
@@ -184,6 +221,79 @@ describe('the borrower’s settings at the helper', () => {
     const run = recorded(await tick(h.ctx));
 
     expect(run.failure_reason).toBe('collateral_unavailable');
+    expectNothingOnEitherChain();
+  });
+});
+
+describe('another collateral at LTV 0 in the account', () => {
+  const frozen: Address = '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf';
+
+  it('is recorded as the reason, and nothing is sent', async () => {
+    h = await collateralHarness();
+    setCollateral({ ltvZeroCollateral: frozen });
+
+    const run = recorded(await tick(h.ctx));
+
+    expect(run.outcome).toBe('aborted');
+    expect(run.failure_reason).toBe(
+      `ltv_zero_collateral: ${frozen} is enabled as collateral at LTV 0, so Aave lets no other collateral leave the account before it`,
+    );
+    expectNothingOnEitherChain();
+  });
+
+  it('does not matter while the position is healthy', async () => {
+    h = await collateralHarness();
+    for (const client of [h.a, h.b]) {
+      client.sample = sickSample(client.url, {
+        healthFactor: parseWad('1.3'),
+        collateral: collateralOf(h.mpc.address, { ltvZeroCollateral: frozen }),
+      });
+    }
+
+    expect(await tick(h.ctx)).toMatchObject({ status: 'idle', reason: 'healthy' });
+  });
+});
+
+describe('the keeper’s max_sold', () => {
+  it('takes the position’s tolerance', async () => {
+    h = await collateralHarness({ position: { ...collateralTarget, quoteToleranceBps: 10n } });
+
+    const run = recorded(await tick(h.ctx));
+
+    expect(run.max_sold).toBe(((COLLATERAL_SALE.sold * 10_010n) / 10_000n).toString());
+    expect(h.near.requests[0]?.maxSold).toBe((COLLATERAL_SALE.sold * 10_010n) / 10_000n);
+  });
+
+  it('takes the higher of two quotes that agree', async () => {
+    h = await collateralHarness();
+    h.b.quote = COLLATERAL_SALE.sold + 1_000n;
+
+    await tick(h.ctx);
+
+    expect(h.near.requests[0]?.maxSold).toBe(((COLLATERAL_SALE.sold + 1_000n) * 10_050n) / 10_000n);
+  });
+
+  it.each<[string, (harness: Harness) => void, RegExp]>([
+    ['an endpoint cannot quote', (harness) => { harness.b.quote = new Error('execution reverted'); }, /^quote_unavailable: 1 of 2 quotes/],
+    ['the quotes disagree', (harness) => { harness.b.quote = COLLATERAL_SALE.sold * 2n; }, /^quote_disagreement/],
+    [
+      'the pool asks more than the oracle bound',
+      (harness) => {
+        harness.a.quote = 2_600_000_000_000_000_000n;
+        harness.b.quote = 2_600_000_000_000_000_000n;
+      },
+      /^quote_over_slippage_bound: the pool asks 2600000000000000000 for 5000000000 USDC units, the helper allows 2525000000000000000/,
+    ],
+  ])('refuses before NEAR is asked when %s', async (_name, arrange, reason) => {
+    h = await collateralHarness();
+    arrange(h);
+
+    const run = recorded(await tick(h.ctx));
+
+    expect(run.outcome).toBe('aborted');
+    expect(run.failure_reason).toMatch(reason);
+    expect(run.max_sold).toBeNull();
+    expect(run.trace?.quote?.max_sold).toBeNull();
     expectNothingOnEitherChain();
   });
 });
@@ -263,6 +373,7 @@ describe('the broadcast gate in collateral mode', () => {
     ['another collateral', { collateral: '0x4444444444444444444444444444444444444444' as Address }],
     ['another fee tier', { poolFee: 3_000n }],
     ['another borrower', { borrower: '0x4444444444444444444444444444444444444444' as Address }],
+    ['a looser max_sold', { maxSold: COLLATERAL_MAX_SOLD * 2n }],
   ])('refuses %s in the calldata', async (_name, behaviour) => {
     h = await collateralHarness();
     h.ctx.near = fakeNear(h.mpc, behaviour);

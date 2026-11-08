@@ -36,7 +36,7 @@ async function readHelperConfig(
     throw new Error(`could not read the helper config at ${helper}: ${errors.join('; ')}`);
   }
   const key = (config: HelperConfig) =>
-    `${config.rescuer.toLowerCase()} ${config.maxSlippageBps} ${config.triggerHf} ${config.targetHf}`;
+    `${config.rescuer.toLowerCase()} ${config.maxSlippageBps} ${config.triggerHf} ${config.targetHf} ${config.collateral.toLowerCase()} ${config.poolFee}`;
   if (answers.some((answer) => key(answer) !== key(first))) {
     throw new Error(`endpoints disagree on the helper config at ${helper}`);
   }
@@ -44,9 +44,10 @@ async function readHelperConfig(
 }
 
 /**
- * Collateral mode needs a collateral config on the contract, a helper on the chain, and
- * a borrower whose settings at the helper are the keeper's. The helper enforces its
- * own trigger and target, so a keeper that disagrees with them would only waste gas.
+ * Collateral mode needs a collateral config on the contract, a helper and a QuoterV2 on
+ * the chain, and a borrower whose settings at the helper are the keeper's and whose
+ * collateral and pool fee there are the position's. The helper enforces all of them,
+ * so a keeper that disagrees would only waste gas.
  */
 async function wireCollateral(
   config: KeeperConfig,
@@ -62,23 +63,27 @@ async function wireCollateral(
       `position ${target.id} has no collateral config on ${config.contract}, so it cannot run in collateral mode`,
     );
   }
+  if (!chain.quoterV2) {
+    throw new Error(`no Uniswap v3 QuoterV2 is known for ${chain.name}, so max_sold cannot be quoted`);
+  }
   const chainConfig = await views.getChain(chain.chainId);
   if (!chainConfig?.unwind) {
     throw new Error(`${config.contract} has no LeveeUnwind helper for ${chain.name}`);
   }
   const helper = getAddress(chainConfig.unwind);
   const borrower = getAddress(position.borrower);
+  const asset = getAddress(position.collateral.asset);
+  const poolFee = BigInt(position.collateral.pool_fee);
   const helperConfig = await readHelperConfig(clients, helper, borrower);
-  const mismatch = helperConfigMismatch(target, helperConfig, rescuer);
+  const mismatch = helperConfigMismatch(
+    { ...target, collateral: asset, poolFee },
+    helperConfig,
+    rescuer,
+  );
   if (mismatch) {
     throw new Error(`position ${target.id}: the borrower's settings at ${helper} differ: ${mismatch}`);
   }
-  return {
-    asset: getAddress(position.collateral.asset),
-    helper,
-    poolFee: BigInt(position.collateral.pool_fee),
-    helperConfig,
-  };
+  return { asset, helper, poolFee, quoter: chain.quoterV2, helperConfig };
 }
 
 /**
@@ -164,6 +169,7 @@ export function rescueContext(options: {
             asset: wiring.collateral.asset,
             helper: wiring.collateral.helper,
             poolFee: wiring.collateral.poolFee,
+            quoter: wiring.collateral.quoter,
           },
         }
       : {}),

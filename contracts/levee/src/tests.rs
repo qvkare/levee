@@ -23,6 +23,8 @@ const BASE_UNWIND: &str = "0x5555555555555555555555555555555555555555";
 const WETH: &str = "0x4200000000000000000000000000000000000006";
 const POOL_FEE: u32 = 500;
 const GAS_LIMIT_UNWIND: u64 = 600_000;
+/// The keeper's cap on the collateral sold, in WETH wei: 0.052 WETH, 0xb8bdb978520000.
+const MAX_SOLD: u128 = 52_000_000_000_000_000;
 
 const MAX_PER_RESCUE: u128 = 100;
 const MAX_PER_DAY: u128 = 250;
@@ -1638,7 +1640,7 @@ fn collateral_setup() -> (Levee, u64) {
 
 fn unwind(contract: &mut Levee, id: u64, amount: u128, now: u64) -> PendingSignature {
     act_as(KEEPER, now);
-    let _ = contract.rescue_from_collateral(id, U128(amount), fees());
+    let _ = contract.rescue_from_collateral(id, U128(amount), U128(MAX_SOLD), fees());
     pending()
 }
 
@@ -1958,7 +1960,7 @@ mod rescue_from_collateral_rules {
     fn rule_1_a_stranger_is_rejected() {
         let (mut contract, id) = collateral_setup();
         act_as(STRANGER, NOON);
-        let _ = contract.rescue_from_collateral(id, U128(1), fees());
+        let _ = contract.rescue_from_collateral(id, U128(1), U128(MAX_SOLD), fees());
     }
 
     #[test]
@@ -1966,7 +1968,7 @@ mod rescue_from_collateral_rules {
     fn rule_1_the_owner_is_not_the_keeper() {
         let (mut contract, id) = collateral_setup();
         act_as(OWNER, NOON);
-        let _ = contract.rescue_from_collateral(id, U128(1), fees());
+        let _ = contract.rescue_from_collateral(id, U128(1), U128(MAX_SOLD), fees());
     }
 
     #[test]
@@ -1974,7 +1976,7 @@ mod rescue_from_collateral_rules {
     fn rule_1_is_checked_before_the_collateral_config() {
         let (mut contract, id) = setup();
         act_as(STRANGER, NOON);
-        let _ = contract.rescue_from_collateral(id, U128(1), fees());
+        let _ = contract.rescue_from_collateral(id, U128(1), U128(MAX_SOLD), fees());
     }
 
     #[test]
@@ -2074,7 +2076,7 @@ mod rescue_from_collateral_rules {
         act_as(KEEPER, NOON);
         let mut high = fees();
         high.max_fee_per_gas = U128(MAX_FEE_CEILING + 1);
-        let _ = contract.rescue_from_collateral(id, U128(1), high);
+        let _ = contract.rescue_from_collateral(id, U128(1), U128(MAX_SOLD), high);
     }
 
     #[test]
@@ -2084,7 +2086,7 @@ mod rescue_from_collateral_rules {
         act_as(KEEPER, NOON);
         let mut high = fees();
         high.max_priority_fee_per_gas = U128(PRIORITY_CEILING + 1);
-        let _ = contract.rescue_from_collateral(id, U128(1), high);
+        let _ = contract.rescue_from_collateral(id, U128(1), U128(MAX_SOLD), high);
     }
 
     #[test]
@@ -2097,7 +2099,7 @@ mod rescue_from_collateral_rules {
             max_fee_per_gas: U128(50),
             max_priority_fee_per_gas: U128(51),
         };
-        let _ = contract.rescue_from_collateral(id, U128(1), inverted);
+        let _ = contract.rescue_from_collateral(id, U128(1), U128(MAX_SOLD), inverted);
     }
 
     #[test]
@@ -2115,7 +2117,7 @@ mod rescue_from_collateral_rules {
         act_as(OWNER, NOON);
         contract.set_keeper(id, account(STRANGER));
         act_as(STRANGER, NOON);
-        let _ = contract.rescue_from_collateral(id, U128(3), fees());
+        let _ = contract.rescue_from_collateral(id, U128(3), U128(MAX_SOLD), fees());
         assert_eq!(spent(&contract, id), 3);
     }
 
@@ -2134,7 +2136,7 @@ mod rescue_from_collateral_rules {
         let (mut contract, id) = collateral_setup();
         let short = Gas::from_gas(MIN_SIGNING_GAS.as_gas() - 1);
         testing_env!(context(KEEPER, NOON).prepaid_gas(short).build());
-        let _ = contract.rescue_from_collateral(id, U128(1), fees());
+        let _ = contract.rescue_from_collateral(id, U128(1), U128(MAX_SOLD), fees());
     }
 }
 
@@ -2207,11 +2209,18 @@ mod unwind_signing {
     fn it_asks_the_signer_for_the_contract_built_unwind() {
         let (mut contract, id) = collateral_setup();
         act_as(KEEPER, NOON);
-        let _ = contract.rescue_from_collateral(id, U128(2), fees());
+        let _ = contract.rescue_from_collateral(id, U128(2), U128(MAX_SOLD), fees());
 
         let chain = contract.get_chain(8453).unwrap();
         let position = contract.get_position(id).unwrap();
-        let tx = txs::unwind_tx(&chain, &position, &collateral_config(), 2, &fees());
+        let tx = txs::unwind_tx(
+            &chain,
+            &position,
+            &collateral_config(),
+            2,
+            MAX_SOLD,
+            &fees(),
+        );
         let unsigned = tx.unsigned_bytes();
         let hash = env::keccak256_array(&unsigned);
 
@@ -2236,22 +2245,23 @@ mod unwind_signing {
     }
 
     /// Read back from the signed bytes rather than from the builder: the helper, no
-    /// value, and calldata naming only the registered borrower, collateral and fee.
-    /// The calldata was written out by hand from the ABI rules.
+    /// value, and calldata naming only the registered borrower, collateral and fee, and
+    /// the keeper's max_sold. The calldata was written out by hand from the ABI rules.
     #[test]
     fn the_transaction_targets_the_helper_with_the_positions_own_terms() {
         let (mut contract, id) = collateral_setup();
         let pending = unwind(&mut contract, id, 100, NOON);
         let calldata = concat!(
-            "d0cda3c2",
+            "65afae08",
             "0000000000000000000000001234567890abcdef1234567890abcdef12345678",
             "0000000000000000000000004200000000000000000000000000000000000006",
             "0000000000000000000000000000000000000000000000000000000000000064",
             "00000000000000000000000000000000000000000000000000000000000001f4",
+            "00000000000000000000000000000000000000000000000000b8bdb978520000",
         );
-        // 94 = a 20-byte string, the helper. 80 = value 0. b884 = 132 bytes of data.
+        // 94 = a 20-byte string, the helper. 80 = value 0. b8a4 = 164 bytes of data.
         // c0 = the empty access list.
-        let tail = format!("94{}80b884{}c0", &BASE_UNWIND[2..], calldata);
+        let tail = format!("94{}80b8a4{}c0", &BASE_UNWIND[2..], calldata);
         assert!(
             pending.unsigned_tx.ends_with(&tail),
             "{}",
@@ -2331,13 +2341,50 @@ mod unwind_signing {
                 },
             );
             let pending = unwind(&mut contract, id, 1, NOON);
-            let fee_word = format!("{pool_fee:064x}c0");
+            let fee_word = format!("{pool_fee:064x}{MAX_SOLD:064x}c0");
             assert!(
                 pending.unsigned_tx.ends_with(&fee_word),
                 "{pool_fee}: {}",
                 pending.unsigned_tx
             );
         }
+    }
+
+    /// The keeper's max_sold reaches the calldata as given, up to the largest u128, and
+    /// is not charged to the budget, which counts USDC.
+    #[test]
+    fn max_sold_reaches_the_calldata_as_given() {
+        let (mut contract, id) = collateral_setup();
+        for (hour, max_sold) in [1u128, MAX_SOLD, u128::MAX].into_iter().enumerate() {
+            act_as(KEEPER, NOON + hour as u64 * HOUR);
+            let _ = contract.rescue_from_collateral(id, U128(40), U128(max_sold), fees());
+            let pending = pending();
+            let tail = format!("{max_sold:064x}c0");
+            assert!(
+                pending.unsigned_tx.ends_with(&tail),
+                "{max_sold}: {}",
+                pending.unsigned_tx
+            );
+            assert_eq!(spent(&contract, id), 40 * (hour as u128 + 1));
+        }
+    }
+
+    /// Two calls that differ only in max_sold are different transactions.
+    #[test]
+    fn max_sold_is_part_of_what_is_signed() {
+        let (contract, id) = collateral_setup();
+        act_as(STRANGER, NOON);
+        let a = contract.preview_rescue_from_collateral(id, U128(40), U128(MAX_SOLD), fees());
+        let b = contract.preview_rescue_from_collateral(id, U128(40), U128(MAX_SOLD + 1), fees());
+        assert_ne!(a.tx_hash, b.tx_hash);
+    }
+
+    #[test]
+    #[should_panic(expected = "max_sold must be above zero")]
+    fn a_zero_max_sold_is_refused() {
+        let (mut contract, id) = collateral_setup();
+        act_as(KEEPER, NOON);
+        let _ = contract.rescue_from_collateral(id, U128(1), U128(0), fees());
     }
 }
 
@@ -2433,7 +2480,7 @@ mod unwind_preview {
     fn the_preview_is_exactly_what_is_signed() {
         let (mut contract, id) = collateral_setup();
         act_as(STRANGER, NOON);
-        let preview = contract.preview_rescue_from_collateral(id, U128(40), fees());
+        let preview = contract.preview_rescue_from_collateral(id, U128(40), U128(MAX_SOLD), fees());
         let pending = unwind(&mut contract, id, 40, NOON);
         assert_eq!(preview.unsigned_tx, pending.unsigned_tx);
         assert_eq!(preview.tx_hash, pending.tx_hash);
@@ -2444,7 +2491,8 @@ mod unwind_preview {
         let (contract, id) = collateral_setup();
         act_as(STRANGER, NOON);
         let reserve = contract.preview_rescue(id, U128(40), fees());
-        let collateral = contract.preview_rescue_from_collateral(id, U128(40), fees());
+        let collateral =
+            contract.preview_rescue_from_collateral(id, U128(40), U128(MAX_SOLD), fees());
         assert_ne!(reserve.tx_hash, collateral.tx_hash);
     }
 
@@ -2453,7 +2501,7 @@ mod unwind_preview {
         let (contract, id) = collateral_setup();
         act_as(STRANGER, NOON);
         let before = contract.get_position(id);
-        contract.preview_rescue_from_collateral(id, U128(40), fees());
+        contract.preview_rescue_from_collateral(id, U128(40), U128(MAX_SOLD), fees());
         assert_eq!(contract.get_position(id), before);
     }
 
@@ -2462,7 +2510,7 @@ mod unwind_preview {
     fn it_fails_for_a_position_without_collateral() {
         let (contract, id) = setup();
         act_as(STRANGER, NOON);
-        contract.preview_rescue_from_collateral(id, U128(1), fees());
+        contract.preview_rescue_from_collateral(id, U128(1), U128(MAX_SOLD), fees());
     }
 
     #[test]
@@ -2471,7 +2519,7 @@ mod unwind_preview {
         let (mut contract, id) = collateral_setup();
         act_as(OWNER, NOON);
         contract.pause(id);
-        contract.preview_rescue_from_collateral(id, U128(1), fees());
+        contract.preview_rescue_from_collateral(id, U128(1), U128(MAX_SOLD), fees());
     }
 
     #[test]
@@ -2479,7 +2527,12 @@ mod unwind_preview {
     fn it_fails_over_the_cap() {
         let (contract, id) = collateral_setup();
         act_as(STRANGER, NOON);
-        contract.preview_rescue_from_collateral(id, U128(MAX_PER_RESCUE + 1), fees());
+        contract.preview_rescue_from_collateral(
+            id,
+            U128(MAX_PER_RESCUE + 1),
+            U128(MAX_SOLD),
+            fees(),
+        );
     }
 
     #[test]
@@ -2487,7 +2540,7 @@ mod unwind_preview {
     fn it_fails_during_the_cooldown() {
         let (mut contract, id) = collateral_setup();
         unwind(&mut contract, id, 1, NOON);
-        contract.preview_rescue_from_collateral(id, U128(1), fees());
+        contract.preview_rescue_from_collateral(id, U128(1), U128(MAX_SOLD), fees());
     }
 
     #[test]
@@ -2497,6 +2550,14 @@ mod unwind_preview {
         act_as(STRANGER, NOON);
         let mut high = fees();
         high.max_fee_per_gas = U128(MAX_FEE_CEILING + 1);
-        contract.preview_rescue_from_collateral(id, U128(1), high);
+        contract.preview_rescue_from_collateral(id, U128(1), U128(MAX_SOLD), high);
+    }
+
+    #[test]
+    #[should_panic(expected = "max_sold must be above zero")]
+    fn it_fails_for_a_zero_max_sold() {
+        let (contract, id) = collateral_setup();
+        act_as(STRANGER, NOON);
+        contract.preview_rescue_from_collateral(id, U128(1), U128(0), fees());
     }
 }
