@@ -277,7 +277,8 @@ function backtestOf(backtest: Backtest): BacktestFigures {
     delaySec: cell.delaySec,
     reserveShare: cell.reserveShare,
     windows: [...new Set(backtest.population.map((row) => row.window))].map(monthName),
-    chains: [...new Set(backtest.population.map((row) => capital(row.chain)))],
+    // Base first, as everywhere else on the site.
+    chains: [...new Set(backtest.population.map((row) => capital(row.chain)))].sort((a, b) => (a === "Base" ? -1 : b === "Base" ? 1 : a.localeCompare(b))),
     rows,
     upfrontNeverWorse: honest.repayAtArmingNeverWorse,
     collateralBeatsBoth: rows.filter((row) => row.collateral > row.levee && row.collateral > row.upfront).map((row) => row.share),
