@@ -1,24 +1,25 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import Link from "next/link";
 import type { ReactNode } from "react";
+import { SiteFooter } from "@/components/site-footer.tsx";
+import { SiteHeader } from "@/components/site-header.tsx";
 import "./globals.css";
 
-const text = localFont({
-  src: "./fonts/schibsted-grotesk-latin-wght.woff2",
-  weight: "400 900",
-  variable: "--font-text",
+const sans = localFont({
+  src: "./fonts/overpass-latin-wght.woff2",
+  weight: "100 900",
+  variable: "--font-sans",
   display: "swap",
 });
 
 const mono = localFont({
-  src: "./fonts/atkinson-hyperlegible-mono-latin-wght.woff2",
-  weight: "200 800",
+  src: "./fonts/overpass-mono-latin-wght.woff2",
+  weight: "300 700",
   variable: "--font-mono",
   display: "swap",
 });
 
-const DESCRIPTION = "Every position at an address, in the order it would go. Levee repays your Aave debt from a reserve when your health factor crosses a trigger you set. No wallet and no login.";
+const DESCRIPTION = "When your Aave health factor crosses the trigger you set, a NEAR contract signs one repay from your USDC reserve. The position stays in your wallet. Check any address, no wallet and no login.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://levee.qvkare.com"),
@@ -28,30 +29,19 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: "Levee", description: DESCRIPTION },
 };
 
+// design-allow: the browser chrome colour, which cannot read a CSS token
 export const viewport: Viewport = { themeColor: "#ffffff", colorScheme: "light" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${text.variable} ${mono.variable}`}>
+    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body>
         <a className="skip" href="#main">
           Skip to content
         </a>
+        <SiteHeader />
         {children}
-        <footer className="foot">
-          <p>Levee is unaudited. Do not use it with funds you cannot lose. Its live runs are on testnet. This site reads public data, holds no funds and asks for no wallet.</p>
-          <nav aria-label="Footer">
-            <Link href="/how" prefetch={false}>
-              How a rescue runs
-            </Link>
-            <Link href="/how#limits" prefetch={false}>
-              Limits
-            </Link>
-            <Link href="/proof" prefetch={false}>
-              Proof
-            </Link>
-          </nav>
-        </footer>
+        <SiteFooter />
       </body>
     </html>
   );

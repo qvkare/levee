@@ -1,53 +1,72 @@
-import Link from "next/link";
-import { BacktestBrief } from "@/components/backtest-brief.tsx";
-import { HomeWall } from "@/components/home-wall.tsx";
-import { LeveeNote } from "@/components/levee-note.tsx";
-import { Simulator, type SimulatorTerms } from "@/components/simulator.tsx";
-import { shortAddress } from "@/lib/address.ts";
-import { EXAMPLES } from "@/lib/examples.ts";
-import { integer } from "@/lib/format.ts";
+import { AddressForm } from "@/components/address-form.tsx";
+import { BacktestSection } from "@/components/backtest.tsx";
+import { Badge } from "@/components/badge.tsx";
+import { Boards, WorstCase } from "@/components/boards.tsx";
+import { ReadSection } from "@/components/read-section.tsx";
+import { RescueMap } from "@/components/rescue-map.tsx";
+import { StopStrip, Terminus, stopsIntro } from "@/components/stops.tsx";
+import { Timetable } from "@/components/timetable.tsx";
 import { getHomeReading } from "@/lib/home-reading.ts";
-import { buildWall, firstAave } from "@/lib/wall.ts";
+import { PROOF } from "@/lib/proof.ts";
 
 /**
- * Prerendered, so it loads from static assets and its HTML holds a real reading at a stated time.
- * The browser takes a fresh reading on load.
+ * Prerendered, so it loads from static assets. The replay and the timetable come from the run records
+ * at build time. The example reading is real at a stated time, and the browser reads it again.
  */
 export const dynamic = "force-static";
 
-const FALLBACK_TERMS: SimulatorTerms = { liquidationThreshold: 0.8, liquidationBonus: 0.05, source: "" };
-
 export default async function Home() {
   const reading = await getHomeReading();
-  const wall = buildWall(reading.report);
-  const aave = firstAave(wall);
-  const bonus = aave?.position.reserves?.liquidationBonus;
-  const terms: SimulatorTerms =
-    aave && bonus != null
-      ? { liquidationThreshold: aave.position.liquidationThreshold, liquidationBonus: bonus, source: `Threshold and bonus from ${aave.name} at block ${integer(aave.market.blockNumber ?? 0)}.` }
-      : FALLBACK_TERMS;
+  const { replay } = PROOF;
 
   return (
-    <HomeWall reading={reading}>
-      <section className="more more-top" aria-label="What Levee does">
-        <LeveeNote first={wall.entries[0]} />
-        <BacktestBrief />
+    <main id="main">
+      <div className="hero">
+        <div>
+          <p className="lines">
+            <Badge lane="P" size="s" />
+            <Badge lane="K" size="s" />
+            <Badge lane="N" size="s" />
+            <Badge lane="M" size="s" />
+            <span className="t">Aave v3 on Base and Arbitrum, signed on NEAR</span>
+          </p>
+          <h1>When your health factor crosses the trigger, NEAR signs the repay</h1>
+          <p className="lede">
+            Levee watches your Aave loan. At your trigger, a <b>NEAR contract signs one repay</b> from your USDC reserve, inside caps you set. <b>The position stays in your wallet</b>, and the keeper can’t send funds anywhere else.
+          </p>
+        </div>
+        <AddressForm title="Check any address" lede="How far each Aave and Hyperliquid position is from liquidation. No wallet, no login." example={{ address: reading.report.address, label: "a public Aave borrower" }} />
+      </div>
+
+      {replay && <RescueMap replay={replay} />}
+
+      <section className="s" id="how" aria-labelledby="how-h">
+        <div className="sh">
+          <h2 className="big" id="how-h">
+            Stop by stop
+          </h2>
+          <p>{stopsIntro()}</p>
+        </div>
+        <StopStrip />
+        <Terminus />
       </section>
-      <Simulator terms={terms} />
-      <section className="sec" aria-labelledby="read">
-        <h2 id="read">Read a public address.</h2>
-        <p className="prose">Levee has no relationship with these addresses. They show what the tool reads, and the order on each wall is percentage move, not likelihood.</p>
-        <ul className="addresses">
-          {EXAMPLES.map((example) => (
-            <li key={example.address}>
-              <Link href={`/a/${example.address}`} prefetch={false}>
-                {example.label}
-                <code>{shortAddress(example.address)}</code>
-              </Link>
-            </li>
-          ))}
-        </ul>
+
+      <section className="s s-tint" id="rules" aria-labelledby="rules-h">
+        <div className="sh">
+          <h2 className="big" id="rules-h">
+            Who can do what
+          </h2>
+          <p>Each line has one job. The contract enforces the limits, so a stolen keeper key stays inside them.</p>
+        </div>
+        <Boards />
+        <WorstCase />
       </section>
-    </HomeWall>
+
+      <Timetable next={{ href: "/proof", title: "Every run and every hop", body: "Per-hop times, each signing sample and the full backtest" }} />
+
+      <BacktestSection />
+
+      <ReadSection reading={reading} trigger={PROOF.trigger} />
+    </main>
   );
 }

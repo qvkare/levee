@@ -1,86 +1,55 @@
-import type { Figures } from "@/lib/wall.ts";
-import { Num } from "./num.tsx";
+import type { Figures } from "@/lib/line.ts";
 
 function Row({ row }: { row: Figures }) {
   return (
-    <>
-      <tr className="fig-main">
-        <td>{row.position}</td>
-        <td className="strong">
-          <Num>{row.distance}</Num>
-        </td>
-        <td>
-          <Num>{row.health}</Num>
-          <span className="wide-note">
-            <Num>{row.healthNote}</Num>
-          </span>
-        </td>
-        <td className="narrow-hide">
-          <Num>{row.size}</Num>
-        </td>
-        <td className={`wide narrow-hide${row.backingQuiet ? " soft" : ""}`}>
-          <Num>{row.backing}</Num>
-        </td>
-        <td>
-          <Num>{row.liquidatesAt}</Num>
-          <span className="wide-note">
-            <Num>{row.liquidatesNote}</Num>
-          </span>
-        </td>
-        <td className={`narrow-hide${row.repayQuiet ? " soft" : ""}`}>
-          {row.repayStruck ? (
-            <>
-              <span className="vh">Levee cannot make this repay: </span>
-              <s>
-                <Num>{row.repay}</Num>
-              </s>
-            </>
-          ) : (
-            <Num>{row.repay}</Num>
-          )}
-        </td>
-        <td className="narrow-hide">
-          <Num>{row.levee}</Num>
-        </td>
-        <td className="wide narrow-hide">
-          <Num>{row.readAt}</Num>
-        </td>
-      </tr>
-      {/* At phone width four columns stay, and the rest of the row reads as one line under them. */}
-      <tr className="fig-more">
-        <td colSpan={4}>
-          {row.size}. {row.backing}. Repay {row.repay}. {row.levee}. Read at {row.readAt}.
-        </td>
-      </tr>
-    </>
+    <tr>
+      <th scope="row">{row.position}</th>
+      <td className="strong">
+        {row.distance}
+        {row.meaning && <small>{row.meaning}</small>}
+      </td>
+      <td>
+        {row.health}
+        {row.healthNote && <small>{row.healthNote.trim()}</small>}
+      </td>
+      <td>{row.size}</td>
+      <td className={row.backingQuiet ? "soft" : undefined}>{row.backing}</td>
+      <td>
+        {row.liquidatesAt}
+        {row.liquidatesNote && <small>{row.liquidatesNote.replace(/^, /, "")}</small>}
+      </td>
+      <td className={row.repayQuiet ? "soft" : undefined}>
+        {row.repayStruck ? (
+          <>
+            <span className="vh">Levee cannot make this repay: </span>
+            <s>{row.repay}</s>
+          </>
+        ) : (
+          row.repay
+        )}
+      </td>
+      <td>{row.levee}</td>
+      <td className="soft">{row.readAt}</td>
+    </tr>
   );
 }
 
+/** Every figure for every position, in the line's order. Wide tables scroll inside themselves. */
 export function FiguresTable({ rows, target }: { rows: Figures[]; target: string }) {
   return (
-    <div className="scroll">
-      <table className="nums">
+    <div className="scroll" tabIndex={0} role="region" aria-label="Every figure, by position">
+      <table className="wide-table">
         <thead>
           <tr>
             <th scope="col">Position</th>
             <th scope="col">Distance</th>
             <th scope="col">Health, side</th>
-            <th scope="col" className="narrow-hide">
-              Size
-            </th>
-            <th scope="col" className="wide narrow-hide">
-              Backing
-            </th>
+            <th scope="col">Size</th>
+            <th scope="col">Backing</th>
             <th scope="col">Liquidates at</th>
-            <th scope="col" className="narrow-hide">
-              Repay to reach {target}
-            </th>
-            <th scope="col" className="narrow-hide">
-              Levee
-            </th>
-            <th scope="col" className="wide narrow-hide">
-              Read at
-            </th>
+            <th scope="col">Repay to reach {target}</th>
+            <th scope="col">Levee</th>
+            <th scope="col">Read at</th>
           </tr>
         </thead>
         <tbody>

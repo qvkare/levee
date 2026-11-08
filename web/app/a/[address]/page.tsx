@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { cache } from "react";
 import type { Address } from "viem";
-import { LiveReport } from "@/components/live-report.tsx";
-import { SiteHeader } from "@/components/site-header.tsx";
-import { Axis } from "@/components/wall.tsx";
+import { ReadState } from "@/components/read-state.tsx";
+import { Reading } from "@/components/reading.tsx";
 import { ADDRESS_ERRORS, parseAddress, shortAddress } from "@/lib/address.ts";
 import { clientKey } from "@/lib/limit.ts";
 import { DEFAULT_TARGET, parseTarget } from "@/lib/math.ts";
+import { PROOF } from "@/lib/proof.ts";
 import { READS_PER_MINUTE, allowRead } from "@/lib/rate-limit.ts";
 import { verdict } from "@/lib/reading.ts";
 import { withTarget } from "@/lib/report.ts";
@@ -47,34 +47,31 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: shortAddress(parsed.address), description: report ? verdict(report).text : undefined, robots: { index: false } };
 }
 
-function Plain({ title, body, value, error }: { title: string; body?: string; value?: string; error?: string }) {
-  return (
-    <>
-      <SiteHeader value={value} error={error} />
-      <main id="main">
-        <div className="board">
-          <div className="empty">
-            <h1 className="lead-title">{title}</h1>
-            {body && <p>{body}</p>}
-          </div>
-          <Axis />
-        </div>
-      </main>
-    </>
-  );
-}
-
 export default async function Page({ params, searchParams }: Props) {
   const { input, parsed } = await addressFrom(params);
-  if (!parsed.ok) return <Plain title="That address cannot be read." value={input} error={ADDRESS_ERRORS[parsed.error]} />;
+  if (!parsed.ok) {
+    return <ReadState title="That isn’t an address Levee can read" body="Paste an EVM address: 0x and 40 hex characters. Levee reads it on Aave on Base and Arbitrum, and on Hyperliquid." value={input} error={ADDRESS_ERRORS[parsed.error]} />;
+  }
 
   const read = await reportFor(parsed.address);
-  if (!read) return <Plain title="Too many reads from this connection." body={`Reads are limited to ${READS_PER_MINUTE} a minute. Try again shortly.`} value={parsed.address} />;
+  if (!read) {
+    return (
+      <ReadState title="Too many reads from this connection" body={`Each connection can read ${READS_PER_MINUTE} addresses a minute. Wait a minute and read again.`} value={parsed.address} retry={`/a/${parsed.address}`} />
+    );
+  }
 
   const query = await searchParams;
   const report = withTarget(read, parseTarget(first(query.target)) ?? DEFAULT_TARGET);
   const fall = parseFall(first(query.fall));
   const simulated = fall === null ? null : applyFall(report, fall);
   // The key resets the page's state when the address or the simulated fall changes.
-  return <LiveReport key={`${report.address}:${fall}`} report={simulated?.report ?? report} whatIf={simulated?.whatIf ?? null} />;
+  return (
+    <Reading
+      key={`${report.address}:${fall}`}
+      report={simulated?.report ?? report}
+      whatIf={simulated?.whatIf ?? null}
+      trigger={PROOF.trigger}
+      measured={{ p50Ms: PROOF.overall.p50Ms, samples: PROOF.overall.samples }}
+    />
+  );
 }
