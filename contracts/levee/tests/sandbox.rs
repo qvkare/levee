@@ -38,6 +38,10 @@ const ARBITRUM: u64 = 42161;
 const BASE_POOL: &str = "0xa238dd80c259a72e81d7e4664a9801593f98d1c5";
 const BASE_USDC: &str = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 const BORROWER: &str = "0x1234567890abcdef1234567890abcdef12345678";
+/// Stands in for the LeveeUnwind helper on Base. The contract only encodes it.
+const BASE_UNWIND: &str = "0x5555555555555555555555555555555555555555";
+/// Not measured yet. Spec section 9 expects 350k to 600k.
+const GAS_LIMIT_UNWIND: u64 = 600_000;
 
 const MAX_FEE_CEILING: u128 = 2_000_000_000;
 const PRIORITY_CEILING: u128 = 100_000_000;
@@ -172,16 +176,18 @@ fn fees(nonce: u64) -> Value {
     })
 }
 
-fn chain(chain_id: u64, pool: &str, usdc: &str) -> ChainConfig {
+fn chain(chain_id: u64, pool: &str, usdc: &str, unwind: &str) -> ChainConfig {
     ChainConfig {
         chain_id,
         pool: pool.into(),
         usdc: usdc.into(),
+        unwind: unwind.into(),
         max_fee_per_gas_ceiling: U128(MAX_FEE_CEILING),
         max_priority_fee_ceiling: U128(PRIORITY_CEILING),
         gas_limit_approve: 70_000,
         gas_limit_repay: 350_000,
         gas_limit_transfer: 80_000,
+        gas_limit_unwind: GAS_LIMIT_UNWIND,
     }
 }
 
@@ -191,11 +197,13 @@ fn chains() -> Vec<ChainConfig> {
             BASE,
             "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5",
             "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            BASE_UNWIND,
         ),
         chain(
             ARBITRUM,
             "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
             "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+            "0x6666666666666666666666666666666666666666",
         ),
     ]
 }
@@ -1396,6 +1404,9 @@ struct Vector {
     chain_id: u64,
     pool: String,
     usdc: String,
+    unwind: String,
+    collateral: String,
+    pool_fee: u32,
     borrower: String,
     nonce: u64,
     max_fee_per_gas: String,
@@ -1411,11 +1422,13 @@ fn without_ceilings(vector: &Vector) -> ChainConfig {
         chain_id: vector.chain_id,
         pool: vector.pool.clone(),
         usdc: vector.usdc.clone(),
+        unwind: vector.unwind.clone(),
         max_fee_per_gas_ceiling: U128(u128::MAX),
         max_priority_fee_ceiling: U128(u128::MAX),
         gas_limit_approve: vector.gas_limit,
         gas_limit_repay: vector.gas_limit,
         gas_limit_transfer: vector.gas_limit,
+        gas_limit_unwind: vector.gas_limit,
     }
 }
 
@@ -1425,7 +1438,7 @@ fn without_ceilings(vector: &Vector) -> ChainConfig {
 async fn the_wasm_matches_every_cast_vector_byte_for_byte() -> anyhow::Result<()> {
     let fixture: Vectors = serde_json::from_str(include_str!("../fixtures/tx_vectors.json"))?;
     let kinds: BTreeSet<&str> = fixture.vectors.iter().map(|v| v.kind.as_str()).collect();
-    assert_eq!(kinds.len(), 4);
+    assert_eq!(kinds.len(), 5);
     let mut checked = 0;
 
     let worker = near_workspaces::sandbox().await?;
@@ -1455,6 +1468,7 @@ async fn the_wasm_matches_every_cast_vector_byte_for_byte() -> anyhow::Result<()
                 "max_per_rescue": u128::MAX.to_string(),
                 "max_per_day": u128::MAX.to_string(),
                 "cooldown_secs": 0,
+                "collateral": { "asset": vector.collateral, "pool_fee": vector.pool_fee },
             }))
             .deposit(NearToken::from_millinear(100))
             .gas(CALL_GAS)
@@ -1469,9 +1483,14 @@ async fn the_wasm_matches_every_cast_vector_byte_for_byte() -> anyhow::Result<()
             "max_priority_fee_per_gas": vector.max_priority_fee_per_gas,
         });
 
-        if vector.kind == "repay" {
+        let preview_method = match vector.kind.as_str() {
+            "repay" => Some("preview_rescue"),
+            "unwind" => Some("preview_rescue_from_collateral"),
+            _ => None,
+        };
+        if let Some(preview_method) = preview_method {
             let preview: PreviewTx = levee
-                .view("preview_rescue")
+                .view(preview_method)
                 .args_json(json!({ "id": id, "amount": vector.amount, "fees": fees }))
                 .await?
                 .json()?;
@@ -1497,6 +1516,10 @@ async fn the_wasm_matches_every_cast_vector_byte_for_byte() -> anyhow::Result<()
             "value" => (
                 "sweep_gas",
                 json!({ "id": id, "amount_wei": vector.amount, "fees": fees }),
+            ),
+            "unwind" => (
+                "rescue_from_collateral",
+                json!({ "id": id, "amount": vector.amount, "fees": fees }),
             ),
             other => panic!("unknown kind {other}"),
         };

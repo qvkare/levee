@@ -1,6 +1,7 @@
-//! Levee repays a borrower's debt from a reserve when their health factor crosses a
-//! trigger. This contract holds the caps, and is the only thing that can ask the MPC
-//! network to sign for a position's rescuer address. See `docs/SPEC.md` sections 2 to 4.
+//! Levee repays a borrower's debt when their health factor crosses a trigger, from a
+//! reserve or by selling a slice of the borrower's own collateral. This contract holds
+//! the caps, and is the only thing that can ask the MPC network to sign for a
+//! position's rescuer address. See `docs/SPEC.md` sections 2 to 4 and 9.
 //!
 //! It builds every EVM transaction itself. A caller supplies a position, an amount
 //! and fees, never calldata, a target or a payload. There is no admin, no owner of
@@ -30,7 +31,9 @@ use crate::mpc::{
     SIGN_DEPOSIT,
 };
 use crate::policy::{utc_day, LOOSEN_DELAY_NANOS};
-use crate::types::{ChainConfig, Fees, PendingLoosen, Position, PreviewTx, Reservation};
+use crate::types::{
+    ChainConfig, CollateralConfig, Fees, PendingLoosen, Position, PreviewTx, Reservation,
+};
 
 /// Static gas for `sign`. See `docs/SPEC.md`, section "Gas".
 pub const SIGN_GAS: Gas = Gas::from_tgas(20);
@@ -66,7 +69,8 @@ pub struct PendingSignature {
     pub id: u64,
     pub unsigned_tx: String,
     pub tx_hash: String,
-    /// Set only for a rescue, which is the one kind that holds budget.
+    /// Set only for `rescue` and `rescue_from_collateral`, the two kinds that hold
+    /// budget.
     pub reservation: Option<Reservation>,
 }
 
@@ -123,13 +127,59 @@ fn validated_chain(chain: ChainConfig) -> ChainConfig {
             .gas_limit_approve
             .min(chain.gas_limit_repay)
             .min(chain.gas_limit_transfer)
+            .min(chain.gas_limit_unwind)
             >= MIN_EVM_GAS_LIMIT,
         ERR_GAS_LIMIT_TOO_LOW
     );
     ChainConfig {
         pool: or_panic(normalise_address(&chain.pool)),
         usdc: or_panic(normalise_address(&chain.usdc)),
+        unwind: or_panic(normalise_address(&chain.unwind)),
         ..chain
+    }
+}
+
+/// How a keeper's rescue is paid for. Both share one budget, one cooldown and one
+/// set of events.
+#[derive(Clone, Copy)]
+enum Mode {
+    /// `rescue`: `Pool.repay` from the rescuer's USDC.
+    Reserve,
+    /// `rescue_from_collateral`: `LeveeUnwind.unwind`, which sells the borrower's
+    /// collateral to repay.
+    Collateral,
+}
+
+impl Mode {
+    fn kind(self) -> SignKind {
+        match self {
+            Mode::Reserve => SignKind::Rescue,
+            Mode::Collateral => SignKind::Unwind,
+        }
+    }
+}
+
+/// Rules 2 to 6, plus the collateral config for an unwind, and the transaction to
+/// sign. Rule 1 needs the caller, so the method checks it.
+fn checked_rescue(
+    mode: Mode,
+    chain: &ChainConfig,
+    position: &Position,
+    amount: u128,
+    fees: &Fees,
+    now: u64,
+) -> Result<(Reservation, Eip1559Tx), &'static str> {
+    match mode {
+        Mode::Reserve => {
+            let reservation = policy::check_rescue(position, chain, amount, fees, now)?;
+            Ok((reservation, txs::repay_tx(chain, position, amount, fees)))
+        }
+        Mode::Collateral => {
+            let collateral = policy::collateral_of(position)?;
+            let reservation = policy::check_rescue(position, chain, amount, fees, now)?;
+            let tx = txs::unwind_tx(chain, position, collateral, amount, fees);
+            Ok((reservation, tx))
+        }
     }
 }
 
@@ -157,6 +207,10 @@ impl Levee {
 
     /// Creates a position owned by the caller. The deposit pays for the most storage
     /// the position can ever use, and the surplus is refunded.
+    ///
+    /// `collateral` may be left out, and then `rescue_from_collateral` refuses the
+    /// position. Like the borrower, it can never change.
+    #[allow(clippy::too_many_arguments)]
     #[payable]
     pub fn register(
         &mut self,
@@ -166,9 +220,15 @@ impl Levee {
         max_per_rescue: U128,
         max_per_day: U128,
         cooldown_secs: u32,
+        collateral: Option<CollateralConfig>,
     ) -> u64 {
-        require!(self.chains.contains_key(&chain_id), ERR_UNKNOWN_CHAIN);
+        let chain = self
+            .chains
+            .get(&chain_id)
+            .unwrap_or_else(|| env::panic_str(ERR_UNKNOWN_CHAIN));
         let borrower = or_panic(normalise_address(&borrower));
+        let collateral =
+            collateral.map(|config| or_panic(policy::validate_collateral(chain, config)));
         require!(max_per_rescue.0 > 0 && max_per_day.0 > 0, ERR_ZERO_CAP);
 
         let owner = env::predecessor_account_id();
@@ -183,6 +243,7 @@ impl Levee {
                 keeper: keeper.clone(),
                 chain_id,
                 borrower: borrower.clone(),
+                collateral: collateral.clone(),
                 max_per_rescue,
                 max_per_day,
                 cooldown_secs,
@@ -195,8 +256,10 @@ impl Levee {
         );
         self.positions.flush();
 
-        // `set_keeper` and `queue_loosen` take no deposit but can grow the record, so
-        // the room they may need is charged now. The contract never pays for storage.
+        // The record is measured as stored, collateral config included, since that
+        // never changes. `set_keeper` and `queue_loosen` take no deposit but can grow
+        // the record, so the room they may need is charged now. The contract never
+        // pays for storage.
         let growth_room = PENDING_LOOSEN_BYTES + MAX_ACCOUNT_ID_LEN - keeper.as_str().len() as u64;
         let bytes = env::storage_usage() - usage_before + growth_room;
         let cost = env::storage_byte_cost().saturating_mul(u128::from(bytes));
@@ -216,6 +279,7 @@ impl Levee {
             max_per_rescue,
             max_per_day,
             cooldown_secs,
+            collateral,
             storage_paid: U128(cost.as_yoctonear()),
         }
         .emit();
@@ -337,35 +401,15 @@ impl Levee {
 
     /// Signs `Pool.repay(USDC, amount, 2, borrower)` within the position's caps.
     pub fn rescue(&mut self, id: u64, amount: U128, fees: Fees) -> Promise {
-        let position = self.position(id);
-        require!(
-            env::predecessor_account_id() == position.keeper,
-            ERR_NOT_KEEPER
-        );
-        let chain = self.chain(position);
-        let reservation = or_panic(policy::check_rescue(
-            position,
-            chain,
-            amount.0,
-            &fees,
-            env::block_timestamp(),
-        ));
-        let tx = txs::repay_tx(chain, position, amount.0, &fees);
-        let pending = pending_signature(SignKind::Rescue, id, &tx, Some(reservation.clone()));
+        self.keeper_rescue(Mode::Reserve, id, amount, fees)
+    }
 
-        let position = self
-            .positions
-            .get_mut(&id)
-            .unwrap_or_else(|| env::panic_str(ERR_NO_POSITION));
-        policy::reserve(position, &reservation);
-        LeveeEvent::RescueRequested {
-            id,
-            amount,
-            nonce: fees.nonce,
-            tx_hash: pending.tx_hash.clone(),
-        }
-        .emit();
-        self.request_signature(pending)
+    /// Signs `LeveeUnwind.unwind(borrower, collateral, amount, pool_fee)` within the
+    /// position's caps. Same rules, budget and cooldown as `rescue`: `amount` is USDC
+    /// base units, charged to the same `max_per_rescue` and `max_per_day`. Refused for
+    /// a position registered without a collateral config.
+    pub fn rescue_from_collateral(&mut self, id: u64, amount: U128, fees: Fees) -> Promise {
+        self.keeper_rescue(Mode::Collateral, id, amount, fees)
     }
 
     /// Signs `USDC.transfer(borrower, amount)`. The destination is fixed.
@@ -404,7 +448,7 @@ impl Levee {
                 recovery_id: signature.recovery_id,
             };
             let event = match signed.kind {
-                SignKind::Rescue => LeveeEvent::RescueSigned(signed.clone()),
+                SignKind::Rescue | SignKind::Unwind => LeveeEvent::RescueSigned(signed.clone()),
                 SignKind::Allowance => LeveeEvent::AllowanceSigned(signed.clone()),
                 SignKind::WithdrawFloat => LeveeEvent::FloatWithdrawn(signed.clone()),
                 SignKind::SweepGas => LeveeEvent::GasSwept(signed.clone()),
@@ -427,7 +471,7 @@ impl Levee {
             released: U128(released),
         };
         match failure.kind {
-            SignKind::Rescue => LeveeEvent::RescueFailed(failure).emit(),
+            SignKind::Rescue | SignKind::Unwind => LeveeEvent::RescueFailed(failure).emit(),
             _ => LeveeEvent::SignFailed(failure).emit(),
         }
         None
@@ -450,20 +494,13 @@ impl Levee {
     /// The transaction `rescue` would sign now, failing with the same error it would.
     /// A view has no caller, so rule 1 is the one rule this cannot check.
     pub fn preview_rescue(&self, id: u64, amount: U128, fees: Fees) -> PreviewTx {
-        let position = self.position(id);
-        let chain = self.chain(position);
-        or_panic(policy::check_rescue(
-            position,
-            chain,
-            amount.0,
-            &fees,
-            env::block_timestamp(),
-        ));
-        let unsigned = txs::repay_tx(chain, position, amount.0, &fees).unsigned_bytes();
-        PreviewTx {
-            tx_hash: hex_of(&signing_hash(&unsigned)),
-            unsigned_tx: hex_of(&unsigned),
-        }
+        self.preview(Mode::Reserve, id, amount, fees)
+    }
+
+    /// The transaction `rescue_from_collateral` would sign now, failing with the same
+    /// error it would, except for rule 1.
+    pub fn preview_rescue_from_collateral(&self, id: u64, amount: U128, fees: Fees) -> PreviewTx {
+        self.preview(Mode::Collateral, id, amount, fees)
     }
 
     pub fn get_chain(&self, chain_id: u64) -> Option<ChainConfig> {
@@ -508,6 +545,60 @@ impl Levee {
         self.chains
             .get(&position.chain_id)
             .unwrap_or_else(|| env::panic_str(ERR_UNKNOWN_CHAIN))
+    }
+
+    /// `rescue` and `rescue_from_collateral`: rule 1, then the rest, then the budget
+    /// and cooldown are reserved before the signer is asked.
+    fn keeper_rescue(&mut self, mode: Mode, id: u64, amount: U128, fees: Fees) -> Promise {
+        let position = self.position(id);
+        require!(
+            env::predecessor_account_id() == position.keeper,
+            ERR_NOT_KEEPER
+        );
+        let chain = self.chain(position);
+        let (reservation, tx) = or_panic(checked_rescue(
+            mode,
+            chain,
+            position,
+            amount.0,
+            &fees,
+            env::block_timestamp(),
+        ));
+        let kind = mode.kind();
+        let pending = pending_signature(kind, id, &tx, Some(reservation.clone()));
+
+        let position = self
+            .positions
+            .get_mut(&id)
+            .unwrap_or_else(|| env::panic_str(ERR_NO_POSITION));
+        policy::reserve(position, &reservation);
+        LeveeEvent::RescueRequested {
+            id,
+            kind,
+            amount,
+            nonce: fees.nonce,
+            tx_hash: pending.tx_hash.clone(),
+        }
+        .emit();
+        self.request_signature(pending)
+    }
+
+    fn preview(&self, mode: Mode, id: u64, amount: U128, fees: Fees) -> PreviewTx {
+        let position = self.position(id);
+        let chain = self.chain(position);
+        let (_, tx) = or_panic(checked_rescue(
+            mode,
+            chain,
+            position,
+            amount.0,
+            &fees,
+            env::block_timestamp(),
+        ));
+        let unsigned = tx.unsigned_bytes();
+        PreviewTx {
+            tx_hash: hex_of(&signing_hash(&unsigned)),
+            unsigned_tx: hex_of(&unsigned),
+        }
     }
 
     /// Asks the MPC contract to sign from the position's rescuer. Nothing a caller

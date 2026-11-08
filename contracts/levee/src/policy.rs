@@ -5,7 +5,8 @@
 
 use near_sdk::json_types::U128;
 
-use crate::types::{ChainConfig, Fees, PendingLoosen, Position, Reservation};
+use crate::address::normalise_address;
+use crate::types::{ChainConfig, CollateralConfig, Fees, PendingLoosen, Position, Reservation};
 
 pub const NANOS_PER_SEC: u64 = 1_000_000_000;
 pub const NANOS_PER_DAY: u64 = 86_400 * NANOS_PER_SEC;
@@ -13,6 +14,8 @@ pub const NANOS_PER_DAY: u64 = 86_400 * NANOS_PER_SEC;
 pub const LOOSEN_DELAY_NANOS: u64 = NANOS_PER_DAY;
 /// `prepare_allowance` may approve this many days of `max_per_day`.
 pub const ALLOWANCE_DAYS: u128 = 30;
+/// The Uniswap v3 fee tiers a collateral pool may use, in hundredths of a basis point.
+pub const POOL_FEES: [u32; 4] = [100, 500, 3_000, 10_000];
 
 pub const ERR_PAUSED: &str = "position is paused";
 pub const ERR_ZERO_AMOUNT: &str = "amount must be above zero";
@@ -32,6 +35,10 @@ pub const ERR_LOOSEN_COOLDOWN: &str = "cooldown_secs may only decrease";
 pub const ERR_NOTHING_TO_LOOSEN: &str = "no value is being loosened";
 pub const ERR_NO_PENDING_LOOSEN: &str = "no loosening is queued";
 pub const ERR_LOOSEN_NOT_READY: &str = "the loosening delay has not elapsed";
+pub const ERR_POOL_FEE: &str = "pool_fee must be 100, 500, 3000 or 10000";
+pub const ERR_COLLATERAL_IS_USDC: &str =
+    "the collateral cannot be USDC, which is what it is sold for";
+pub const ERR_NO_COLLATERAL: &str = "position has no collateral config";
 
 /// The UTC day bucket of a block timestamp.
 pub fn utc_day(now: u64) -> u64 {
@@ -128,6 +135,30 @@ pub fn release(position: &mut Position, reservation: &Reservation) -> u128 {
     released
 }
 
+/// A collateral config as `register` stores it: the asset is a strict address, stored
+/// lowercase, and is not the USDC it would be sold for. The fee is a Uniswap v3 tier.
+pub fn validate_collateral(
+    chain: &ChainConfig,
+    collateral: CollateralConfig,
+) -> Result<CollateralConfig, &'static str> {
+    let asset = normalise_address(&collateral.asset)?;
+    if asset == chain.usdc {
+        return Err(ERR_COLLATERAL_IS_USDC);
+    }
+    if !POOL_FEES.contains(&collateral.pool_fee) {
+        return Err(ERR_POOL_FEE);
+    }
+    Ok(CollateralConfig {
+        asset,
+        pool_fee: collateral.pool_fee,
+    })
+}
+
+/// What `rescue_from_collateral` may sell, or why it cannot run for this position.
+pub fn collateral_of(position: &Position) -> Result<&CollateralConfig, &'static str> {
+    position.collateral.as_ref().ok_or(ERR_NO_COLLATERAL)
+}
+
 /// `tighten`: each value may stay the same or get stricter.
 pub fn check_tighten(
     position: &Position,
@@ -208,11 +239,13 @@ mod tests {
             chain_id: 8453,
             pool: "0xa238dd80c259a72e81d7e4664a9801593f98d1c5".into(),
             usdc: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913".into(),
+            unwind: "0x5555555555555555555555555555555555555555".into(),
             max_fee_per_gas_ceiling: U128(1_000),
             max_priority_fee_ceiling: U128(100),
             gas_limit_approve: 70_000,
             gas_limit_repay: 350_000,
             gas_limit_transfer: 80_000,
+            gas_limit_unwind: 600_000,
         }
     }
 
@@ -222,6 +255,7 @@ mod tests {
             keeper: account("keeper.near"),
             chain_id: 8453,
             borrower: "0x1234567890abcdef1234567890abcdef12345678".into(),
+            collateral: None,
             max_per_rescue: U128(100),
             max_per_day: U128(250),
             cooldown_secs: 60,
@@ -586,6 +620,95 @@ mod tests {
     #[test]
     fn allowance_is_thirty_days_of_budget() {
         assert_eq!(max_allowance(&position()), 7_500);
+    }
+
+    const WETH: &str = "0x4200000000000000000000000000000000000006";
+
+    fn collateral(asset: &str, pool_fee: u32) -> CollateralConfig {
+        CollateralConfig {
+            asset: asset.into(),
+            pool_fee,
+        }
+    }
+
+    #[test]
+    fn every_uniswap_fee_tier_is_accepted() {
+        for fee in POOL_FEES {
+            assert_eq!(
+                validate_collateral(&chain(), collateral(WETH, fee)),
+                Ok(collateral(WETH, fee))
+            );
+        }
+    }
+
+    #[test]
+    fn a_fee_beside_a_tier_is_rejected() {
+        for fee in [
+            0,
+            1,
+            99,
+            101,
+            499,
+            501,
+            2_999,
+            3_001,
+            9_999,
+            10_001,
+            1_000_000,
+            u32::MAX,
+        ] {
+            assert_eq!(
+                validate_collateral(&chain(), collateral(WETH, fee)),
+                Err(ERR_POOL_FEE),
+                "fee {fee}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_collateral_is_stored_lowercase() {
+        let mixed = collateral("0xAbCdEf0000000000000000000000000000000001", 500);
+        assert_eq!(
+            validate_collateral(&chain(), mixed).unwrap().asset,
+            "0xabcdef0000000000000000000000000000000001"
+        );
+    }
+
+    #[test]
+    fn the_collateral_address_is_as_strict_as_any_other() {
+        let zero = format!("0x{}", "0".repeat(40));
+        assert_eq!(
+            validate_collateral(&chain(), collateral(&zero, 500)),
+            Err(crate::address::ERR_ZERO_ADDRESS)
+        );
+        for bad in ["", "0x", "4200000000000000000000000000000000000006", "0x42"] {
+            assert_eq!(
+                validate_collateral(&chain(), collateral(bad, 500)),
+                Err(crate::address::ERR_ADDRESS_FORMAT),
+                "{bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn usdc_cannot_be_the_collateral_in_any_case() {
+        for usdc in [
+            "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        ] {
+            assert_eq!(
+                validate_collateral(&chain(), collateral(usdc, 500)),
+                Err(ERR_COLLATERAL_IS_USDC)
+            );
+        }
+    }
+
+    #[test]
+    fn a_position_without_collateral_cannot_unwind() {
+        assert_eq!(collateral_of(&position()), Err(ERR_NO_COLLATERAL));
+        let mut with = position();
+        with.collateral = Some(collateral(WETH, 3_000));
+        assert_eq!(collateral_of(&with), Ok(&collateral(WETH, 3_000)));
     }
 
     #[test]

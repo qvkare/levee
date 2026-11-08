@@ -3,12 +3,16 @@
 use near_sdk::json_types::U128;
 use near_sdk::{near, AccountId};
 
-/// Which transaction a signature belongs to.
+use crate::types::CollateralConfig;
+
+/// Which transaction a signature belongs to. `unwind` is `rescue_from_collateral`'s:
+/// it shares `rescue`'s budget, release and events.
 #[near(serializers = [json])]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SignKind {
     Rescue,
+    Unwind,
     Allowance,
     WithdrawFloat,
     SweepGas,
@@ -69,16 +73,21 @@ pub enum LeveeEvent {
         max_per_rescue: U128,
         max_per_day: U128,
         cooldown_secs: u32,
+        /// What `rescue_from_collateral` may sell, if anything.
+        collateral: Option<CollateralConfig>,
         /// Yoctonear kept for storage. The rest of the deposit was refunded.
         storage_paid: U128,
     },
+    /// Logged by `rescue` and `rescue_from_collateral`. `kind` says which.
     #[event_version("1.0.0")]
     RescueRequested {
         id: u64,
+        kind: SignKind,
         amount: U128,
         nonce: u64,
         tx_hash: String,
     },
+    /// A `rescue` or `rescue_from_collateral` signature. `kind` says which.
     #[event_version("1.0.0")]
     RescueSigned(SignedTx),
     #[event_version("1.0.0")]
@@ -89,7 +98,7 @@ pub enum LeveeEvent {
     FloatWithdrawn(SignedTx),
     #[event_version("1.0.0")]
     GasSwept(SignedTx),
-    /// A signature failed for anything other than a rescue.
+    /// A signature failed for anything other than a rescue of either kind.
     #[event_version("1.0.0")]
     SignFailed(SignFailure),
     #[event_version("1.0.0")]

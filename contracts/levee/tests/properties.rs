@@ -7,10 +7,12 @@ use alloy_consensus::transaction::RlpEcdsaDecodableTx;
 use alloy_consensus::{SignableTransaction, TxEip1559};
 use alloy_primitives::{keccak256, Address, TxKind, U256};
 use levee::address::{normalise_address, parse_address};
-use levee::evm::{signing_hash, SELECTOR_APPROVE, SELECTOR_REPAY, SELECTOR_TRANSFER};
+use levee::evm::{
+    signing_hash, SELECTOR_APPROVE, SELECTOR_REPAY, SELECTOR_TRANSFER, SELECTOR_UNWIND,
+};
 use levee::policy::{self, NANOS_PER_DAY, NANOS_PER_SEC};
-use levee::txs::{approve_tx, repay_tx, sweep_tx, transfer_tx};
-use levee::types::{ChainConfig, Fees, Position, Reservation};
+use levee::txs::{approve_tx, repay_tx, sweep_tx, transfer_tx, unwind_tx};
+use levee::types::{ChainConfig, CollateralConfig, Fees, Position, Reservation};
 use near_sdk::json_types::U128;
 use near_sdk::test_utils::VMContextBuilder;
 use near_sdk::testing_env;
@@ -50,21 +52,25 @@ fn chain() -> impl Strategy<Value = ChainConfig> {
             chain_id: 8453,
             pool: normalise_address("0xA238Dd80C259a72e81d7e4664a9801593F98d1c5").unwrap(),
             usdc: normalise_address("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913").unwrap(),
+            unwind: normalise_address("0x5555555555555555555555555555555555555555").unwrap(),
             max_fee_per_gas_ceiling: U128(u128::MAX),
             max_priority_fee_ceiling: U128(u128::MAX),
             gas_limit_approve: 70_000,
             gas_limit_repay: 350_000,
             gas_limit_transfer: 80_000,
+            gas_limit_unwind: 600_000,
         }),
         Just(ChainConfig {
             chain_id: 42161,
             pool: normalise_address("0x794a61358D6845594F94dc1DB02A252b5b4814aD").unwrap(),
             usdc: normalise_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831").unwrap(),
+            unwind: normalise_address("0x6666666666666666666666666666666666666666").unwrap(),
             max_fee_per_gas_ceiling: U128(u128::MAX),
             max_priority_fee_ceiling: U128(u128::MAX),
             gas_limit_approve: 500_000,
             gas_limit_repay: 1_500_000,
             gas_limit_transfer: 500_000,
+            gas_limit_unwind: 2_000_000,
         }),
     ]
 }
@@ -75,12 +81,19 @@ fn borrower() -> impl Strategy<Value = String> {
         .prop_map(|bytes| format!("0x{}", hex::encode(bytes)))
 }
 
+/// Any asset and any fee tier the contract accepts.
+fn collateral() -> impl Strategy<Value = CollateralConfig> {
+    (borrower(), prop::sample::select(policy::POOL_FEES.to_vec()))
+        .prop_map(|(asset, pool_fee)| CollateralConfig { asset, pool_fee })
+}
+
 fn position(chain: &ChainConfig, borrower: String) -> Position {
     Position {
         owner: "owner.near".parse().unwrap(),
         keeper: "keeper.near".parse().unwrap(),
         chain_id: chain.chain_id,
         borrower,
+        collateral: None,
         max_per_rescue: U128(100),
         max_per_day: U128(250),
         cooldown_secs: 0,
@@ -160,6 +173,31 @@ proptest! {
     }
 
     #[test]
+    fn unwind_keeps_target_selector_borrower_collateral_and_fee(
+        chain in chain(),
+        borrower in borrower(),
+        collateral in collateral(),
+        amount in wide_u128(),
+        fees in fees(),
+    ) {
+        let mut position = position(&chain, borrower);
+        position.collateral = Some(collateral.clone());
+        let unsigned = unwind_tx(&chain, &position, &collateral, amount, &fees).unsigned_bytes();
+        let tx = assert_decodes_to(&unsigned, &chain, &fees, chain.gas_limit_unwind);
+
+        prop_assert_eq!(tx.to, TxKind::Call(address(&chain.unwind)));
+        prop_assert_eq!(tx.value, U256::ZERO);
+        prop_assert_eq!(tx.input.len(), 132);
+        prop_assert_eq!(&tx.input[..4], SELECTOR_UNWIND);
+        prop_assert_eq!(word_address(&tx.input[4..36]), address(&position.borrower));
+        prop_assert_eq!(word_address(&tx.input[36..68]), address(&collateral.asset));
+        prop_assert_eq!(U256::from_be_slice(&tx.input[68..100]), U256::from(amount));
+        // A uint24 word: the fee, and nothing above bit 24.
+        prop_assert_eq!(&tx.input[100..129], &[0u8; 29][..]);
+        prop_assert_eq!(U256::from_be_slice(&tx.input[100..132]), U256::from(collateral.pool_fee));
+    }
+
+    #[test]
     fn approve_only_ever_names_the_pool(
         chain in chain(),
         amount in wide_u128(),
@@ -236,11 +274,13 @@ fn config() -> ChainConfig {
         chain_id: 8453,
         pool: "0xa238dd80c259a72e81d7e4664a9801593f98d1c5".into(),
         usdc: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913".into(),
+        unwind: "0x5555555555555555555555555555555555555555".into(),
         max_fee_per_gas_ceiling: U128(1_000),
         max_priority_fee_ceiling: U128(100),
         gas_limit_approve: 70_000,
         gas_limit_repay: 350_000,
         gas_limit_transfer: 80_000,
+        gas_limit_unwind: 600_000,
     }
 }
 

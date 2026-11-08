@@ -18,6 +18,7 @@ const STRANGER: &str = "stranger.near";
 const BORROWER: &str = "0x1234567890abcdef1234567890abcdef12345678";
 const BASE_POOL: &str = "0xa238dd80c259a72e81d7e4664a9801593f98d1c5";
 const BASE_USDC: &str = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
+const GAS_LIMIT_UNWIND: u64 = 600_000;
 
 const MAX_PER_RESCUE: u128 = 100;
 const MAX_PER_DAY: u128 = 250;
@@ -53,11 +54,13 @@ fn base() -> ChainConfig {
         chain_id: 8453,
         pool: "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5".into(),
         usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913".into(),
+        unwind: "0x5555555555555555555555555555555555555555".into(),
         max_fee_per_gas_ceiling: U128(MAX_FEE_CEILING),
         max_priority_fee_ceiling: U128(PRIORITY_CEILING),
         gas_limit_approve: 70_000,
         gas_limit_repay: 350_000,
         gas_limit_transfer: 80_000,
+        gas_limit_unwind: GAS_LIMIT_UNWIND,
     }
 }
 
@@ -86,6 +89,7 @@ fn register(contract: &mut Levee, keeper: &str) -> u64 {
         U128(MAX_PER_RESCUE),
         U128(MAX_PER_DAY),
         COOLDOWN_SECS,
+        None,
     )
 }
 
@@ -309,6 +313,7 @@ mod registration {
             U128(MAX_PER_RESCUE),
             U128(MAX_PER_DAY),
             COOLDOWN_SECS,
+            None,
         )
     }
 
@@ -359,6 +364,7 @@ mod registration {
             U128(1),
             U128(1),
             0,
+            None,
         );
         assert_eq!(contract.get_position(id).unwrap().borrower, BORROWER);
     }
@@ -383,7 +389,15 @@ mod registration {
         testing_env!(context(OWNER, NOON)
             .attached_deposit(NearToken::from_near(1))
             .build());
-        contract.register(1, BORROWER.into(), account(KEEPER), U128(1), U128(1), 0);
+        contract.register(
+            1,
+            BORROWER.into(),
+            account(KEEPER),
+            U128(1),
+            U128(1),
+            0,
+            None,
+        );
     }
 
     #[test]
@@ -400,6 +414,7 @@ mod registration {
             U128(1),
             U128(1),
             0,
+            None,
         );
     }
 
@@ -417,6 +432,7 @@ mod registration {
             U128(1),
             U128(1),
             0,
+            None,
         );
     }
 
@@ -427,7 +443,15 @@ mod registration {
         testing_env!(context(OWNER, NOON)
             .attached_deposit(NearToken::from_near(1))
             .build());
-        contract.register(8453, BORROWER.into(), account(KEEPER), U128(0), U128(1), 0);
+        contract.register(
+            8453,
+            BORROWER.into(),
+            account(KEEPER),
+            U128(0),
+            U128(1),
+            0,
+            None,
+        );
     }
 
     #[test]
@@ -437,7 +461,15 @@ mod registration {
         testing_env!(context(OWNER, NOON)
             .attached_deposit(NearToken::from_near(1))
             .build());
-        contract.register(8453, BORROWER.into(), account(KEEPER), U128(1), U128(0), 0);
+        contract.register(
+            8453,
+            BORROWER.into(),
+            account(KEEPER),
+            U128(1),
+            U128(0),
+            0,
+            None,
+        );
     }
 
     #[test]
@@ -493,6 +525,7 @@ mod registration {
             U128(MAX_PER_RESCUE),
             U128(MAX_PER_DAY),
             COOLDOWN_SECS,
+            None,
         );
         let paid: U128 =
             serde_json::from_value(last_event()["data"]["storage_paid"].clone()).unwrap();
@@ -1054,7 +1087,7 @@ mod callback {
             SignKind::Allowance => contract.prepare_allowance(id, U128(1), fees()),
             SignKind::WithdrawFloat => contract.withdraw_float(id, U128(1), fees()),
             SignKind::SweepGas => contract.sweep_gas(id, U128(1), fees()),
-            SignKind::Rescue => unreachable!(),
+            SignKind::Rescue | SignKind::Unwind => unreachable!(),
         };
         pending()
     }
