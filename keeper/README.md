@@ -65,7 +65,7 @@ The CLI reads `.env` from the repo root.
 ```json
 {
   "positions": [
-    { "id": 1, "trigger": "1.25", "target": "1.6", "mode": "collateral", "max_slippage_bps": 100 },
+    { "id": 1, "trigger": "1.25", "target": "1.6", "mode": "collateral", "max_slippage_bps": 100, "quote_tolerance_bps": 50 },
     { "id": 2, "trigger": "1.25", "target": "1.6" }
   ],
   "fee_ceilings": {
@@ -74,7 +74,7 @@ The CLI reads `.env` from the repo root.
 }
 ```
 
-A position with no `mode` is in reserve mode, as every position was before v0.2. `max_slippage_bps` is for collateral mode only, and is required there: above 0 and at most 300, as `authorize` allows.
+A position with no `mode` is in reserve mode, as every position was before v0.2. `max_slippage_bps` is for collateral mode only, and is required there: above 0 and at most 300, as `authorize` allows. `quote_tolerance_bps` is for collateral mode only, optional, from 0 to 300, and defaults to 50: the headroom over a fresh quote when the keeper sets `max_sold`, below.
 
 The borrower, chain and caps are read from `get_position`. `fee_ceilings` repeats the contract's fee ceilings and must match them: the keeper clamps its bid to these values, and the contract rejects anything above its own.
 
@@ -92,13 +92,16 @@ In collateral mode only:
 
 - The position was registered with a collateral config: the asset and the Uniswap fee tier.
 - The contract's `get_chain` names a `LeveeUnwind` helper for the chain.
-- The borrower called `authorize(rescuer, maxSlippageBps, triggerHf, targetHf)` on the helper for the derived rescuer, with the keeper's own `trigger`, `target` and `max_slippage_bps`, and approved the collateral's aToken to the helper.
+- The borrower called `authorize(rescuer, maxSlippageBps, triggerHf, targetHf, collateral, poolFee)` on the helper for the derived rescuer, with the keeper's own `trigger`, `target` and `max_slippage_bps`, and the collateral and fee tier the position registered on NEAR, and approved the collateral's aToken to the helper.
+- The chain has a known Uniswap v3 QuoterV2 in `src/chains.ts`: Base, Arbitrum One and Base Sepolia.
 
 ## Collateral mode
 
-The helper enforces the borrower's own settings: `unwind` reverts unless the health factor is below their trigger, and checks the result against their target. So the keeper acts on what the helper holds, and refuses to start, in `wirePosition`, unless every endpoint that answers reports the derived rescuer and the same trigger, target and slippage as the positions file. Each pass reads them again with the position, and a change since start stops the pass as `helper_config_mismatch`.
+The helper enforces the borrower's own settings: `unwind` reverts unless the health factor is below their trigger, checks the result against their target, and sells only the collateral, in only the pool, they authorized. So the keeper acts on what the helper holds, and refuses to start, in `wirePosition`, unless every endpoint that answers reports the derived rescuer, the same trigger, target and slippage as the positions file, and the same collateral and pool fee as the position on NEAR. Each pass reads them again with the position, and a change since start stops the pass as `helper_config_mismatch`.
 
-Each sample also reads, at the same block, the collateral's oracle price, its own liquidation threshold and decimals from `getReserveData`, and the borrower's aToken balance and allowance to the helper. The quorum compares those within 0.5%, and the helper's settings exactly.
+Each sample also reads, at the same block, the collateral's oracle price, its own liquidation threshold and decimals from `getReserveData`, the borrower's aToken balance and allowance to the helper, and what Aave's LTV-0 rule needs: the borrower's collateral bits, their eMode category and each enabled reserve's LTV. The quorum compares the figures within 0.5%, and the helper's settings and the LTV-0 reading exactly.
+
+If another collateral the borrower has enabled sits at LTV 0, which from Aave v3.6 every frozen reserve does, Aave lets only that asset leave the account first and reverts the helper's aToken transfer with `LtvValidationFailed`. `src/ltv.ts` applies Aave's own `getUserReserveLtv`, eMode included, and below the trigger the keeper records an aborted run with `ltv_zero_collateral`, naming the asset, instead of sending an unwind that would fail. `status` shows it. Only the borrower can clear it, by withdrawing that asset or disabling it as collateral. The collateral being sold may itself be frozen: the helper sells it.
 
 The repay to reach target `T` is spec section 9's
 
@@ -108,17 +111,27 @@ R = (T × D − C × L) / (T − L_c × (1 + s))
 
 with `s` the pool fee plus `max_slippage_bps`, the most the helper can be charged. It rounds as reserve mode does: `R` up in base currency, the USDC conversion up, then two base units for Aave's rounding. It is capped by `max_per_rescue`, the day's remaining budget, the USDC debt, and the USDC that the borrower's aToken balance, and separately their allowance to the helper, can pay for at `(1 + s)` over the oracle. The rescuer's USDC balance and allowance are not caps in this mode.
 
+### `max_sold`
+
+The NEAR contract publishes the signed transaction before it lands, so a searcher could sandwich it up to the borrower's whole slippage bound. Just before calling `rescue_from_collateral`, after it has the fees and nonce, the keeper therefore asks every endpoint for Uniswap QuoterV2's `quoteExactOutputSingle` for the position's pool and the amount, and sets
+
+```
+max_sold = highest quote × (10000 + quote_tolerance_bps) / 10000, rounded down
+```
+
+At least two answers must agree within 0.5%, as the quorum does, so one endpoint can stop the unwind but cannot loosen the cap past what the others report. A quote above the helper's own oracle bound, `amount × price(USDC) / price(collateral) × (1 + max_slippage_bps)`, would revert on chain, so it is refused too. The refusals are `quote_unavailable`, `quote_disagreement` and `quote_over_slippage_bound`, all aborted before NEAR is asked. The helper takes the tighter of `max_sold` and its oracle bound, so the cap never loosens what the borrower allowed. The broadcast gate refuses a signed `unwind` whose `max_sold` is not the one the keeper asked for.
+
 After a successful unwind, the record takes `sold` and the swap's price from the helper's `Unwound` event, priced against Aave's oracle at the receipt's block. A reverted unwind is replayed with `eth_call` at its block to read the reason. The helper's above-trigger error means the health factor recovered between the read and inclusion: the run is `aborted` with `above_trigger`, a no-op that cost only gas. Any other revert is `failed`, `evm_reverted`, with the error selector.
 
-The helper's config view, its above-trigger error and the indexing of `Unwound` are not fixed by the spec. They sit in `src/unwind.ts`, each marked `TODO(merge)`, to be matched to `evm/src/LeveeUnwind.sol`.
+Everything that depends on the helper's source, its `unwind` and `authorizationOf` ABIs, its above-trigger error, the indexing of `Unwound` and the QuoterV2 call, sits in `src/unwind.ts`, matched to `evm/src/LeveeUnwind.sol`.
 
 ## How a pass works
 
 1. Read the position from every RPC at one block each. At least two distinct endpoints on the right chain must be under 30 seconds old and agree within 0.5% on every number the decision uses. Any fresh endpoint can veto.
 2. Decide, in `src/decision.ts`. Pure, with the formula, Aave's rounding and the caps.
-3. Read the rescuer's nonce and fees, clamped to the ceilings.
+3. Read the rescuer's nonce and fees, clamped to the ceilings. In collateral mode, quote `max_sold`.
 4. Call `rescue` or `rescue_from_collateral` with no deposit, since a function-call key cannot attach one, and wait for the signature.
-5. Assemble the transaction with viem. It is refused unless the signature recovers to the derived rescuer and every requested field matches: the Pool, USDC and borrower for a repay; the helper, borrower, collateral and fee tier for an unwind.
+5. Assemble the transaction with viem. It is refused unless the signature recovers to the derived rescuer and every requested field matches: the Pool, USDC and borrower for a repay; the helper, borrower, collateral, fee tier and `max_sold` for an unwind.
 6. Broadcast to every RPC, wait for the receipt, reread the health factor and write the record.
 
 ## Run records
@@ -133,7 +146,7 @@ Every attempt that wanted to act leaves `evidence/runs/<run-id>.json`. A file is
 
 In `run`, a refusal that repeats every 5 seconds is recorded once per 5 minutes per reason. Anything that reached the lending chain is always recorded.
 
-Records carry `mode`. A record without it predates v0.2 and is reserve mode. Collateral records also carry `collateral`, the asset, `sold`, from the `Unwound` event, and `swap`: what was repaid and sold, the oracle prices at the block, the effective price and how many basis points below the oracle it was.
+Records carry `mode`. A record without it predates v0.2 and is reserve mode. Collateral records also carry `collateral`, the asset, `max_sold`, the cap the keeper sent, `sold`, from the `Unwound` event, and `swap`: what was repaid and sold, the oracle prices at the block, the effective price and how many basis points below the oracle it was. Their trace holds `quote`: each endpoint's QuoterV2 answer, the tolerance, the oracle bound and the choice.
 
 ## `verify` verdicts
 
@@ -145,9 +158,9 @@ Records carry `mode`. A record without it predates v0.2 and is reserve mode. Col
 
 Beyond spec section 6, `verify` recomputes the on-chain transaction's signing hash and requires it to equal the `tx_hash` the contract returned, so a NEAR receipt and a repay cannot be unrelated transactions paired in a record. It also requires the contract's result to be of the run's kind, `rescue` or `unwind`.
 
-For a collateral run, `verify` checks the NEAR method is `rescue_from_collateral`, `to` is the helper named by the contract's `get_chain`, the selector is `unwind`'s, the decoded borrower, collateral and fee tier match the record and the registered position, and the amount is within caps. For a success it also requires exactly one `Unwound` event from the helper, agreeing on the borrower, the derived rescuer, the collateral and `sold`, with `repaid` above zero and at most the amount signed.
+For a collateral run, `verify` checks the NEAR method is `rescue_from_collateral` and its `max_sold` is the record's, `to` is the helper named by the contract's `get_chain`, the selector is `unwind`'s, the decoded borrower, collateral, fee tier and `max_sold` match the record and the registered position, and the amount is within caps. For a success it also requires exactly one `Unwound` event from the helper, agreeing on the borrower, the derived rescuer, the collateral and `sold`, with `repaid` above zero and at most the amount signed, and `sold` at most `max_sold`.
 
-`replay` recomputes the same for a collateral run, from the helper's settings in the recorded samples, and adds a `Swap` step that prices the recorded event again and a `Revert` step that checks the above-trigger reading.
+`replay` recomputes the same for a collateral run, from the helper's settings in the recorded samples, and adds a `Quote` step that chooses `max_sold` again from the recorded quotes and recomputes the oracle bound from the sample, a `Swap` step that prices the recorded event again and a `Revert` step that checks the above-trigger reading.
 
 Until a real run exists, every claim is `RECORDED`, and `make verify` reports 0 PASS.
 
@@ -163,7 +176,7 @@ pnpm --filter keeper typecheck
 
 `test:e2e` needs `anvil` on the path and reads `BASE_FORK_RPC_URL`, defaulting to `https://mainnet.base.org`. It forks the block pinned in `evm/`, moves chain time up to the wall clock and takes about two minutes.
 
-Collateral mode has no fork test yet, because `LeveeUnwind` is not deployed anywhere. `test/collateral-*.test.ts` and `test/unwind.test.ts` run it against fakes of the helper's config view, its `Unwound` event and its revert, with the formula's numbers worked by hand.
+`test/collateral-*.test.ts`, `test/unwind.test.ts` and `test/ltv.test.ts` run collateral mode against fakes of the helper's config view, its `Unwound` event, its revert and QuoterV2, with the formula's numbers worked by hand. `test/collateral.fork.test.ts` runs the two new reads against the anvil fork: the QuoterV2 quote equals what `cast` reads at the pinned block, and the LTV-0 read names a second collateral once Aave's own configurator freezes it. The helper's own behaviour is tested in `evm/`.
 
 ### What is simulated
 
