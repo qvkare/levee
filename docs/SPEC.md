@@ -20,7 +20,7 @@ Out of scope: TEEs, an LLM in the money path, pooling user funds, a token, tradi
 | Actor | Can | Cannot |
 |---|---|---|
 | Owner (NEAR account) | Register, set caps, pause, withdraw float to the registered borrower | Be bypassed by the keeper |
-| Keeper (NEAR function-call key limited to `rescue`) | Ask the contract to sign a repay within caps. Fire early | Change the destination, the asset, or the borrower. Exceed caps. Withdraw |
+| Keeper (NEAR function-call key limited to the keeper methods its positions use: `rescue`, `rescue_from_collateral`, or both. Never an empty list, which NEAR reads as every method) | Ask the contract to sign a repay within caps. Fire early | Change the destination, the asset, or the borrower. Exceed caps. Withdraw |
 | Levee contract | Sign `approve`, `repay`, `transfer` to fixed targets | Sign arbitrary payloads. It has no admin and no full-access key on mainnet |
 | MPC network (`v1.signer`) | Sign for the derived address. Trusted for custody of the rescuer key | |
 | Aave Pool | Pull USDC the rescuer approved | |
@@ -57,6 +57,7 @@ Selectors:
 | `approve(address,uint256)` | `0x095ea7b3` |
 | `transfer(address,uint256)` | `0xa9059cbb` |
 | `repay(address,uint256,uint256,address)` | `0x573ade81` |
+| `unwind(address,address,uint256,uint24)` (LeveeUnwind) | `0xd0cda3c2` |
 
 Aave `repay` takes an explicit amount when `onBehalfOf` is not the caller. Variable rate mode is `2`.
 
@@ -252,7 +253,9 @@ The trigger, target and RPC list live off chain. No LLM is involved.
 ```
 
 - `near_sender` and `near_contract` are required. NEAR RPC cannot resolve a hash without its sender, and the rescuer's derivation depends on the contract.
-- `outcome` is `aborted` when the keeper refused and nothing reached the lending chain, and `failed` when an attempt was made and did not land.
+- `outcome` is `aborted` when the keeper refused and nothing reached the lending chain, and `failed` when an attempt was made and did not land. One exception: an `unwind` that lands and reverts with `AboveTrigger`, because health factor recovered before inclusion, is `aborted` with `failure_reason: "above_trigger"`. It spent only gas.
+- Collateral runs add `mode: "collateral"`, `collateral`, `sold` and `swap` (the effective price against Aave's oracle at that block, from the `Unwound` event). A record with no `mode` is a reserve run.
+- For collateral runs, `make verify` also checks the NEAR result's `kind` is `unwind`, `to` is the helper, the calldata decodes to the position's borrower, collateral and pool fee, and the `Unwound` event matches.
 - A step the run did not reach is `null`.
 - `trace` is optional. It holds the inputs and results of each step, so that `keeper replay` can repeat the run with no keys and no network.
 - `network` is `simulated` for a run on a local fork with a local key standing in for the MPC. A simulated run does not count as proof.
@@ -331,7 +334,16 @@ function unwind(address borrower, address collateral, uint256 amount, uint24 poo
 
 A public view returns a borrower's config, and the keeper reads its trigger and target from it. A borrower's limits are their aToken allowance to the helper, `maxSlippageBps`, `triggerHf`, `targetHf` and the NEAR caps.
 
-UNVERIFIED: Uniswap v3 factory addresses on Base, Arbitrum and Base Sepolia; whether Aave's `withdraw(asset, amount, to)` to the pool inside the callback holds on every Pool revision in section 3; the gas `unwind` uses (expected 350k to 600k).
+Built in `evm/src/LeveeUnwind.sol`, measured on forks on 2026-11-08 (details, addresses and sources in `evm/README.md`):
+
+- The config view is `authorizationOf(address) returns (address rescuer, uint16 maxSlippageBps, uint64 triggerHf, uint64 targetHf)`. The above-trigger error is `AboveTrigger(uint256 healthFactor, uint256 triggerHf)`. `Unwound` indexes all three addresses.
+- `maxSlippageBps` is all-in, the pool fee included, as the `max_in` formula implies.
+- After the swap the helper requires health factor to have risen (`NoImprovement`) and to be at most `targetHf × 1.01` plus what a worst-case swap would have spent beyond this one, over the debt left (`OverSold`). A keeper that sizes for `maxSlippageBps` plus the pool fee, as below, therefore always fits. A sale 1.25 times the keeper's amount is refused.
+- `amount` above the debt is capped at the debt, which is a full repay, and a full repay leaves no debt and fails `OverSold`.
+- `withdraw(type(uint256).max)` sends the helper's whole aToken balance to the pool, so no dust stays.
+- Frozen, paused or inactive collateral is refused by the helper. Isolation mode is not checked: Aave 3.7 (Pool revision 11) removed it, and on revision 10 the repay frees the ceiling.
+- Gas with cold storage: 524k to 590k. Set `gas_limit_unwind` to 1,000,000 and confirm Arbitrum's L1 data cost on testnet.
+- On Base use the 0.05% pool (`pool_fee` 500). It was cheaper than the deeper 0.30% pool at the sizes tested.
 
 ### Contract changes
 
@@ -339,6 +351,9 @@ UNVERIFIED: Uniswap v3 factory addresses on Base, Arbitrum and Base Sepolia; whe
 - `Position` gains `collateral: Option<CollateralConfig>`, with `CollateralConfig { asset: String, pool_fee: u32 }`, set at `register` and immutable afterwards. `pool_fee` is one of 100, 500, 3000 or 10000.
 - New method `rescue_from_collateral(id, amount, fees)`, caller keeper, same rules and budget as `rescue`. It fails if the position has no collateral config. `amount` is USDC base units, charged to the same `max_per_rescue` and `max_per_day`. The callback `kind` is `unwind`.
 - `preview_rescue_from_collateral(id, amount, fees)`, a view, as `preview_rescue`.
+- `register` refuses the chain's USDC as collateral. `rescue_requested` gains `kind`, and `position_registered` gains `collateral` (events stay at 1.0.0).
+- `rescue_from_collateral` burns about 2.62 Tgas, inside the same 35 Tgas minimum.
+- `unwind` is required in every `ChainConfig` in v0.2, so a chain is listed only where a helper is deployed.
 - The contract is immutable, so v0.2 is a new deployment with a new account. v0.1 stays live for its records.
 
 ### Keeper
@@ -349,7 +364,7 @@ Repay to reach target `T` when selling collateral with liquidation threshold `L_
 R = (T × D − C × L) / (T − L_c × (1 + s))
 ```
 
-Take `s` from the pool fee plus `max_slippage_bps`, so the target is reached even at the worst allowed price. Cap `R` by the position caps and the USDC debt. Also check that the collateral it implies, `R × (1 + s) / price(collateral)`, fits within the borrower's aToken balance and allowance to the helper. The rescuer needs ETH for gas only.
+Take `s` from the pool fee plus `max_slippage_bps`. That is conservative by the pool fee, because `max_slippage_bps` already includes it, so the keeper lands slightly above target, about 1.61 for a 1.60 target at a 0.15% real cost. The helper's `OverSold` bound allows exactly this. Read the trigger, target and `max_slippage_bps` from the helper's `authorizationOf`, and refuse to start if the keeper's own config disagrees. Cap `R` by the position caps and the USDC debt. Also check that the collateral it implies, `R × (1 + s) / price(collateral)`, plus 2 wei of aToken rounding, fits within the borrower's aToken balance and allowance to the helper. The keeper reads each reserve's own liquidation threshold, so borrowers in eMode are not sized correctly yet. The rescuer needs ETH for gas only.
 
 ### Evidence
 
@@ -366,7 +381,10 @@ Base Sepolia's Aave market uses its own test tokens, and they have no real DEX l
 | Pool price worse than oracle by more than `max_slippage_bps` | `unwind` reverts. Nothing moves. The keeper can retry with a smaller amount |
 | Pool too thin for the amount | Same as above |
 | Allowance or aToken balance too small | `unwind` reverts |
-| Collateral in isolation mode, or frozen or paused on Aave | `unwind` reverts |
+| Collateral frozen, paused or inactive on Aave | `unwind` reverts |
+| The collateral reserve has no withdrawable cash | `unwind` reverts |
+| Health factor below 1 and the repay does not lift it to 1 or above | The aToken transfer fails Aave's check, and `unwind` reverts |
+| The oracle returns a zero price | `unwind` reverts |
 | The borrower revoked | `unwind` reverts |
 | Health factor recovered above the trigger before inclusion | `unwind` reverts with `AboveTrigger`. The keeper records an aborted run |
 
