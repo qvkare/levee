@@ -1,167 +1,160 @@
-# Levee design direction
+# Levee design direction: the order
 
-A borrower's position is a river section on a printed hydrographic sheet, and the water level is their own number. Read this before adding a page or a component. If the work needs something this document does not allow, change the document first and give the reason. `pnpm --filter web design-check` enforces the bans below.
-
-Lentic (`lentic.qvkare.com`) is the sibling this follows, by the owner's decision of 7 Nov 2026: its structure and its discipline, not its code, palette or drawing. No component here is copied from it.
+Every position at an address stands at its true distance from the liquidation wall, and its type size is set by that distance. Read this before adding a page or a component. If the work needs something this document does not allow, change the document first and give the reason. `pnpm --filter web design-check` enforces the bans below.
 
 ## Product world
 
 - **Does:** repays a borrower's Aave debt from a reserve when their health factor crosses a trigger they set. The position stays in the borrower's wallet, and the keeper cannot send funds anywhere else. The public tool reads any address with no wallet and no login.
-- **First ten seconds:** a judge, a screener or a borrower wants to see how close a position is to liquidation, what a rescue does about it, and whether the numbers are real.
-- **Proof data:** the stage of a real position, read from Aave at a stated block, so anyone can repeat the read with a direct call.
-- **Worst moment:** a position over flood stage (health factor below 1.00). The water goes over the levee crest and across the land behind it, and a liquidator takes collateral plus a bonus.
-- **Never confuse:** read and protected (the tool only reads); live and simulated; cross and isolated; a market fall and a fall relative to debt; missing data and zero.
-- **Name:** a levee is the bank that holds a river back from the land behind it.
+- **First ten seconds:** a judge, a screener or a borrower pastes an address and wants to see which position goes first, how far it is, what Levee could do about it, and whether the numbers are real.
+- **What only this product shows:** every position at one address, across Aave on Base, Aave on Arbitrum and Hyperliquid, in one order. No venue shows positions outside itself.
+- **Proof data:** a real public position, read from Aave at a stated block and from Hyperliquid at a stated time, with the exact contract outputs in `/api/risk` so anyone can repeat the read.
+- **Worst moment:** a position inside its last 5%. A liquidator can take collateral plus a bonus once health factor reaches 1.00.
+- **Never confuse:** read and protected (the tool only reads); live, built, example and simulated; cross and isolated; a market fall and a fall relative to debt; a debt Levee can repay and one it cannot; missing data and zero; a percentage move and a likelihood.
 
 ## Neighbours surveyed
 
-Viewport screenshots at 1280 px, 7 Nov 2026.
+Measured with Playwright at 1440 x 900 on 7 Nov 2026: the first screen, its DOM text and its colour areas.
 
-| Site | Signature element | Display type and weight | Colours | Real data |
-|---|---|---|---|---|
-| near.org | Sparkling star field on black | FK Grotesk 400, 80 px | Black, green | None on the first screen |
-| near-intents.org | Centred card over a checker pattern | System sans, 600 | Warm grey, orange | None |
-| aave.com | Phone mockups on a lilac wash | Aave Repro 550, 72 px | White, lilac | Illustrative balance in a mockup |
-| defisaver.com | Gradient headline over a dashboard screenshot | DM Sans 600, 60 px | Near-black, teal to blue gradient | Static screenshot |
-| hyperliquid.xyz | Light serif headline, mint particle field | Teodor 300, 64 px | Pale grey, mint, deep green | None on the first screen |
-| check-for-flooding.service.gov.uk | Height, trend and state as plain large text | GDS Transport 700, 48 px | White, government blue | Live river level |
-| water.noaa.gov | Hydrograph with coloured flood-category bands (the surveyed gauge URL returned 404; known from prior use) | Proxima Nova 400 | Blue with category colours | Live stage |
-| lentic.qvkare.com (sibling) | Staff gauge and flood drill beside a light claim | Barlow 300, 72 px | Survey white, lake green, one flood red | Live reading, marked simulations |
+| Site | Signature element | Largest type | Real data |
+|---|---|---|---|
+| app.aave.com | Plain market table | Inter Variable 30/500 | The whole table is live |
+| app.hyperliquid.xyz | A terminal built on one type size | 20/400, body 12 | Everything is live, 90 figures |
+| fluid.io | One number on the screen | Satoshi 20/400, the number in canvas | One live TVL |
+| morpho.org | Wire curve on a gridded field | FK Grotesk 59/300 | Amounts to the dollar |
+| tsunami.gov | One sentence band that states the state | Arial 24/700 | Live state |
+| grid.iamkate.com | `Demand = Generation + Transfers` | Proza 40/400 | Live grid |
+| gridstatus.io/live | A table-first console | Helvetica Neue 18/600 | Live market |
+| windy.com | The data field is the ground | 67/400 | Everything is live |
 
-Bulwark has no public site at the URL tried. It was reviewed from source.
+Shared baseline: one sans family, a large left or centred headline, real figures made visible. Tools sit at 26 to 90 figures, marketing pages at 0 to 3. The dense ones stay calm by using few sizes.
 
-Shared baseline: light display type, one brand colour, a screenshot or mockup as the proof.
-
-Nobody does: show a rescue. The DeFi sites show pictures of dashboards, and the flood services print real levels as text and leave the river out. Levee runs a real position through the fall, with and without a rescue, on its own river section.
+Nobody does: put every position at an address in one order across venues, or let the data set the type.
 
 ## Concept
 
-The position is a river section. Health factor is stage, liquidation is flood stage, and the reserve is the levee.
-
-Water rises as health falls, because that is what danger looks like on a river. So the staff reads downwards: 1.00 sits at the crest and larger values sit lower.
+The wall is liquidation. Each position hangs from it on a stem as long as its distance, and the number at the end of the stem is set at a size the distance decides. Near means large. The rule makes the crisis by itself: at 1.2% the size would be 2100 px, which no page holds, so inside the last 5% the wall takes the page.
 
 | Product fact | Visual |
 |---|---|
-| Health factor | River stage, read off a staff gauge |
-| Health factor 1.00, or margin ratio 1.00 | Flood stage: the levee crest, and the only magenta line |
-| Approximate fall to liquidation | Freeboard: the height between water and crest |
-| Trigger and target | Dashed lines on the section. The water rises to one and a repay draws it down to the other |
-| Reserve | The levee: a buff bank with protected land behind it |
-| No debt and no positions | Dry channel: water sits on the bed |
-| Health factor below 1.00 | Water over the crest and across the land, with only the levee's outline left |
-| How a rescue works (home page) | The flood drill: a real position walked down in simulated rounds, with and without Levee |
-| What a position would do | Try a position: the same section and the same maths, under the reader's own sliders |
-| What a stolen key can do | A ruled table of attempts, each refused with the contract's rule in words |
-| A source that did not answer | Gauge out of service: hatching, and a sentence naming the source. A blank is never drawn as zero |
-| Isolated Hyperliquid position | Row labelled "Not covered" in words |
+| Liquidation | The wall: a 12 px ink bar at the right edge of the label column, from the header to the foot of the board |
+| Distance to liquidation | The stem's length and the number's position on one axis, 0% at the wall and 100% at the end |
+| How near | Type size, by the rule below |
+| Order | Top to bottom, nearest first. It is percentage move, not likelihood, and every wall says so |
+| Over 100% away | Off the axis, named in one line under it, and in the table |
+| A position Levee cannot reach (non-USDC debt, isolated margin, other DEX collateral) | The number in outline: paper fill, ink stroke |
+| A debt Levee cannot repay | Outline, plus an ink band across the page that says so, and the repay figure struck in the table |
+| Inside the last 5% | The whole page turns crisis red. The number fills the screen, and the rest of the address folds into two lines |
+| A simulation | The word Simulation in bold, at the start of a sentence that says what was changed |
+| A source that did not answer | Named in a line under the wall: missing, not zero |
+| What a rescue does | The simulator: the same position with and without Levee, on the same wall |
+| Time on /proof | The same wall in seconds: each moment of a rescue at its median time from detection |
 
-The staff is spaced by the square root of the fall, as a rating curve is drawn on log paper. The last few percent above flood stage get the most room, which is where a reader needs resolution. Both faces mark the same height: stage on one, approximate fall on the other, as a real staff can carry feet and metres.
+## The rule
 
-Tests:
+`size = 2520 / distance`, in pixels, with distance in percent, held between 15 px and 208 px. 12.1% sets 208 px, 42.9% sets 59 px, 87.2% sets 29 px.
 
-- **Portability: pass.** A river section with a flood line only makes sense for a product that holds water back from a line.
-- **Data: pass.** The water, every reading and every repay come from a position's own terms. The drill states the block it read.
-- **Failure: pass.** Over flood stage has its own drawing, not a red badge. Liquidation shows what was taken.
-- **Squint: pass.** At 20% it is a blue band, a buff bank and one magenta line beside a light claim. No neighbour looks like that, and Lentic's staff stands in green water with no bank.
-- **Explainability: pass.** "Water rises as health falls. At 1.00 it reaches the crest."
+| Width | k | Smallest | Largest |
+|---|---|---|---|
+| Over 1180 px | 2520 | 15 px | 208 px |
+| 761 to 1180 px | 1900 | 15 px | 157 px |
+| 760 px and under | 1120 | 19 px | 92 px |
+
+The rule lives in CSS (`--k`, `--size-min`, `--size-max` in `app/globals.css`), so the page holds with no script. `lib/punto.ts` holds the same numbers for deciding how much label a row has room for, and a test holds the two together. Rows over 120 px get a name and two lines, rows from 44 px a name and one, smaller rows one line in all. Nothing else sets the size of a number on the wall.
 
 ## Palette
 
-One light theme. The hues are those of a nautical chart: white deep water, blue shoal, buff land, black ink, magenta caution.
+| Token | Hex | Role | Contrast on its ground |
+|---|---|---|---|
+| Paper | `#FFFFFF` | Ground | |
+| Ink | `#101A22` | The logo's colour. Type, wall, stems, the band | 17.6:1 |
+| Ink 2 | `#55626D` | Secondary type | 6.3:1 |
+| Rule | `#D9DEE2` | Table rows, the simulator's trigger and target lines | Not for type |
+| Crisis | `#E4231B` | The whole page, inside the last 5%. Nothing else, nowhere else | White on it 4.6:1 |
 
-| Name | Hex | Role |
-|---|---|---|
-| Paper | `#FCFDFC` | Page and air above the water |
-| Ink | `#101A22` | Text, staff marks, waterline, bed, primary buttons |
-| Ink 2 | `#44525D` | Secondary text and table headers |
-| Rule | `#C6CED1` | Hairlines between rows and sections |
-| Water | `#BFDFF0` | Water, and nothing else |
-| Land | `#EFDCA4` | The levee and the land behind it, and nothing else |
-| Flood | `#9C0B66` | Flood stage, and anything at or past it |
-
-Colour means: blue is water, buff is land, and magenta is flood stage. Being healthy is the normal state and is drawn in ink, so a safe position is not painted as a reward. Action stage is ink too, and is told in words and by the water's height.
-
-Measured contrast (WCAG ratio): ink on paper 17.3, ink 2 on paper 7.9, ink on water 12.6, ink 2 on water 5.8, ink on land 13.0, ink 2 on land 5.9, flood on paper 7.8, flood on water 5.7, flood on land 5.8.
+The first screen is one colour. Crisis red is a state of the page, set by `data-crisis="on"` on a container: `html:has([data-crisis="on"])` turns every token, so paper becomes red and ink becomes white. No component carries its own red, and it is never a small accent.
 
 ## Type
 
-- **Barlow:** interface, body and tables at 400 and 500, the claim and section headlines at 300. Its reference is public infrastructure lettering: plates, highway signs, bridges. A levee is public works.
-- **Barlow Condensed:** staff numerals at 500 and large readings at 400, so long figures fit a narrow column.
-- **Old Standard italic, 17 px and up:** names and measures on the water (readings, trigger, target). On charts and USGS sheets, water features are lettered in italic and land in roman. This rule is the reason the face is here, and it appears nowhere else. The wordmark stays roman, because a levee is land.
-- **System monospace:** addresses, hashes and code only.
-- **Figures:** tabular everywhere numbers align or update.
+- **Schibsted Grotesk**, variable, self-hosted (`app/fonts`, OFL). 500 for numbers and headings, 600 for names in the label column and bold, 400 for text. Letter spacing -5% on wall numbers, -4% on headings. Wall numbers have a line height of 0.84.
+- **Atkinson Hyperlegible Mono** for addresses and run ids, because `0/O` and `1/l` cannot be mixed up in a string someone pastes.
+- Tables use tabular figures. Schibsted widens punctuation in that mode, so `<Num>` pulls `, . :` back in. Header cells and the first column stay proportional.
+- Sizes outside the rule: 47 px headline, 33 px section heading, 23 px name, 16.5 px text, 15.5 px labels, 13.5 px axis. No italic.
 
-Fonts are self-hosted from `app/fonts` under the SIL Open Font License, so the build has no font network dependency.
+## Grid
+
+- A 264 px label column, the 12 px wall at its right edge, then the axis. The axis is the width less the label column, a 44 px right margin and 64 px of room for the last number, so 1% is about 10.7 px at 1440.
+- The header row is the same grid: mark and wordmark in the label column, the address box on the axis, links at the right.
+- Under the board, sections run full width with a 3 px ink rule on top and a 33 px heading.
+- 1180 px and under: a 210 px label column, links under the address box. 760 px and under: the wall moves to the left edge, each number sits on its stem with its label under it, and the axis ticks go.
+- No horizontal scroll at 375, 820, 1440 or 1920. A wide table scrolls inside itself.
 
 ## Mark
 
-An L, chosen by the owner on 7 Nov 2026. The tall arm is held water and the short arm is protected land, split by a slanted cut, the bank. It is one colour: ink on paper, pale steel on dark.
-
-It is set left of the wordmark at about 28 px in the header, and it heads the README. `public/levee-mark.svg` is the ink mark. `public/levee-mark-profile.svg` is the pale mark on its dark field, for social and Open Graph images, and it is the only dark thing in the product. The favicon and the Open Graph image are rendered from these two files. If the mark changes, render them again.
-
-Do not recolour it to the palette, add effects, or redraw it inside pages.
-
-## Layout
-
-- **Alignment and grid:** left aligned to one margin, 1180 px at most.
-- **Home page:** a 5:7 split with no stock hero. Left: the claim, one paragraph, the address box and example addresses. Right: the flood drill. Stacked below 960 px. Then, separated by rules: Try a position, How a rescue runs, What each key can do, Limits, Proof. No logo strip, no icon cards, no statistic row, no closing banner.
-- **Section heads:** the headline left and one short lede right, on the same 5:7 grid.
-- **Report page:** the verdict, then the full-bleed section, then one ruled station per venue.
-- **Separation:** 1 px rules and space. The river bed closes each section drawing, so nothing floats. There are no cards.
-- **Tables:** real `table` elements for flood stages, steps, attempts, trust, failures, positions and runs. Below 720 px long rows stack; short tables stay tables.
-- **Radius per role:** inputs and buttons 2 px, like a stamped plate. The state tag 2 px. Everything else 0.
-- Print feel comes from rules and lettering only. No paper grain, folds or textures.
+`public/levee-mark.svg`, in `#101A22` only, 31 px beside the wordmark set in Schibsted Grotesk 600. It stays ink on the red page. It is not recoloured, outlined or animated.
 
 ## Components
 
-- **Buttons:** ink fill for the one primary action, ink outline for secondary ones. Links are underlined text.
-- **Navigation:** one sticky bar, 64 px, opaque paper with a hairline under it (no blur, no shadow). The mark and wordmark, then the sections. Below 980 px the sections move into a Menu of ruled rows, built on `details`, so it works without scripts.
-- **Inputs:** 1 px ink border on paper with a visible label. Errors appear under the field in words, tied with `aria-describedby`.
-- **State tags:** "Live" or "Simulation", a small ruled tag. It is the only badge on the site, because it is a state. Anything not read from a chain carries "Simulation". A reading kept from the build is neither, so it says when it was read and carries no tag.
-- **Status:** stage names in words, not pills. Magenta only for flood stage. A status always has text, not colour alone.
-- **Figures:** a ruled row replaces stat boxes.
-- **Hop strip:** three ruled cells under the drill: Detected, Contract signs, Repay lands. A hairline ring fills in ink as each hop passes. Timings read "not yet measured" until real runs exist. No latency is invented.
-- **Simulator controls:** range inputs with a 1 px ink track and a paper thumb with an ink ring. The value and its unit are printed beside each control, never inside the thumb.
-- **Segmented control:** With Levee and Without Levee, ruled, ink fill on the chosen one.
-- **Empty, loading and error states:** empty is a dry channel with the reason. While a report loads, the page stays put and the button says "Reading the gauges". There is no skeleton, because a report is rendered in full on the server: a reader without scripts, or a screener fetching the URL, gets every number in the first response. A failed source is a gauge out of service, says which source and that the figures are missing, not zero. Nothing that needs a reading (slider, repay sentence, target line) appears without one.
+| Component | Where | Notes |
+|---|---|---|
+| `SiteHeader` | Every page | Mark, wordmark, address box, links. `BareHeader` in the last 5% |
+| `Run`, `Axis` | Wall | A list: each row reads name, lines, distance |
+| `CrisisView` | Last 5% | Lead line, number, two lines for the rest, sentence, three figures |
+| `FiguresTable` | Report | Every figure in the wall's order. At phone width four columns and one line under each row |
+| `Holdings` | Report | Each Aave asset, terms, Hyperliquid pools and notes |
+| `Simulator` | Home | Two rows, a fall slider marked with the keeper and liquidation, the terms, and what follows |
+| `TextTable`, `MeasuredTable` | `/how`, `/proof` | Words stack at phone width, roles kept |
+
+## States
+
+| State | What the page does |
+|---|---|
+| Live | `Read 20:35:05 UTC` under the wall, `Read again`, and a new read every minute while the tab is visible |
+| Built | The home page's HTML. Replaced by a live read on load |
+| Example | The read failed: the earlier reading stays, and the line says `Example, not live` and why |
+| Simulation | `?fall=` on a report, or the simulator. Bold `Simulation.` and what was changed |
+| Dry quote | `/how`, under the refill step: a live NEAR Intents quote asked from the browser. Bold `Dry quote.`, that nothing moves and the reserve layer is not built, then amount out, time estimate, confidential or not, and the quote time. If the route fails it says the route is unavailable |
+| Last 5% | Red page, number fills the screen, two lines for the rest |
+| Cannot repay | Outline, ink band, struck repay, `What Levee does with the first row: nothing.` |
+| Not covered | Outline and `Not covered` beside the number and in the table |
+| Partial | A line naming each source that did not answer |
+| Unavailable, empty, loading | A heading in the axis column and one plain paragraph. The wall still stands |
+| Rate limited | `Too many reads from this connection` and the limit |
+
+The home page shows a third party's address only to show the tool, so it passes over a position inside the last 5% and falls back to the next address or the stored example. The red page is for an address someone asked about, or a simulation.
 
 ## Motion
 
-Nothing fades or slides in on scroll, and no number counts up. What moves is the product's own simulation.
-
-- **The water line** settles at each new reading in 220 ms (`cubic-bezier(0.2, 0, 0, 1)`, transform only).
-- **The flood drill**, the home page's one orchestrated moment. It plays once on load and again on Replay or on a branch button. Below the fold on a phone, load comes before anyone can see it, so it waits until the section is in view. That starts a simulation, and it reveals no content, so the ban on scroll reveals holds. It starts from a real public Aave position read at a stated block, or a marked example if the read fails, then steps the collateral price down in simulated rounds, one reading every 160 ms, for about twelve seconds in all, and stays on the final state. With Levee, the water rises to the trigger, the hop strip fills, the repay lands and the water drops to the target. Without Levee, the same path goes over flood stage and a liquidator takes collateral plus the bonus. Every number comes from the position's terms, and every simulated reading is labelled simulated.
-- **Try a position** follows input directly. The water moves in 220 ms.
-- **The report's target line** slides in 180 ms and stops at the levee, because a water level cannot pass through land.
-- **Reduced motion:** nothing plays. The drill becomes a table of its states, and the sliders jump.
+- On a new reading the numbers slide along the axis and resize, in 220 ms. `--d` is a registered custom property, so position, stem and size follow one value and move as one.
+- The simulator's numbers move the same way as the fall is dragged, and the trigger and target lines follow their inputs.
+- Nothing moves on scroll, nothing counts up, nothing loops. With `prefers-reduced-motion: reduce` the numbers jump.
 
 ## Voice
 
-- **Headlines:** "Repay your Aave debt before a liquidator does." "Water rises as health falls." "No live runs yet."
-- **Error message:** "Base RPC did not answer. Base figures are missing, not zero."
-- **Words we use:** stage, flood stage, action stage, freeboard, repay, reserve, trigger, target, caps, gauge, hop, approximate, simulated, unaudited.
-- **Honesty:** anything not built is tagged "Simulation" and says what exists today. Timings are not invented. Failure conditions are published.
-- **Words we avoid:** protect (unless a rescue actually ran), safe, secure, risk-free, "never", "trustless", "guaranteed", "within seconds" (spec section 8), and the universal list.
+- Plain sentences, full stops, the reader as "you" only where it is their position. Headings are sentences: `The same order, every figure.`
+- Every figure is computed from a read or a file. Numbers on `/proof`, `/how` and the backtest come from `evidence/` and `backtest/results/` at build time.
+- Say what is measured and how much: `13 full runs on Base Sepolia, a testnet, from one position.` A p95 over few runs is called the slowest run.
+- Unaudited, read only, testnet: every page carries them in the footer, and the report says them beside what Levee would do.
+- Example addresses carry neutral labels. Levee says it has no relationship with them.
 
 ## Banned
 
-Universal: section 4 of the portfolio `DESIGN.md`.
+Universal (enforced by `tools/design-check.mjs`): gradients, gradient or clipped text, default indigo and violet, glows, blur panels, default typefaces, em dashes, emoji, arrow glyphs welded to links, tracked all-caps eyebrows, 01/02/03 markers, scroll and attention motion, count-ups, filler copy, placeholder people, round unsourced numbers.
 
 Product-specific:
 
-- Em dashes.
-- Waves, ripples, droplets and water textures. The water is one flat tint with a straight line on top.
-- Green, amber or red health pills. A river has no traffic light.
-- Count-ups and scroll reveals.
-- Fake statistics, invented latency and unsourced figures.
-- Icon cards, rounded cards, dashboard tiles, KPI rows, sparklines and gauge dials. The one instrument is the staff.
-- Sponsor colours: NEAR green, Aave lilac, Hyperliquid mint, Base blue and Arbitrum blue. They would read as an official property.
-- Blue gradients of any kind.
-- A dark theme: a survey sheet is printed, and one theme keeps the colour meanings legible.
-- Hazard stripes. Hatching means a gauge is out of service, nothing else.
-- Illustrated levees that do not move with data, other than the fixed profile of the section itself.
+- Claims no table backs: never, guaranteed, trustless, within seconds.
+- The retired design and its words: river sections, staff gauges, hydrographs, flood drills, water fills, flood stage, action stage, freeboard, crest. Barlow, Old Standard and italic labels. A 5:7 hero with an instrument on the right.
+- Red as an accent: a red line, red text, a red pill or a red dot. Red is the page or nothing.
+- Health pills in green, amber and red, gauge dials, sparklines, KPI tiles, icon cards.
+- A dark theme.
+- Sponsor colours: NEAR green, Aave lilac, Hyperliquid mint, Base blue, Arbitrum blue.
+- Small framed Live or Simulation tags. The word goes at the start of a sentence.
+- A third-party address named or linked as an example of anything negative.
+- Presenting the order as likelihood.
 
 ## Checks
 
-- `pnpm --filter web design-check` passes.
-- Screenshots at 375, 820 and 1280 px with real data, including the drill's flood ending, reduced motion and a gauge out of service.
+- `pnpm --filter web test`, `typecheck` and `design-check` pass.
+- Screenshots at 390 and 1440 of the home page, a report, the last 5%, a debt Levee cannot repay and `/proof`, compared with the mock. Spot checks at 375, 820 and 1920 for overflow.
+- Keyboard: skip link, address box, Read it, links, the fall slider and the term fields, with a visible focus ring on white and on red.
+- Reduced motion: the numbers jump.

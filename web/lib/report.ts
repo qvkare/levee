@@ -1,7 +1,7 @@
-/** Assembles the report from the venue reads. Pure, and safe to import in the browser. */
+/** Assembles the report from the venue reads. Pure, so the browser can import it too. */
 import { repayFigure } from "./aave-model.ts";
 import { CHAINS } from "./chains.ts";
-import { stageForFall } from "./math.ts";
+import { standingForFall } from "./math.ts";
 import { SCHEMA, type AaveMarket, type Failure, type HyperliquidAccount, type Nearest, type RiskReport, type Status } from "./types.ts";
 
 function nearestReading(aave: RiskReport["aave"], hyperliquid: HyperliquidAccount): Nearest | null {
@@ -9,14 +9,14 @@ function nearestReading(aave: RiskReport["aave"], hyperliquid: HyperliquidAccoun
   for (const market of Object.values(aave)) {
     const position = market.position;
     if (position?.dropToLiquidation) {
-      readings.push({ venue: `aave.${market.chain}`, label: `Aave on ${CHAINS[market.chain].label}`, stage: position.stage, fall: position.dropToLiquidation.fraction });
+      readings.push({ venue: `aave.${market.chain}`, label: `Aave on ${CHAINS[market.chain].label}`, standing: position.standing, fall: position.dropToLiquidation.fraction });
     }
   }
   const perp = hyperliquid.positions.find((position) => position.distance !== null);
   if (perp && perp.distance !== null) {
     const fall = Math.max(0, perp.distance);
-    const flooded = hyperliquid.marginRatio !== null && hyperliquid.marginRatio < 1;
-    readings.push({ venue: "hyperliquid", label: `Hyperliquid ${perp.market}`, stage: flooded ? "flood" : stageForFall(fall), fall: flooded ? 0 : fall });
+    const over = hyperliquid.marginRatio !== null && hyperliquid.marginRatio < 1;
+    readings.push({ venue: "hyperliquid", label: `Hyperliquid ${perp.market}`, standing: over ? "liquidatable" : standingForFall(fall), fall: over ? 0 : fall });
   }
   return readings.sort((a, b) => a.fall - b.fall)[0] ?? null;
 }

@@ -101,7 +101,7 @@ test("distance is measured toward liquidation on both sides", () => {
   assert.ok(Math.abs((byMarket.SHORT?.distance as number) - 0.3) < 1e-9);
   assert.equal(account.positions[0]?.market, "LONG"); // nearest first
   assert.equal(account.marginRatio, 10); // 50 / 5
-  assert.equal(account.stage, "watch");
+  assert.equal(account.standing, "open");
 });
 
 test("isolated positions are labelled not covered in every mode", () => {
@@ -150,14 +150,14 @@ test("unified pools are per collateral token and subtract isolated margin", () =
   assert.equal(account.marginRatio, 8);
 });
 
-test("the lowest pool ratio is the account ratio, and below 1.00 is flood stage", () => {
+test("the lowest pool ratio is the account ratio, and below 1.00 is liquidatable", () => {
   const account = buildAccount({
     abstraction: "default",
     spot: null,
     dexes: [dex([raw({})], {}, "50", "5"), dex([raw({ coin: "xyz:GOLD" })], { dex: "xyz" }, "4", "5")],
   });
   assert.equal(account.marginRatio, 0.8);
-  assert.equal(account.stage, "flood");
+  assert.equal(account.standing, "liquidatable");
 });
 
 test("a null liquidation price stays null and sorts last", () => {
@@ -168,6 +168,6 @@ test("a null liquidation price stays null and sorts last", () => {
 
 test("an empty account is dry", () => {
   const account = buildAccount({ abstraction: "default", spot: null, dexes: [dex([])] });
-  assert.equal(account.stage, "dry");
+  assert.equal(account.standing, "none");
   assert.equal(account.marginRatio, null);
 });

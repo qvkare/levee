@@ -6,8 +6,8 @@
  * equity is the spot total less isolated margin, per collateral token, as in Hyperliquid's
  * computeUnifiedAccountRatio. This reproduced liquidationPx at 0.00% on live accounts.
  */
-import { stageForFall } from "./math.ts";
-import type { HyperliquidAccount, HyperliquidMode, MarginPool, PerpPosition, Stage } from "./types.ts";
+import { standingForFall } from "./math.ts";
+import type { HyperliquidAccount, HyperliquidMode, MarginPool, PerpPosition, Standing } from "./types.ts";
 
 export interface RawPosition {
   coin: string;
@@ -45,14 +45,14 @@ export interface HyperliquidInput {
 
 const USDC_TOKEN = 0;
 
-/** What a failed read reports. The stage says nothing, so the page must check the status first. */
+/** What a failed read reports. The standing says nothing, so the page must check the status first. */
 export const NO_ACCOUNT: HyperliquidAccount = {
   status: "unavailable",
   readAt: null,
   mode: "unknown",
   rawMode: null,
   marginRatio: null,
-  stage: "dry",
+  standing: "none",
   pools: [],
   positions: [],
   notes: [],
@@ -157,11 +157,11 @@ const NOTES: Partial<Record<HyperliquidMode, string>> = {
   unknown: "The account mode was not read, so no margin ratio is shown.",
 };
 
-function accountStage(positions: PerpPosition[], marginRatio: number | null): Stage {
-  if (positions.length === 0) return "dry";
-  if (marginRatio !== null && marginRatio < 1) return "flood";
+function accountStanding(positions: PerpPosition[], marginRatio: number | null): Standing {
+  if (positions.length === 0) return "none";
+  if (marginRatio !== null && marginRatio < 1) return "liquidatable";
   const nearest = positions[0]?.distance ?? null;
-  return nearest === null ? "normal" : stageForFall(nearest);
+  return nearest === null ? "open" : standingForFall(nearest);
 }
 
 export function buildAccount({ abstraction, spot, dexes }: HyperliquidInput): HyperliquidAccount {
@@ -187,7 +187,7 @@ export function buildAccount({ abstraction, spot, dexes }: HyperliquidInput): Hy
     mode,
     rawMode: abstraction,
     marginRatio,
-    stage: accountStage(positions, marginRatio),
+    standing: accountStanding(positions, marginRatio),
     pools,
     positions,
     notes,

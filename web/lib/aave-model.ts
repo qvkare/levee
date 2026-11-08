@@ -1,5 +1,5 @@
 /** Turns raw Aave reads into the reported position. No network here. */
-import { approxFall, healthAfterRepay, repayToTarget, stageForHealth } from "./math.ts";
+import { approxFall, healthAfterRepay, repayToTarget, standingForHealth } from "./math.ts";
 import type { AavePosition, DropToLiquidation, RepayFigure, ReserveLine, Reserves } from "./types.ts";
 
 /** getUserAccountData outputs, in contract order. */
@@ -92,7 +92,7 @@ export function buildPosition(account: AccountData, reserves: Reserves | null, u
   };
   return {
     ...base,
-    stage: stageForHealth(health),
+    standing: standingForHealth(health),
     healthFactor: health,
     ltv: Number(ltv) / 1e4,
     dropToLiquidation:

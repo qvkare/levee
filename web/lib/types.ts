@@ -3,13 +3,16 @@
  * `schema` changes only when a field is removed or changes meaning.
  * Amounts are USD at Aave oracle prices or Hyperliquid marks. A null is missing data, not zero.
  */
-export const SCHEMA = "levee.risk.v1";
+export const SCHEMA = "levee.risk.v2";
 
 /** ok: everything answered. partial: some figures are missing. unavailable: no figures at all. */
 export type Status = "ok" | "partial" | "unavailable";
 
-/** Reading bands set by Levee, by distance to liquidation. Only Aave and Hyperliquid liquidate. */
-export type Stage = "dry" | "normal" | "watch" | "action" | "flood";
+/**
+ * Where a position stands against liquidation. none: nothing can be liquidated. open: more than 5%
+ * away. close: inside the last 5%. liquidatable: at or past the line.
+ */
+export type Standing = "none" | "open" | "close" | "liquidatable";
 
 export type ChainKey = "base" | "arbitrum";
 export type Venue = "aave.base" | "aave.arbitrum" | "hyperliquid";
@@ -38,7 +41,7 @@ export interface Reserves {
 /** Approximate fall in collateral value, relative to debt, that brings health factor to 1.00. */
 export interface DropToLiquidation {
   approximate: true;
-  /** 0.18 means about 18%. Zero at or below flood stage. */
+  /** 0.18 means about 18%. Zero at a health factor of 1.00 or below. */
   fraction: number;
   formula: "1 - 1/HF";
   assumption: string;
@@ -60,7 +63,7 @@ export interface RepayFigure {
 }
 
 export interface AavePosition {
-  stage: Stage;
+  standing: Standing;
   /** Null when there is no debt: the contract returns the maximum uint256. */
   healthFactor: number | null;
   collateralUsd: number;
@@ -135,7 +138,7 @@ export interface HyperliquidAccount {
   rawMode: string | null;
   /** Lowest ratio across pools. Null for portfolio accounts and accounts with no cross position. */
   marginRatio: number | null;
-  stage: Stage;
+  standing: Standing;
   pools: MarginPool[];
   /** Nearest to liquidation first. */
   positions: PerpPosition[];
@@ -145,7 +148,7 @@ export interface HyperliquidAccount {
 export interface Nearest {
   venue: Venue;
   label: string;
-  stage: Stage;
+  standing: Standing;
   /** Same scale as dropToLiquidation.fraction and position distance. */
   fall: number;
 }

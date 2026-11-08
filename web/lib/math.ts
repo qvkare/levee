@@ -1,5 +1,5 @@
 /** Spec formulas. Pure, so the page and the API cannot disagree. */
-import type { Stage } from "./types.ts";
+import type { Standing } from "./types.ts";
 
 export interface Debtor {
   collateralUsd: number;
@@ -15,11 +15,6 @@ export const MAX_TARGET = 3;
 /** Spec section 7: for volatile collateral against stable debt, the drop is about 1 - 1/HF. */
 export function approxFall(healthFactor: number): number {
   return healthFactor <= 1 ? 0 : 1 - 1 / healthFactor;
-}
-
-/** The health factor a given fall corresponds to. Used to set marks on the staff. */
-export function healthForFall(fall: number): number {
-  return 1 / (1 - fall);
 }
 
 /** Spec section 5: R = D - (C * L) / T, floored at zero and capped at the debt. */
@@ -98,7 +93,7 @@ export interface RescueResult {
   healthAfter: number | null;
   /** Fall from today that reaches the trigger, and that reaches 1.00. */
   fallToTrigger: number | null;
-  fallToFlood: number | null;
+  fallToLiquidation: number | null;
   /** What a liquidator would do if the position still ends below 1.00. */
   liquidation: Liquidation | null;
 }
@@ -125,33 +120,24 @@ export function simulateRescue(input: RescueInput): RescueResult {
     reserveLeftUsd: reserveUsd - repaidUsd,
     healthAfter,
     fallToTrigger: healthBefore === null ? null : Math.max(0, 1 - trigger / healthBefore),
-    fallToFlood: healthBefore === null ? null : approxFall(healthBefore),
+    fallToLiquidation: healthBefore === null ? null : approxFall(healthBefore),
     liquidation: healthAfter !== null && healthAfter < 1 ? liquidate({ ...fallen, debtUsd: fallen.debtUsd - repaidUsd }, liquidationBonus) : null,
   };
 }
 
-/** Levee's reading bands. The two pairs are the same heights on the staff. */
-export const ACTION_HEALTH = 1.25;
-export const WATCH_HEALTH = 1.5;
-export const ACTION_FALL = 0.2;
-export const WATCH_FALL = 1 / 3;
+/** Inside this distance a position is in its last 5%, and the page says so with all it has. */
+export const LAST_STRETCH = 0.05;
 
-export function stageForFall(fall: number): Stage {
-  if (fall <= 0) return "flood";
-  if (fall < ACTION_FALL) return "action";
-  if (fall < WATCH_FALL) return "watch";
-  return "normal";
+export function standingForFall(fall: number): Standing {
+  if (fall <= 0) return "liquidatable";
+  return fall < LAST_STRETCH ? "close" : "open";
 }
 
-/**
- * Compared on health factor, not on the fall, so the band edges land exactly on 1.25 and 1.50.
- * A health factor of exactly 1.00 is not yet liquidatable, so it is action stage.
- */
-export function stageForHealth(healthFactor: number | null): Stage {
-  if (healthFactor === null) return "dry";
-  if (healthFactor < 1) return "flood";
-  if (healthFactor < ACTION_HEALTH) return "action";
-  return healthFactor < WATCH_HEALTH ? "watch" : "normal";
+/** A health factor of exactly 1.00 is not yet liquidatable, so it reads as close. */
+export function standingForHealth(healthFactor: number | null): Standing {
+  if (healthFactor === null) return "none";
+  if (healthFactor < 1) return "liquidatable";
+  return approxFall(healthFactor) < LAST_STRETCH ? "close" : "open";
 }
 
 export function parseTarget(input: string | null | undefined): number | null {

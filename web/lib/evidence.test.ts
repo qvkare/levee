@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { evmLink, nearLink, parseRun, readRuns } from "./evidence.ts";
+import { evidenceDir, evmLink, latencyTable, nearLink, parseMpcLatency, parseRun, percentile, readMpcLatency, readRehearsal, readRuns, tally } from "./evidence.ts";
 
 const success = {
   run_id: "2026-11-09T10-12-03Z-base-1",
@@ -68,4 +68,72 @@ test("runs are read from the folder, newest first, and a missing folder is empty
   const runs = readRuns(dir);
   assert.deepEqual(runs.map((run) => run.outcome), ["failed", "success"]);
   assert.deepEqual(readRuns(join(dir, "nothing-here")), []);
+});
+
+test("percentiles are nearest rank, so a small sample's p95 is its slowest", () => {
+  assert.equal(percentile([], 0.5), null);
+  assert.equal(percentile([3, 1, 2], 0.5), 2);
+  assert.equal(percentile([4, 1, 3, 2], 0.5), 2);
+  assert.equal(percentile(Array.from({ length: 13 }, (_, i) => i + 1), 0.95), 13);
+  assert.equal(percentile(Array.from({ length: 100 }, (_, i) => i + 1), 0.95), 95);
+});
+
+test("hops are timed from the keeper's timestamps", () => {
+  const { hops, overall } = latencyTable([parseRun("a", JSON.stringify(success))]);
+  assert.deepEqual(hops.map((hop) => hop.p50Ms), [1000, 2000, 500, 1500]);
+  assert.equal(overall.p50Ms, 5000);
+  assert.equal(overall.samples, 1);
+});
+
+test("a run that stopped early counts only for the hops it finished", () => {
+  const aborted = parseRun("b", JSON.stringify({ ...success, outcome: "aborted", timestamps_ms: { detected: 1000, near_included: null } }));
+  const { hops, overall } = latencyTable([aborted]);
+  assert.ok(hops.every((hop) => hop.samples === 0 && hop.p50Ms === null));
+  assert.equal(overall.samples, 0);
+});
+
+test("the tally counts what is in the folder", () => {
+  const runs = [parseRun("a", JSON.stringify({ ...success, network: "testnet", chain_id: 84532 })), parseRun("b", JSON.stringify({ ...success, network: "testnet", chain_id: 84532, outcome: "aborted" }))];
+  assert.deepEqual(tally(runs), { total: 2, success: 1, failed: 0, aborted: 1, unreadable: 0, chains: ["Base Sepolia"], positions: 1, testnetOnly: true });
+  assert.equal(tally([parseRun("a", JSON.stringify(success))]).testnetOnly, false);
+});
+
+test("signing figures are worked out from the samples", () => {
+  const raw = JSON.stringify({ network: "testnet", mpc: "m", measured_at: "t", note: "n", p50_ms: 1, samples: [{ run: 0, outcome: "signed", elapsed_ms: 6000 }, { run: 1, outcome: "signed", elapsed_ms: 7000 }, { run: 2, outcome: "failed", elapsed_ms: 9000 }] });
+  const parsed = parseMpcLatency(raw);
+  assert.equal(parsed?.runs, 3);
+  assert.equal(parsed?.signed, 2);
+  assert.equal(parsed?.failed, 1);
+  assert.equal(parsed?.p50Ms, 6000);
+  assert.equal(parsed?.slowestMs, 7000);
+  assert.equal(parseMpcLatency("nope"), null);
+});
+
+test("the repository's records add up", () => {
+  const runs = readRuns(evidenceDir());
+  const counts = tally(runs);
+  assert.equal(counts.total, counts.success + counts.failed + counts.aborted + counts.unreadable);
+  assert.ok(counts.total > 0);
+  const { overall } = latencyTable(runs);
+  assert.equal(overall.samples, counts.success);
+  assert.ok((overall.p50Ms as number) <= (overall.p95Ms as number));
+});
+
+test("the measured signing figures match the file's own summary", () => {
+  const latency = readMpcLatency();
+  const file = JSON.parse(readFileSync(`${evidenceDir()}/../mpc-latency-testnet.json`, "utf8")) as { runs: number; signed: number; p50_ms: number; p95_ms: number; max_ms: number };
+  assert.equal(latency?.runs, file.runs);
+  assert.equal(latency?.signed, file.signed);
+  assert.equal(latency?.p50Ms, file.p50_ms);
+  assert.equal(latency?.p95Ms, file.p95_ms);
+  assert.equal(latency?.slowestMs, file.max_ms);
+});
+
+test("the rehearsal is only read if the file says it was a fork", () => {
+  const rehearsal = readRehearsal();
+  assert.match(rehearsal?.label as string, /fork/);
+  const dir = mkdtempSync(join(tmpdir(), "levee-rehearsal-"));
+  mkdirSync(join(dir, "rehearsal"));
+  writeFileSync(join(dir, "rehearsal", "base-sepolia-fork-rescue.json"), JSON.stringify({ ...success, label: "A live run" }));
+  assert.equal(readRehearsal(dir), null);
 });
