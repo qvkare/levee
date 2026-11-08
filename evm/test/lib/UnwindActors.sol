@@ -66,6 +66,15 @@ contract PoolMinter {
     }
 }
 
+/// Stands in for Aave's PriceOracleSentinel, which none of the forks has set.
+contract MockSentinel {
+    bool public isLiquidationAllowed = true;
+
+    function set(bool allowed) external {
+        isLiquidationAllowed = allowed;
+    }
+}
+
 /// Calls the helper's swap callback directly, as a fake pool would.
 contract FakePool {
     function callBack(IUniswapV3SwapCallback target, int256 amount0Delta, int256 amount1Delta, bytes calldata data)
