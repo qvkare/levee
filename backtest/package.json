@@ -9,6 +9,7 @@
     "backtest": "tsx src/run.ts",
     "fetch-data": "tsx src/fetch/all.ts",
     "derive": "tsx src/derive.ts",
+    "derive-portfolio": "tsx src/portfolio/derive.ts",
     "test": "node --import tsx --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
