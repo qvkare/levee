@@ -39,7 +39,7 @@ export function SiteHeader() {
           ))}
         </ul>
       </nav>
-      <p className="status">Testnet · unaudited</p>
+      <p className="status">Testnet</p>
     </header>
   );
 }

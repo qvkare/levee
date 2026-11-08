@@ -66,13 +66,13 @@ Two actors have a board and no lane. `LeveeUnwind` is ink, badge U, because it i
 | `--amber` | `#F2A100` | Below the trigger and the last 5%. Nothing else | Ink on it 8.3:1 |
 | `--amber-soft` | `#FFF0C7` | The band under the trigger | Its label in `--amber-ink`, 6.1:1 |
 
-Amber is a state, never decoration. It marks: the replay's "Below trigger" sign and the first station, the band under the trigger on a distance line, and a reading inside the last 5%. "Testnet · unaudited" is an ink outline, and "Worst case" an ink tag. The earlier "Being re-measured" tag is retired: the collateral backtest is the measured answer, and the reserve backtest it replaced is shown as the second mode's result, in grey.
+Amber is a state, never decoration. It marks: the replay's "Below trigger" sign and the first station, the band under the trigger on a distance line, and a reading inside the last 5%. "Testnet" is an ink outline, and "Worst case" an ink tag. The earlier "Being re-measured" tag is retired: the collateral backtest is the measured answer, and the reserve backtest it replaced is shown as the second mode's result, in grey.
 
 ## Type
 
 - **Overpass**, variable, 400 to 800, self-hosted in `app/fonts` (OFL). Highway-sign lettering, wide and sturdy at small sizes. 800 for headings, names and figures, 700 for labels, 600 for small type, 400 for text. Headings track at -3%.
 - **Overpass Mono** for addresses, transaction hashes, times on the map and the terminus, because `0/O` and `1/l` must not be mixed up.
-- The shipped Overpass has one fix: its GDEF table marked the middle dot and the spacing accents as combining marks, so browsers drew "Testnet ·unaudited". They are base glyphs now. Nothing else in the font changed.
+- The shipped Overpass has one fix: its GDEF table marked the middle dot and the spacing accents as combining marks, so browsers glued a middle dot to the word after it. They are base glyphs now. Nothing else in the font changed.
 - Figures are tabular everywhere (`tnum`). Overpass sits high in its line box, so buttons and tags add 2 to 3 px of top padding.
 - Drawings size their label boxes from `lib/text-width.ts`, the font's own advance widths, so a sign fits its text on the server too.
 
@@ -106,7 +106,7 @@ The terminus call is long, so it breaks between its arguments and never inside o
 
 | Component | Where | Notes |
 |---|---|---|
-| `SiteHeader`, `SiteFooter` | Every page | Brand, five links, "Testnet · unaudited". The footer says not to use it with funds you can't lose, and links the v0.2 contract and the helper |
+| `SiteHeader`, `SiteFooter` | Every page | Brand, five links, "Testnet". The footer says nothing is on any mainnet, and links the v0.2 contract and the helper |
 | `AddressForm` | Home, `/a` | The blue plate. A GET form that works without scripts, with the shape checked in place |
 | `RescueMap` | Home | The replay. Server-drawn at 1328 and 350 px, redrawn at the real width. Ends at the helper's square |
 | `StopStrip`, `StopLine`, `Terminus` | Home, `/how` | Seven stops: the borrower's terms, then the six of every rescue, the helper's on the P lane. The terminus is `LeveeUnwind.unwind` with its four checks |
@@ -156,7 +156,7 @@ The home page shows a third party's address only to show the tool, so it passes 
 - Headings are names, with no full stop: "Stop by stop", "Who can do what".
 - No "X, not Y" turns. Say the thing and stop.
 - No hype words. See the filler list below.
-- "Testnet · unaudited" in the header, and the footer says not to use it with funds you can't lose. Once or twice, not in every section.
+- "Testnet" in the header, and the footer says nothing is on any mainnet. Once or twice, not in every section.
 - Labels say testnet, example, simulation, planned and backtest where those apply.
 - A testnet sale price always says that the team seeded the pool at Aave's oracle price, so it is no measure of slippage.
 - A backtest net figure always stands with its caveats: positions already below the trigger, pools that lagged the oracle, gas on reverted unwinds, and one sale alone in its block with nothing annualised.

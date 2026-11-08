@@ -211,7 +211,7 @@ export default function ProofPage() {
     <main id="main">
       <div className="page-head">
         <h1>Every run, every figure</h1>
-        <p className="lede">{counts.total === 0 ? "No live runs yet. Each run will appear here with its transactions, the failed ones included." : `${intro()} Levee is unaudited. Failed and aborted runs stay on this page.`}</p>
+        <p className="lede">{counts.total === 0 ? "No live runs yet. Each run will appear here with its transactions, the failed ones included." : `${intro()} Failed and aborted runs stay on this page.`}</p>
       </div>
 
       <Timetable id="timetable" replayAbove={false} next={{ href: "/how", title: "How a rescue runs", body: "The line stop by stop, who can do what, and when it fails" }} />
@@ -333,7 +333,6 @@ export default function ProofPage() {
           {collateralRuns > 0 && <li>{SEEDED}</li>}
           <li>The replay on the home page draws the fall before detection. No record times it, and the page says so.</li>
           <li>The backtest is a simulation. It assumes the keeper, RPCs, NEAR and the MPC network all worked through the worst minutes, and that each sale filled at its quote, alone in its block.</li>
-          <li>Levee is unaudited. Don’t use it with funds you can’t lose.</li>
         </ul>
       </section>
     </main>

@@ -6,7 +6,7 @@ export function SiteFooter() {
   return (
     <footer className="site-foot">
       <Brand className="brand brand-plate" />
-      <p>Levee repays Aave debt from the borrower’s own collateral. It is unaudited, and it runs on testnet only: nothing is deployed on any mainnet. Don’t use it with funds you can’t lose. This site reads public data, holds no funds and asks for no wallet. A NEAR hackathon entry.</p>
+      <p>Levee repays Aave debt from the borrower’s own collateral. It runs on testnet only: nothing is deployed on any mainnet. This site reads public data, holds no funds and asks for no wallet. A NEAR hackathon entry.</p>
       <nav aria-label="Footer">
         <ul>
           <li>

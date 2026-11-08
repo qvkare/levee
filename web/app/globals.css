@@ -270,7 +270,7 @@ main {
   display: none;
 }
 
-/* Testnet and unaudited, said once at the top of every page */
+/* Testnet, said once at the top of every page */
 .status {
   padding: 6px 12px 4px;
   border: 2px solid var(--ink);

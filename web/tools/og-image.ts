@@ -94,8 +94,8 @@ svg text{font-family:Overpass,sans-serif}.b{font-weight:800}.m{font-family:"Over
   <rect y="268" width="1200" height="362" fill="${C.tint}"/>
   <g transform="translate(40 38) scale(0.72)"><polygon points="9,15 27,6 27,39.5 9,57.5" fill="${C.ink}"/><polygon points="28.7,41.2 56,41.2 56,49.7 35.8,59.2 10.7,59.2" fill="${C.ink}"/></g>
   <text x="92" y="76" class="b" font-size="32">Levee</text>
-  <rect x="938" y="44" width="222" height="40" rx="7" fill="#fff" stroke="${C.ink}" stroke-width="2.5"/>
-  <text x="1049" y="71" text-anchor="middle" font-size="19" font-weight="700">Testnet · unaudited</text>
+  <rect x="1056" y="44" width="104" height="40" rx="7" fill="#fff" stroke="${C.ink}" stroke-width="2.5"/>
+  <text x="1108" y="71" text-anchor="middle" font-size="19" font-weight="700">Testnet</text>
   <text x="40" y="160" class="b" font-size="46" letter-spacing="-1.4">Below your trigger, Levee repays</text>
   <text x="40" y="214" class="b" font-size="46" letter-spacing="-1.4">your Aave debt from your collateral</text>
   <text x="1160" y="182" text-anchor="end" class="b" font-size="96" letter-spacing="-3">${p50} s</text>

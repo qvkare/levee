@@ -101,7 +101,6 @@ const PHASE_COLUMNS: Column<Phase>[] = [
 ];
 
 const LIMITS = [
-  "Unaudited. Don’t use it with funds you can’t lose.",
   "A liquidator can win the race, a pool can be too thin for the sale, and the MPC network can be down.",
   "The NEAR contract cannot read the lending chain, so an off-chain keeper reads the trigger, and the helper checks it again on chain. If the keeper stops, nothing fires.",
   "The MPC network is trusted with custody of the rescuer key.",

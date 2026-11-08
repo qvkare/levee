@@ -4,7 +4,7 @@
 
 The Levee site and public risk tool. Levee repays Aave debt from the borrower's own collateral when health factor falls below their trigger, and the site shows how, with every testnet run and the backtest. Paste any address and read how close it is to liquidation on Aave (Base and Arbitrum) and Hyperliquid. No wallet and no login.
 
-It runs on Cloudflare Workers at `levee.qvkare.com`. Unaudited. It reads public data and holds no funds.
+It runs on Cloudflare Workers at `levee.qvkare.com`. It reads public data and holds no funds.
 
 Spec: `../docs/SPEC.md`. Design direction: `DESIGN.md`. Read it before changing the interface.
 
