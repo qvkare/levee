@@ -1,45 +1,45 @@
-import Link from "next/link";
-import type { ReactNode } from "react";
-import { AddressForm } from "./address-form.tsx";
+"use client";
 
-export function Brand() {
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const LINKS = [
+  { href: "/how", label: "How a rescue runs", short: "How it runs", page: "/how" },
+  { href: "/how#who", label: "Who can do what", short: "Who can do what", page: null },
+  { href: "/proof", label: "Proof", short: "Proof", page: "/proof" },
+  { href: "/proof#backtest", label: "Backtest", short: "Backtest", page: null },
+  { href: "/#read", label: "Read an address", short: "Read an address", page: null },
+];
+
+export function Brand({ className = "brand" }: { className?: string }) {
   return (
-    <Link href="/" className="brand" prefetch={false}>
+    <Link href="/" className={className} prefetch={false}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/levee-mark.svg" width={31} height={31} alt="" />
+      <img src="/levee-mark.svg" width={30} height={30} alt="" />
       Levee
     </Link>
   );
 }
 
-/** The header row: mark and wordmark in the label column, then the address box, as in a search engine. */
-export function SiteHeader({ shown, value, error, here }: { shown?: string; value?: string; error?: string | null; here?: "how" | "proof" }) {
+/** The header on every page: the mark, the pages, and what state Levee is in. */
+export function SiteHeader() {
+  const path = usePathname();
   return (
-    <header className="head">
+    <header className="site-head">
       <Brand />
-      <AddressForm shown={shown} value={value} error={error} />
-      <nav className="links" aria-label="Main">
-        <Link href="/how" prefetch={false} aria-current={here === "how" ? "page" : undefined}>
-          <span className="wide">How a rescue runs</span>
-          <span className="narrow">How</span>
-        </Link>
-        <Link href="/how#limits" prefetch={false} className="hide-narrow">
-          Limits
-        </Link>
-        <Link href="/proof" prefetch={false} aria-current={here === "proof" ? "page" : undefined}>
-          Proof
-        </Link>
+      <nav className="site-nav" aria-label="Main">
+        <ul>
+          {LINKS.map((link) => (
+            <li key={link.href}>
+              <Link href={link.href} prefetch={false} aria-current={link.page !== null && path === link.page ? "page" : undefined}>
+                <span className="wide">{link.label}</span>
+                <span className="narrow">{link.short}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
       </nav>
-    </header>
-  );
-}
-
-/** In the last 5% the header gives way: the mark, and one way out. */
-export function BareHeader({ children }: { children: ReactNode }) {
-  return (
-    <header className="head head-bare">
-      <Brand />
-      <div className="links">{children}</div>
+      <p className="status">Testnet · unaudited</p>
     </header>
   );
 }

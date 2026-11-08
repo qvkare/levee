@@ -26,6 +26,11 @@ export function percent(fraction: number): string {
   return `${floorTo(fraction * 100, 1)}%`;
 }
 
+/** A count out of a total, in percent to one decimal and rounded, as the backtest's own summary prints it. */
+export function countShare(count: number, total: number): string {
+  return ((count / total) * 100).toFixed(1);
+}
+
 /** Share of a total, for thresholds, rounded to the nearest tenth. */
 export function share(fraction: number): string {
   return `${(fraction * 100).toFixed(1)}%`;
@@ -73,6 +78,12 @@ export function readDate(iso: string | number): string {
   const date = new Date(iso);
   const time = date.toISOString().slice(11, 16);
   return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}, ${time} UTC`;
+}
+
+/** 7 Nov 2026, 19:27:38 UTC. */
+export function readSecond(iso: string | number): string {
+  const date = new Date(iso);
+  return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}, ${date.toISOString().slice(11, 19)} UTC`;
 }
 
 /** 19:22:40 UTC. */

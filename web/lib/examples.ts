@@ -10,5 +10,5 @@ export const EXAMPLES = [
   { label: "A unified Hyperliquid account with isolated positions", address: "0x585f4fBe2d2A889c286fa71FB81D01f30773F4B1" },
 ] as const;
 
-/** The home page reads these, in order. Each has more than one position, so the wall has an order to show. */
+/** The home page reads these, in order. Each has more than one position, so the line has an order to show. */
 export const HOME_ADDRESSES = [EXAMPLES[0].address, EXAMPLES[1].address];

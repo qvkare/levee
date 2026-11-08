@@ -1,11 +1,11 @@
 /**
- * The wall: every position at an address, at its distance from liquidation, nearest first. The
- * rows, the table and the crisis state all read this one model, so they cannot disagree. Pure.
+ * The distance line: every position at an address, placed by how far it is from liquidation,
+ * nearest first. The drawing, the figures table and the last-5% state all read this one model, so
+ * they cannot disagree. Pure.
  */
 import { CHAINS } from "./chains.ts";
 import { clock, countWord, dollars, integer, joined, percent, plainShare, ratio, usd } from "./format.ts";
-import { LAST_STRETCH } from "./math.ts";
-import { tierFor, type Tier } from "./punto.ts";
+import { LAST_STRETCH, approxFall } from "./math.ts";
 import type { AaveMarket, AavePosition, ChainKey, HyperliquidAccount, PerpPosition, ReserveLine, RiskReport, Venue } from "./types.ts";
 
 /**
@@ -38,41 +38,28 @@ export interface PerpEntry extends EntryBase {
   perp: PerpPosition;
 }
 
-export type WallEntry = AaveEntry | PerpEntry;
+export type LineEntry = AaveEntry | PerpEntry;
 
-/** home: what a stranger needs. report: what the owner of the address needs. */
-export type WallView = "home" | "report";
-
-/** One row on the wall, in the same words on the server and in the browser. */
-export interface RowModel {
-  id: string;
-  name: string;
-  /** Beside the number. The second shows only on a large row. */
-  line: string;
-  line2: string | null;
-  /** Takes the place of both on a small row. */
-  short: string;
-  percent: string;
-  /** Distance in percent, for the axis. Held just above zero, so the rule has something to divide by. */
-  d: number;
-  tier: Tier;
-  /** Levee cannot reach it. The number is drawn in outline. */
-  hollow: boolean;
-}
-
-export interface Wall {
+export interface DistanceLine {
   /** Everything at the address, nearest first. */
-  entries: WallEntry[];
-  /** On the axis: 100% or nearer. */
-  onAxis: WallEntry[];
-  /** Further than the axis goes. */
-  beyond: WallEntry[];
+  entries: LineEntry[];
+  /** With a distance to place. */
+  placed: LineEntry[];
   /** No distance to report. */
-  unplaced: WallEntry[];
-  /** Sources that gave no answer. Their figures are missing, not zero. */
+  unplaced: LineEntry[];
+  /** Sources that gave no answer. Their figures are missing, and nothing counts them as zero. */
   unread: string[];
   /** The nearest position, when it is inside the last 5%. */
-  crisis: WallEntry | null;
+  crisis: LineEntry | null;
+}
+
+/** The line runs on a square-root scale to 250%. Anything further sits past its end, marked off scale. */
+export const SCALE_MAX = 2.5;
+export const SCALE_TICKS = [0.1, 0.25, 0.5, 1, 1.5, 2, 2.5];
+
+/** Where a distance sits along the line, from 0 at liquidation to 1 at the end of the scale. */
+export function scaleAt(distance: number): number {
+  return Math.sqrt(Math.min(Math.max(distance, 0), SCALE_MAX) / SCALE_MAX);
 }
 
 const sum = (lines: ReserveLine[]) => lines.reduce((total, line) => total + line.usd, 0);
@@ -127,11 +114,11 @@ function perpEntry(perp: PerpPosition, account: HyperliquidAccount): PerpEntry {
   };
 }
 
-function order(a: WallEntry, b: WallEntry): number {
+function order(a: LineEntry, b: LineEntry): number {
   return (a.distance ?? Infinity) - (b.distance ?? Infinity);
 }
 
-export function buildWall(report: RiskReport): Wall {
+export function buildLine(report: RiskReport): DistanceLine {
   const markets = [report.aave.base, report.aave.arbitrum];
   const entries = [
     ...markets.flatMap((market) => (market.position ? [aaveEntry(market, market.position)] : [])),
@@ -144,101 +131,92 @@ export function buildWall(report: RiskReport): Wall {
   const first = entries[0];
   return {
     entries,
-    onAxis: entries.filter((entry) => entry.distance !== null && entry.distance <= 1),
-    beyond: entries.filter((entry) => entry.distance !== null && entry.distance > 1),
+    placed: entries.filter((entry) => entry.distance !== null),
     unplaced: entries.filter((entry) => entry.distance === null),
     unread,
     crisis: first && first.distance !== null && first.distance < LAST_STRETCH ? first : null,
   };
 }
 
-/** How to read the number. It is a market fall only when the collateral is volatile and the debt is not. */
-function moveLine(position: AavePosition): string {
-  const asset = collateralAsset(position) ?? "Collateral";
+/** Levee can act on it now: Aave with USDC debt. Drawn in the position's blue. */
+export const repayable = (entry: LineEntry) => entry.reach === "repays" || entry.reach === "part";
+
+/** One point on the line, in the same words on the server and in the browser. */
+export interface LinePoint {
+  id: string;
+  name: string;
+  /** Fraction to liquidation. */
+  distance: number;
+  percent: string;
+  /** Health factor, or leverage and margin. */
+  detail: string;
+  repayable: boolean;
+  /** Past the end of the scale. */
+  beyond: boolean;
+}
+
+function detailOf(entry: LineEntry): string {
+  if (entry.kind === "aave") return `HF ${ratio(entry.position.healthFactor ?? 0)}`;
+  return entry.perp.margin === "isolated" ? `${entry.perp.leverage}x isolated` : `${entry.perp.leverage}x`;
+}
+
+export function pointsFor(line: DistanceLine): LinePoint[] {
+  return line.placed.map((entry) => {
+    const distance = entry.distance ?? 0;
+    return { id: entry.id, name: entry.name, distance, percent: percent(distance), detail: detailOf(entry), repayable: repayable(entry), beyond: distance > SCALE_MAX };
+  });
+}
+
+/** The distance a trigger stands at, for volatile collateral against stable debt. */
+export const triggerDistance = (trigger: number) => approxFall(trigger);
+
+/** What a distance means for this position, in a few words. */
+export function meaningOf(entry: LineEntry): string {
+  if (entry.kind === "perp") return entry.perp.side === "long" ? "A fall in price" : "A rise in price";
+  const { position } = entry;
   const reserves = position.reserves;
   const drop = position.dropToLiquidation;
-  if (!reserves || !drop) return `${asset} against the debt`;
-  if (drop.assumptionHolds !== false) return `${asset} can fall this far`;
-  if (reserves.debt.some((line) => !line.stable)) return "Against the debt, not a market fall";
-  return reserves.collateral.every((line) => line.stable) ? "The size of a depeg, not a market fall" : "The market fall needed is larger";
+  const asset = collateralAsset(position) ?? "collateral";
+  if (!reserves || !drop || drop.assumptionHolds !== false) return `A fall in ${asset} against the debt`;
+  if (reserves.debt.some((line) => !line.stable)) return "One asset moving against the other";
+  return reserves.collateral.every((line) => line.stable) ? "The size of a depeg" : "Needs a larger market fall";
 }
 
-function repayLine(position: AavePosition, reach: Reach): string {
-  const repay = position.repay;
-  if (!repay) return "No debt";
-  if (reach === "none") return "Levee cannot repay this";
-  const target = repay.target.toFixed(2);
-  if (repay.usd === 0) return `Above ${target}, no repay needed`;
-  if (reach === "part") return `Levee can repay ${usd(repay.usdcDebtUsd ?? 0)} of ${usd(repay.usd)}`;
-  return `Repay ${usd(repay.usd)} to reach ${target}`;
-}
-
-function aaveLines(entry: AaveEntry, view: WallView): Pick<RowModel, "line" | "line2" | "short"> {
-  const { position, reach } = entry;
-  const health = `Health factor ${ratio(position.healthFactor ?? 0)}`;
-  const first = view === "report" || reach === "none" ? repayLine(position, reach) : health;
-  return { line: first, line2: moveLine(position), short: reach === "none" ? "Levee cannot repay this" : health };
-}
-
-function perpLines(entry: PerpEntry, view: WallView): Pick<RowModel, "line" | "line2" | "short"> {
-  const { perp, reach } = entry;
-  const direction = perp.side === "long" ? "price fall" : "price rise";
-  const uncovered = reach === "uncovered";
-  const line = uncovered ? `Not covered, ${perp.margin === "isolated" ? "isolated margin" : "Hyperliquid"}` : view === "report" && perp.liquidationPrice !== null ? `Liquidation price ${dollars(perp.liquidationPrice)}` : `Hyperliquid, ${direction}`;
-  return { line, line2: uncovered || view === "report" ? `Hyperliquid, ${direction}` : null, short: uncovered ? "Not covered" : "Hyperliquid" };
-}
-
-export function rowFor(entry: WallEntry, view: WallView): RowModel {
-  const distance = entry.distance ?? 0;
-  const d = Math.max(0.01, Math.round(distance * 10_000) / 100);
-  return {
-    id: entry.id,
-    name: entry.name,
-    ...(entry.kind === "aave" ? aaveLines(entry, view) : perpLines(entry, view)),
-    percent: percent(distance),
-    d,
-    tier: tierFor(d),
-    hollow: entry.reach === "none" || entry.reach === "uncovered",
-  };
-}
-
-/** A short name, for a sentence that lists positions. */
-function shortName(entry: WallEntry): string {
+/** Short names, for a sentence that lists positions. */
+function shortName(entry: LineEntry): string {
   return entry.kind === "perp" ? entry.perp.market : entry.name;
 }
 
-const moreLine = (count: number) => `${countWord(count)} more ${count === 1 ? "is" : "are"} over 100% away`;
-
-/** What is not on the axis, in one sentence, or null when everything is. */
-export function offAxisLine(wall: Wall, view: WallView): string | null {
+/** What has no place on the line, in one sentence, or null when everything has one. */
+export function unplacedLine(line: DistanceLine): string | null {
   const parts: string[] = [];
-  if (wall.beyond.length) parts.push(view === "report" ? `${moreLine(wall.beyond.length)}, listed below.` : `${moreLine(wall.beyond.length)}, off this page: ${joined(wall.beyond.map(shortName))}.`);
-  const reported = wall.unplaced.filter((entry) => entry.kind === "perp");
+  const reported = line.unplaced.filter((entry) => entry.kind === "perp");
   if (reported.length) parts.push(`Hyperliquid reports no liquidation price for ${joined(reported.map(shortName))}.`);
-  const free = wall.unplaced.filter((entry) => entry.kind === "aave");
-  if (free.length) parts.push(`${joined(free.map(shortName))} ${free.length === 1 ? "has" : "have"} no debt.`);
+  const free = line.unplaced.filter((entry) => entry.kind === "aave");
+  if (free.length) parts.push(`${joined(free.map(shortName))} ${free.length === 1 ? "has" : "have"} collateral and no debt.`);
   return parts.length ? parts.join(" ") : null;
 }
 
-/** Sources that did not answer, or null when all did. Missing is not zero. */
-export function unreadLine(wall: Wall): string | null {
-  if (wall.unread.length === 0) return null;
-  return `Not read: ${joined(wall.unread)}. ${wall.unread.length === 1 ? "Its figures are" : "Their figures are"} missing, not zero.`;
+/** Sources that did not answer, or null when all did. */
+export function unreadLine(line: DistanceLine): string | null {
+  if (line.unread.length === 0) return null;
+  return `Not read: ${joined(line.unread)}. ${line.unread.length === 1 ? "Its positions are" : "Their positions are"} missing from this reading, and nothing counts them as zero.`;
 }
 
 /** Everyone but the nearest, in two lines. */
-export function restLines(entries: WallEntry[]): [string, string] {
+export function restLines(entries: LineEntry[]): [string, string] {
   const [next, ...others] = entries;
   if (!next) return ["No other position at this address.", ""];
   const place = next.distance === null ? "no distance reported" : percent(next.distance);
-  const tail = others.length === 0 ? "Nothing behind it" : `${countWord(others.length)} more behind it`;
-  return [`Next: ${shortName(next)}, ${place}`, tail];
+  const tail = others.length === 0 ? "Nothing behind it." : `${countWord(others.length)} more behind it.`;
+  return [`Next: ${shortName(next)}, ${place}.`, tail];
 }
 
 export interface Figures {
   id: string;
   position: string;
   distance: string;
+  meaning: string;
   health: string;
   /** Margin mode and the like: the first thing to go at narrow widths. */
   healthNote: string;
@@ -263,6 +241,7 @@ function aaveFigures(entry: AaveEntry): Figures {
     id: entry.id,
     position: entry.name,
     distance: entry.distance === null ? "No debt" : percent(entry.distance),
+    meaning: entry.distance === null ? "" : meaningOf(entry),
     health: position.healthFactor === null ? "No debt" : ratio(position.healthFactor),
     healthNote: "",
     size: position.debtUsd > 0 ? `${usd(position.debtUsd)} debt` : "No debt",
@@ -284,6 +263,7 @@ function perpFigures(entry: PerpEntry, readAt: number | null): Figures {
     id: entry.id,
     position: perp.market,
     distance: entry.distance === null ? "None reported" : percent(entry.distance),
+    meaning: entry.distance === null ? "" : meaningOf(entry),
     health: `${perp.side === "long" ? "Long" : "Short"}, ${perp.leverage}x`,
     healthNote: ` ${perp.margin}`,
     size: usd(perp.notionalUsd),
@@ -291,7 +271,7 @@ function perpFigures(entry: PerpEntry, readAt: number | null): Figures {
     backingQuiet: perp.margin === "cross",
     liquidatesAt: perp.liquidationPrice === null ? "none reported" : dollars(perp.liquidationPrice),
     liquidatesNote: "",
-    repay: "not applicable",
+    repay: "does not apply",
     repayStruck: false,
     repayQuiet: true,
     levee: entry.reachLabel,
@@ -299,12 +279,14 @@ function perpFigures(entry: PerpEntry, readAt: number | null): Figures {
   };
 }
 
-export function figuresFor(wall: Wall, report: RiskReport): Figures[] {
-  return wall.entries.map((entry) => (entry.kind === "aave" ? aaveFigures(entry) : perpFigures(entry, report.hyperliquid.readAt)));
+export function figuresFor(line: DistanceLine, report: RiskReport): Figures[] {
+  return line.entries.map((entry) => (entry.kind === "aave" ? aaveFigures(entry) : perpFigures(entry, report.hyperliquid.readAt)));
 }
 
 export interface CrisisModel {
+  name: string;
   percent: string;
+  /** Levee cannot reach it. */
   hollow: boolean;
   rest: [string, string];
   /** What this is, and what is doing nothing about it. */
@@ -343,11 +325,12 @@ function perpCrisis(entry: PerpEntry): Pick<CrisisModel, "sentence" | "figures">
   };
 }
 
-export function crisisFor(wall: Wall): CrisisModel | null {
-  const entry = wall.crisis;
+export function crisisFor(line: DistanceLine): CrisisModel | null {
+  const entry = line.crisis;
   if (!entry) return null;
-  const others = wall.entries.filter((other) => other !== entry);
+  const others = line.entries.filter((other) => other !== entry);
   return {
+    name: entry.name,
     percent: percent(entry.distance ?? 0),
     hollow: entry.reach === "none" || entry.reach === "uncovered",
     rest: restLines(others),
@@ -355,13 +338,45 @@ export function crisisFor(wall: Wall): CrisisModel | null {
   };
 }
 
-/** The source and moment of a reading, for the line above the crisis number. */
-export function readingLine(entry: WallEntry, report: RiskReport): string {
+/** The source and moment of a reading. */
+export function readingLine(entry: LineEntry, report: RiskReport): string {
   if (entry.kind === "aave") return `${entry.name}, at block ${integer(entry.market.blockNumber ?? 0)}.`;
   return `Hyperliquid, at ${report.hyperliquid.readAt === null ? "an unknown time" : clock(report.hyperliquid.readAt)}.`;
 }
 
-/** The position Levee could act on first, if any: the first row with a repay it can make. */
-export function firstAave(wall: Wall): AaveEntry | null {
-  return wall.entries.find((entry): entry is AaveEntry => entry.kind === "aave" && entry.distance !== null) ?? null;
+/**
+ * Which Aave positions are under the trigger the testnet runs used, and what a repay to target would
+ * take. `strong` is the part to set in bold. Null without a trigger.
+ */
+export function triggerSentence(line: DistanceLine, trigger: number | null): { strong: string; rest: string } | null {
+  if (trigger === null) return null;
+  const aave = line.entries.filter((entry): entry is AaveEntry => entry.kind === "aave" && entry.position.healthFactor !== null);
+  const t = trigger.toFixed(2);
+  const used = `, the trigger used in the testnet runs.`;
+  if (aave.length === 0) return { strong: "No Aave debt here", rest: ", and Levee repays only on Aave." };
+  const under = aave.filter((entry) => (entry.position.healthFactor as number) < trigger);
+  const first = under.find((entry) => (entry.reach === "repays" || entry.reach === "part") && (entry.position.repay?.usd ?? 0) > 0);
+  const repay = first?.position.repay;
+  const tail = first && repay ? ` Repaying ${usd(repay.usd)} would bring ${first.name} to ${repay.target.toFixed(2)}.` : "";
+  if (under.length === 0) return { strong: `No Aave position here is under ${t}`, rest: used };
+  if (under.length === 1) return { strong: `${(under[0] as AaveEntry).name} is under ${t}`, rest: `${used}${tail}` };
+  const count = under.length === 2 && aave.length === 2 ? "Both" : countWord(under.length);
+  return { strong: `${count} Aave positions are under ${t}`, rest: `${used}${tail}` };
+}
+
+/** How to read the distances at this address, and whose it is. */
+export function directionSentence(report: RiskReport): string {
+  const sides = new Set(report.hyperliquid.positions.map((perp) => perp.side));
+  const aave = [report.aave.base, report.aave.arbitrum].some((market) => market.position?.healthFactor != null);
+  const perps = sides.size === 2 ? "for Hyperliquid shorts a rise in price and for longs a fall" : sides.has("short") ? "for the Hyperliquid shorts a rise in price" : sides.has("long") ? "for the Hyperliquid longs a fall in price" : "";
+  let lead = "";
+  if (aave && perps) lead = `For Aave the distance is a fall in collateral price, ${perps}. `;
+  else if (aave) lead = "For Aave the distance is a fall in collateral price. ";
+  else if (perps) lead = `On Hyperliquid the distance is ${sides.size === 2 ? "a rise in price for shorts and a fall for longs" : sides.has("short") ? "a rise in price" : "a fall in price"}. `;
+  return `${lead}Levee has no relationship with this address, and nothing is repaying it.`;
+}
+
+/** The position Levee could act on first, if any: the first Aave position with a distance. */
+export function firstAave(line: DistanceLine): AaveEntry | null {
+  return line.entries.find((entry): entry is AaveEntry => entry.kind === "aave" && entry.distance !== null) ?? null;
 }

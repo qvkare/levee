@@ -1,13 +1,13 @@
 /**
  * The same report with one position's collateral marked down. Everything else stays as read, and
- * the result feeds the same wall, so a simulation cannot use different maths from a reading. Pure.
+ * the result feeds the same line, so a simulation cannot use different maths from a reading. Pure.
  */
 import { repayFigure } from "./aave-model.ts";
 import { CHAINS } from "./chains.ts";
 import { approxFall, standingForHealth } from "./math.ts";
 import { assembleReport } from "./report.ts";
 import type { AaveMarket, AavePosition, RiskReport } from "./types.ts";
-import { buildWall, collateralAsset, firstAave } from "./wall.ts";
+import { buildLine, collateralAsset, firstAave } from "./line.ts";
 
 export const MAX_FALL_PERCENT = 90;
 
@@ -44,7 +44,7 @@ function fallen(market: AaveMarket, position: AavePosition, fall: number, target
 
 /** The nearest Aave position after the fall, or null when the address has no Aave debt. */
 export function applyFall(report: RiskReport, fall: number): { report: RiskReport; whatIf: WhatIf } | null {
-  const entry = firstAave(buildWall(report));
+  const entry = firstAave(buildLine(report));
   if (!entry) return null;
   const market: AaveMarket = { ...entry.market, position: fallen(entry.market, entry.position, fall, report.target) };
   const { base, arbitrum } = report.aave;

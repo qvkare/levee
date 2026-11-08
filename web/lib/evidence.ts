@@ -38,6 +38,21 @@ export interface EvidenceRun {
   nearTx: string | null;
   evmTx: string | null;
   evmBlock: number | null;
+  /** The Levee contract the keeper called. */
+  nearContract: string | null;
+  trace: RunTrace | null;
+}
+
+/**
+ * The few trace figures the site draws: the keeper's settings, and what the first RPC read at
+ * detection. Aave base-currency values have 8 decimals of USD. Strings, as recorded.
+ */
+export interface RunTrace {
+  trigger: string | null;
+  target: string | null;
+  collateralBase: string | null;
+  debtBase: string | null;
+  thresholdBps: string | null;
 }
 
 const OUTCOMES: readonly string[] = ["success", "failed", "aborted"];
@@ -51,6 +66,22 @@ function timestampsOf(raw: unknown): Timestamps {
   if (typeof raw !== "object" || raw === null) return NO_TIMESTAMPS;
   const { detected, near_included, signed, broadcast, included } = raw as Record<string, unknown>;
   return { detected: count(detected), nearIncluded: count(near_included), signed: count(signed), broadcast: count(broadcast), included: count(included) };
+}
+
+const record = (value: unknown): Record<string, unknown> => (typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
+
+function traceOf(raw: unknown): RunTrace | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const trace = record(raw);
+  const samples = record(trace.quorum).samples;
+  const first = record(Array.isArray(samples) ? samples[0] : null);
+  return {
+    trigger: text(trace.trigger),
+    target: text(trace.target),
+    collateralBase: text(first.total_collateral_base),
+    debtBase: text(first.total_debt_base),
+    thresholdBps: text(first.liquidation_threshold_bps),
+  };
 }
 
 function latency({ detected, included }: Timestamps): number | null {
@@ -75,35 +106,39 @@ export function parseRun(id: string, raw: string): EvidenceRun {
     nearTx: null,
     evmTx: null,
     evmBlock: null,
+    nearContract: null,
+    trace: null,
   };
-  let record: Record<string, unknown>;
+  let fields: Record<string, unknown>;
   try {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return unreadable;
-    record = parsed as Record<string, unknown>;
+    fields = parsed as Record<string, unknown>;
   } catch {
     return unreadable;
   }
-  const outcome = text(record.outcome);
+  const outcome = text(fields.outcome);
   if (!outcome || !OUTCOMES.includes(outcome)) return { ...unreadable, failureReason: "This record has no valid outcome." };
-  const timestamps = timestampsOf(record.timestamps_ms);
+  const timestamps = timestampsOf(fields.timestamps_ms);
   return {
-    id: text(record.run_id) ?? id,
+    id: text(fields.run_id) ?? id,
     outcome: outcome as Outcome,
-    network: text(record.network),
-    chainId: count(record.chain_id),
-    positionId: count(record.position_id),
-    borrower: text(record.borrower),
-    rescuer: text(record.rescuer),
-    amount: text(record.amount),
-    failureReason: text(record.failure_reason),
-    healthBefore: text(record.health_factor_before),
-    healthAfter: text(record.health_factor_after),
+    network: text(fields.network),
+    chainId: count(fields.chain_id),
+    positionId: count(fields.position_id),
+    borrower: text(fields.borrower),
+    rescuer: text(fields.rescuer),
+    amount: text(fields.amount),
+    failureReason: text(fields.failure_reason),
+    healthBefore: text(fields.health_factor_before),
+    healthAfter: text(fields.health_factor_after),
     latencyMs: latency(timestamps),
     timestamps,
-    nearTx: text(record.near_tx),
-    evmTx: text(record.evm_tx),
-    evmBlock: count(record.evm_block),
+    nearTx: text(fields.near_tx),
+    evmTx: text(fields.evm_tx),
+    evmBlock: count(fields.evm_block),
+    nearContract: text(fields.near_contract),
+    trace: traceOf(fields.trace),
   };
 }
 

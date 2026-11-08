@@ -1,1 +1,1 @@
-Levee. Every position at an address, in the order it would go.
+Levee. When your health factor crosses the trigger, NEAR signs the repay. A real Base Sepolia rescue drawn on four lines: your position, the keeper, the Levee contract on NEAR and the MPC network. 8.4 s from detection to repay, the median of 13 testnet runs.

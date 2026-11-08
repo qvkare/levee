@@ -1,7 +1,6 @@
 import { CHAINS } from "@/lib/chains.ts";
 import { amount, plainShare, ratio, usd } from "@/lib/format.ts";
 import type { AavePosition, ReserveLine, RiskReport } from "@/lib/types.ts";
-import { Num } from "./num.tsx";
 
 interface Line extends ReserveLine {
   id: string;
@@ -36,7 +35,7 @@ export function Holdings({ report, quiet = [] }: { report: RiskReport; quiet?: s
     <>
       {lines.length > 0 && (
         <>
-          <h3>What each Aave position holds</h3>
+          <h3 className="sub">What each Aave position holds</h3>
           <div className="scroll">
             <table className="nums">
               <thead>
@@ -55,10 +54,10 @@ export function Holdings({ report, quiet = [] }: { report: RiskReport; quiet?: s
                     <td>{line.role}</td>
                     <td>{line.symbol}</td>
                     <td>
-                      <Num>{amount(line.amount)}</Num>
+                      {amount(line.amount)}
                     </td>
                     <td>
-                      <Num>{usd(line.usd)}</Num>
+                      {usd(line.usd)}
                     </td>
                   </tr>
                 ))}
@@ -66,12 +65,12 @@ export function Holdings({ report, quiet = [] }: { report: RiskReport; quiet?: s
             </table>
           </div>
           {markets.map((market) => (
-            <p key={market.chain} className="note">
+            <p key={market.chain} className="note-line">
               {termsOf(`Aave on ${CHAINS[market.chain].label}`, market.position as AavePosition)}
             </p>
           ))}
           {assumptionNotes.map((note) => (
-            <p key={note} className="note">
+            <p key={note} className="note-line">
               {note}
             </p>
           ))}
@@ -79,7 +78,7 @@ export function Holdings({ report, quiet = [] }: { report: RiskReport; quiet?: s
       )}
       {pools.length > 0 && (
         <>
-          <h3>Hyperliquid margin</h3>
+          <h3 className="sub">Hyperliquid margin</h3>
           <div className="scroll">
             <table className="nums">
               <thead>
@@ -95,13 +94,13 @@ export function Holdings({ report, quiet = [] }: { report: RiskReport; quiet?: s
                   <tr key={pool.id}>
                     <td>{pool.label}</td>
                     <td>
-                      <Num>{usd(pool.equityUsd)}</Num>
+                      {usd(pool.equityUsd)}
                     </td>
                     <td>
-                      <Num>{usd(pool.maintenanceUsd)}</Num>
+                      {usd(pool.maintenanceUsd)}
                     </td>
                     <td>
-                      <Num>{pool.marginRatio === null ? "none" : ratio(pool.marginRatio)}</Num>
+                      {pool.marginRatio === null ? "none" : ratio(pool.marginRatio)}
                     </td>
                   </tr>
                 ))}
@@ -111,7 +110,7 @@ export function Holdings({ report, quiet = [] }: { report: RiskReport; quiet?: s
         </>
       )}
       {[...notes, ...uncovered].map((note) => (
-        <p key={note} className="note">
+        <p key={note} className="note-line">
           {note}
         </p>
       ))}

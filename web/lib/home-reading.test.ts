@@ -4,20 +4,20 @@ import stored from "./fixtures/example-report.json" with { type: "json" };
 import { fitsHome } from "./home-reading-rules.ts";
 import { applyFall } from "./what-if.ts";
 import { SCHEMA, type RiskReport } from "./types.ts";
-import { buildWall } from "./wall.ts";
+import { buildLine } from "./line.ts";
 
 const example = stored as unknown as RiskReport;
 
-test("the stored example is in the current schema and fills a wall", () => {
+test("the stored example is in the current schema and fills a line", () => {
   assert.equal(example.schema, SCHEMA);
-  assert.ok(buildWall(example).onAxis.length > 1);
+  assert.ok(buildLine(example).placed.length > 1);
   assert.equal(fitsHome(example), true);
 });
 
 test("a third party's position in its last 5% does not stand on the home page", () => {
   const fallen = applyFall(example, 0.111);
   assert.ok(fallen);
-  assert.ok(buildWall(fallen.report).crisis);
+  assert.ok(buildLine(fallen.report).crisis);
   assert.equal(fitsHome(fallen.report), false);
 });
 

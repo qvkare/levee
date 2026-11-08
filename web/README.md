@@ -26,12 +26,14 @@ Use `run` for `deploy`: `pnpm deploy` without it is a pnpm command of its own.
 
 | Path | What it is |
 |---|---|
-| `/` | The wall for one public address, read live in the browser over a reading from the build. Then what Levee does with the first row, the backtest by reserve size, the position simulator and a few public addresses. Prerendered |
-| `/a/[address]` | The wall for any address, then every figure in the same order, rendered in full on the server and read again in the browser every minute. `?target=1.75` sets the repay target. `?fall=11.1` marks the nearest Aave position's collateral down by that percentage and says it is a simulation |
-| `/how` | A rescue in numbered steps, with a live dry quote from `/api/route` under the step where the reserve refills the rescuer, the trust table, what a stolen key cannot do, failure conditions, the measured hops, limits, how to read the wall, and the API shape. Prerendered |
-| `/proof` | Every file in `../evidence/runs`, failures included, with explorer links and p50 and p95 per hop. The signing test, the fork rehearsal under its own label, and the backtest with its misses and limits. Prerendered |
+| `/` | The offer and the address box, a replay of one real testnet rescue drawn to time across four lanes, the stops of a rescue, who can do what, the timetable of every run, the backtest, and a real reading of one public address on the distance line, read again in the browser. Prerendered |
+| `/a/[address]` | Any address on the distance line, then every figure, what each Aave position holds and what Levee would do. Rendered on the server and read again in the browser every minute. `?target=1.75` sets the repay target. `?fall=11.1` marks the nearest Aave position's collateral down by that percentage and says it is a simulation |
+| `/how` | The full line stop by stop, with a live dry quote from `/api/route` under the planned stop, the formula, who can do what, what a stolen key cannot do, failure conditions, the measured hops, what is not built yet, limits, how to read a distance, and the API shape. Prerendered |
+| `/proof` | The timetable, every hop's p50, p95 and slowest, every file in `../evidence/runs` with explorer links, failures included, every signing sample, the fork rehearsal under its own label, and the backtest with all three rows, its misses and its limits. Prerendered |
 
-The last 5% turns the page red: a reading or a simulation with a position inside it. The home page passes over a third party's address in that state, because the red page is for an address someone asked about.
+The replay on the home page is the landed run whose detection-to-inclusion time is the median of all landed runs. Code picks it at build time. The fall before detection is in no record, so it is drawn in a zone marked untimed.
+
+A reading with a position inside its last 5% turns its band amber and zooms the line to that 5%. The home page passes over a third party's address in that state, because the state is for an address someone asked about.
 
 ## GET /api/risk
 
@@ -121,17 +123,22 @@ All optional. Copy `.env.example` to `.dev.vars` for local Worker runs. In produ
 
 `wrangler.jsonc` targets `levee.qvkare.com` as a custom domain, with `workers_dev` off. OpenNext builds the Worker. Prerendered pages come from the read-only static assets cache, so no KV or R2 binding is needed, and there is no revalidation: `/`, `/how` and `/proof` change on deploy. The home page takes a fresh reading in the browser. If that fails it keeps the reading from the build and marks it as an example.
 
-Run records and the backtest are read at build time only. A Worker has neither folder, so deploy after adding runs. `next.config.ts` inlines the few figures the report page needs as `LEVEE_BRIEF`.
+Run records and the backtest are read at build time only. A Worker has neither folder, so deploy after adding runs. Every figure the site states about Levee is worked out once, in `lib/proof-model.ts`, and `next.config.ts` inlines the result as `LEVEE_PROOF`, so prerendered pages and pages rendered on the Worker print the same numbers. Pages read it as `PROOF` from `lib/proof.ts`.
 
-The mark is `public/levee-mark.svg`, and `public/levee-mark-profile.svg` is its dark form for link previews. `app/favicon.ico`, `app/icon.png` and `app/apple-icon.png` are rendered from those two files, and `app/opengraph-image.png` from the mark and the wordmark on the wall. Render them again if the mark changes.
+The repository is private, so `GITHUB_URL` in `lib/links.ts` is empty and nothing links to it. Set it, and the footer and the proof cards pick it up.
+
+The mark is `public/levee-mark.svg`, and `public/levee-mark-profile.svg` is its dark form. `app/favicon.ico`, `app/icon.png` and `app/apple-icon.png` are rendered from those two files. `app/opengraph-image.png` is the link preview: the four lanes, the route of the replayed run and its time, rendered by `node tools/og-image.ts` from the same figures. A test fails when its alt text no longer matches the run records, which means it is time to render it again.
+
+The fonts are Overpass and Overpass Mono (OFL), in `app/fonts`. The Overpass file has one change from upstream: its GDEF table marked the middle dot and the spacing accents as combining marks, which made browsers draw them with no width, so they are base glyphs now.
 
 ## Known gaps
 
 - Run on local `workerd` only. Workers egress from shared Cloudflare addresses, so check public RPC and Hyperliquid limits after the first deploy, and set `RISK_*` secrets if they throttle.
 - A report makes about 25 subrequests. The Workers free plan allows 50, and its 10 ms CPU limit may be too low for server rendering. The upload is 1.6 MiB gzipped.
 - The rate limit counts per Cloudflare location and per isolate off Cloudflare. A spread-out client gets more than 30 reads a minute. A WAF rate limiting rule would be exact, and costs money past the free rule.
-- No real account inside the last 5% was found to test against. The red state is covered by unit tests, `?fall=` on a real position and a stand-in Hyperliquid endpoint.
+- No real account inside the last 5% was found to test against. The amber state is covered by unit tests and `?fall=` on a real position.
 - The stablecoin list is by address. A new reserve counts as volatile until it is added.
 - A malformed URL escape such as `/a/%E0%A4%A` gets a plain 500 from the framework. The form cannot produce one.
 - Every live run so far is on Base Sepolia, from one position. The hop table says so, and a p95 over that few runs is the slowest run.
-- The simulator and the stolen-key table state rules from the spec. They should link to tests and transactions when those exist.
+- The stolen-key table and the boards state rules from the spec. They should link to tests and transactions when those exist.
+- The replay draws the fall before detection from the record's own figures: health factor goes from where the previous run left it to the reading at detection. How long that took is not recorded.
