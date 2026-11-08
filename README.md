@@ -2,10 +2,6 @@
 
 Levee repays your Aave debt from a reserve when your health factor crosses a trigger you set. Your position stays in your wallet, and the keeper cannot send funds anywhere else.
 
-Built at NEAR HACKATHON. Tracks: `defi`, `security`. Site: https://levee.qvkare.com
-
-**Unaudited, and live on testnet only.** Do not use it with funds you cannot lose.
-
 ## The problem
 
 Borrowers get liquidated in fast moves and pay a bonus to the liquidator. Protection bots usually need broad keys, or need the position moved into their own contract. Levee needs neither: Aave lets anyone repay a borrower's debt, so the rescuer never touches collateral.
@@ -47,13 +43,34 @@ The sample is small and the testnet was calm. The keeper also reads every 5 seco
 
 Example rescue, health factor 1.06 to 1.50: [NEAR](https://testnet.nearblocks.io/txns/Cxd3vfhi49p3DRBSFMTvT3qPpvqTj6Bwq1zC6UmRFvMn), [Base Sepolia](https://sepolia.basescan.org/tx/0x501ee4e448e7d14594c59e64981aeafa5234913b93f07db0bfbc5bbf880c3b92).
 
-| Item | Value |
-|---|---|
-| Levee contract | `levee-core-1503.testnet` |
-| Keeper | `levee-keeper-1503.testnet`, key limited to `rescue` |
-| MPC | `v1.signer-prod.testnet` |
-| Position 1 rescuer | `0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971` |
-| Aave Pool, Base Sepolia | `0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27` |
+## Contracts
+
+Everything below is on testnet. Nothing is deployed on any mainnet.
+
+### Levee's own
+
+| Contract | Network | Address | Source |
+|---|---|---|---|
+| Levee v0.1, reserve mode | NEAR testnet | [levee-core-1503.testnet](https://testnet.nearblocks.io/address/levee-core-1503.testnet) | `contracts/levee`, before collateral mode was added |
+
+### Accounts Levee acts through
+
+| Account | Network | Address |
+|---|---|---|
+| Keeper, function-call key limited to `rescue` on v0.1 | NEAR testnet | [levee-keeper-1503.testnet](https://testnet.nearblocks.io/address/levee-keeper-1503.testnet) |
+| Rescuer for v0.1 position 1, derived from the contract by Chain Signatures | Base Sepolia | [0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971](https://sepolia.basescan.org/address/0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971) |
+
+### Third-party contracts it calls
+
+| Contract | Network | Address |
+|---|---|---|
+| Chain Signatures MPC signer | NEAR testnet | [v1.signer-prod.testnet](https://testnet.nearblocks.io/address/v1.signer-prod.testnet) |
+| Aave v3 Pool | Base Sepolia | [0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27](https://sepolia.basescan.org/address/0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27) |
+| Aave v3 PoolAddressesProvider | Base Sepolia | [0xE4C23309117Aa30342BFaae6c95c6478e0A4Ad00](https://sepolia.basescan.org/address/0xE4C23309117Aa30342BFaae6c95c6478e0A4Ad00) |
+| USDC, Aave's test token | Base Sepolia | [0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f](https://sepolia.basescan.org/address/0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f) |
+| WETH | Base Sepolia | [0x4200000000000000000000000000000000000006](https://sepolia.basescan.org/address/0x4200000000000000000000000000000000000006) |
+| Uniswap v3 Factory | Base Sepolia | [0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24](https://sepolia.basescan.org/address/0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24) |
+| Uniswap v3 QuoterV2 | Base Sepolia | [0xC5290058841028F1614F3A6F0F5816cAd0df5E27](https://sepolia.basescan.org/address/0xC5290058841028F1614F3A6F0F5816cAd0df5E27) |
 
 ## How a rescue runs
 
