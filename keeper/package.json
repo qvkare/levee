@@ -17,7 +17,7 @@
     "test": "vitest run",
     "test:unit": "vitest run --exclude '**/*.live.test.ts' --exclude '**/*.fork.test.ts'",
     "test:live": "vitest run test/derive.live.test.ts",
-    "test:e2e": "vitest run test/e2e.fork.test.ts"
+    "test:e2e": "vitest run test/e2e.fork.test.ts test/collateral.fork.test.ts"
   },
   "dependencies": {
     "@noble/curves": "2.4.0",
