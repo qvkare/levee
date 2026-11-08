@@ -6,7 +6,8 @@ import { deriveChildKey, publicKeyToAddress, rescuerPath } from './derive.js';
 import { type EvmClient, createEvmClient } from './evm.js';
 import type { NearRescuer, NearViews, Position } from './near.js';
 import { DEFAULT_QUORUM } from './quorum.js';
-import type { PositionTarget, RescueContext } from './rescue.js';
+import type { CollateralContext, PositionTarget, RescueContext } from './rescue.js';
+import { type HelperConfig, helperConfigMismatch } from './unwind.js';
 
 export interface Wiring {
   target: PositionTarget;
@@ -15,6 +16,69 @@ export interface Wiring {
   borrower: Address;
   rescuer: Address;
   clients: EvmClient[];
+  /** Collateral mode only. */
+  collateral?: CollateralContext & { helperConfig: HelperConfig };
+}
+
+/** Every endpoint that answers must give the same config. */
+async function readHelperConfig(
+  clients: EvmClient[],
+  helper: Address,
+  borrower: Address,
+): Promise<HelperConfig> {
+  const reads = await Promise.allSettled(
+    clients.map((client) => client.readHelperConfig(helper, borrower)),
+  );
+  const answers = reads.flatMap((read) => (read.status === 'fulfilled' ? [read.value] : []));
+  const [first] = answers;
+  if (!first) {
+    const errors = reads.map((read) => (read.status === 'rejected' ? String(read.reason) : ''));
+    throw new Error(`could not read the helper config at ${helper}: ${errors.join('; ')}`);
+  }
+  const key = (config: HelperConfig) =>
+    `${config.rescuer.toLowerCase()} ${config.maxSlippageBps} ${config.triggerHf} ${config.targetHf}`;
+  if (answers.some((answer) => key(answer) !== key(first))) {
+    throw new Error(`endpoints disagree on the helper config at ${helper}`);
+  }
+  return first;
+}
+
+/**
+ * Collateral mode needs a collateral config on the contract, a helper on the chain, and
+ * a borrower whose settings at the helper are the keeper's. The helper enforces its
+ * own trigger and target, so a keeper that disagrees with them would only waste gas.
+ */
+async function wireCollateral(
+  config: KeeperConfig,
+  views: NearViews,
+  target: PositionTarget,
+  position: Position,
+  chain: ChainInfo,
+  clients: EvmClient[],
+  rescuer: Address,
+): Promise<NonNullable<Wiring['collateral']>> {
+  if (!position.collateral) {
+    throw new Error(
+      `position ${target.id} has no collateral config on ${config.contract}, so it cannot run in collateral mode`,
+    );
+  }
+  const chainConfig = await views.getChain(chain.chainId);
+  if (!chainConfig?.unwind) {
+    throw new Error(`${config.contract} has no LeveeUnwind helper for ${chain.name}`);
+  }
+  const helper = getAddress(chainConfig.unwind);
+  const borrower = getAddress(position.borrower);
+  const helperConfig = await readHelperConfig(clients, helper, borrower);
+  const mismatch = helperConfigMismatch(target, helperConfig, rescuer);
+  if (mismatch) {
+    throw new Error(`position ${target.id}: the borrower's settings at ${helper} differ: ${mismatch}`);
+  }
+  return {
+    asset: getAddress(position.collateral.asset),
+    helper,
+    poolFee: BigInt(position.collateral.pool_fee),
+    helperConfig,
+  };
 }
 
 /**
@@ -53,13 +117,21 @@ export async function wirePosition(
     throw new Error(`local derivation ${derived} differs from ${config.mpc}: ${live}`);
   }
 
+  const rescuer = publicKeyToAddress(derived);
+  const clients = urls.map((url) => makeClient(url));
+  const collateral =
+    target.mode === 'collateral'
+      ? await wireCollateral(config, views, target, position, chain, clients, rescuer)
+      : undefined;
+
   return {
     target,
     chain,
     position,
     borrower: getAddress(position.borrower),
-    rescuer: publicKeyToAddress(derived),
-    clients: urls.map((url) => makeClient(url)),
+    rescuer,
+    clients,
+    ...(collateral ? { collateral } : {}),
   };
 }
 
@@ -86,6 +158,15 @@ export function rescueContext(options: {
     now: Date.now,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     log,
+    ...(wiring.collateral
+      ? {
+          collateral: {
+            asset: wiring.collateral.asset,
+            helper: wiring.collateral.helper,
+            poolFee: wiring.collateral.poolFee,
+          },
+        }
+      : {}),
   };
 }
 

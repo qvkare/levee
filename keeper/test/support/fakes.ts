@@ -2,14 +2,22 @@
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type Address, type Hex, keccak256 } from 'viem';
+import {
+  type Address,
+  type Hex,
+  encodeAbiParameters,
+  encodeEventTopics,
+  keccak256,
+  parseAbiItem,
+} from 'viem';
 import { CHAINS } from '../../src/chains.js';
 import { parseWad } from '../../src/decision.js';
 import { runsDir } from '../../src/evidence.js';
-import type { EvmClient, EvmReceipt } from '../../src/evm.js';
+import type { EvmClient, EvmReceipt, SimulationResult } from '../../src/evm.js';
 import type { NearRescuer, Position, RescueRequest } from '../../src/near.js';
-import type { Sample } from '../../src/quorum.js';
+import type { CollateralSample, Sample } from '../../src/quorum.js';
 import type { PositionTarget, RescueContext } from '../../src/rescue.js';
+import { type EvmLog, type HelperConfig, unwindCalldata } from '../../src/unwind.js';
 import { createSimulatedMpc, repayCalldata, unsignedTransaction } from './simulated-mpc.js';
 
 export const chain = CHAINS[8453] as NonNullable<(typeof CHAINS)[8453]>;
@@ -44,6 +52,73 @@ export const sickSample = (rpc: string, over: Partial<Sample> = {}): Sample => (
 export const healthySample = (rpc: string): Sample =>
   sickSample(rpc, { healthFactor: parseWad('1.9') });
 
+/** Stands in for `LeveeUnwind`. */
+export const helper: Address = '0x5555555555555555555555555555555555555555';
+/** WETH on Base. */
+export const weth: Address = '0x4200000000000000000000000000000000000006';
+export const poolFee = 500n;
+export const wethPrice = 2_000n * 10n ** 8n;
+
+/** The keeper's collateral-mode settings, which the borrower's at the helper match. */
+export const collateralTarget: PositionTarget = {
+  ...positionTarget,
+  mode: 'collateral',
+  maxSlippageBps: 100n,
+};
+
+/**
+ * The sick position's $20,000 of collateral as 10 WETH at $2,000, all of it approved to
+ * the helper, which the borrower authorized for `rescuer` at 1.25, 1.6 and 1%.
+ */
+export const collateralOf = (
+  rescuer: Address,
+  over: Partial<CollateralSample> = {},
+): CollateralSample => ({
+  priceBase: wethPrice,
+  decimals: 18n,
+  liquidationThresholdBps: 8_000n,
+  aTokenBalance: 10n * 10n ** 18n,
+  aTokenAllowance: 10n * 10n ** 18n,
+  authorizedRescuer: rescuer,
+  maxSlippageBps: 100n,
+  triggerHf: parseWad('1.25'),
+  targetHf: parseWad('1.6'),
+  ...over,
+});
+
+export const helperConfigOf = (sample: CollateralSample): HelperConfig => ({
+  rescuer: sample.authorizedRescuer,
+  maxSlippageBps: sample.maxSlippageBps,
+  triggerHf: sample.triggerHf,
+  targetHf: sample.targetHf,
+});
+
+const UNWOUND_ALL_INDEXED = parseAbiItem(
+  'event Unwound(address indexed borrower, address indexed rescuer, address indexed collateral, uint256 repaid, uint256 sold)',
+);
+
+/** An `Unwound` log as the helper would emit it, encoded by viem from the ABI. */
+export function unwoundLog(fields: {
+  borrower: Address;
+  rescuer: Address;
+  collateral: Address;
+  repaid: bigint;
+  sold: bigint;
+  address?: Address;
+}): EvmLog {
+  return {
+    address: fields.address ?? helper,
+    topics: encodeEventTopics({
+      abi: [UNWOUND_ALL_INDEXED],
+      args: { borrower: fields.borrower, rescuer: fields.rescuer, collateral: fields.collateral },
+    }) as Hex[],
+    data: encodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'uint256' }],
+      [fields.repaid, fields.sold],
+    ),
+  };
+}
+
 export const openPosition = (over: Partial<Position> = {}): Position => ({
   owner: 'owner.testnet',
   keeper: 'keeper.testnet',
@@ -65,6 +140,11 @@ export interface FakeEvm extends EvmClient {
   broadcastError: Error | null;
   receipt: EvmReceipt | null;
   healthAfter: bigint | Error;
+  /** Collateral, then USDC. */
+  prices: bigint[] | Error;
+  /** Defaults to what the sample says the helper holds. */
+  helperConfig: HelperConfig | Error | null;
+  simulation: SimulationResult | Error;
 }
 
 export function fakeEvm(url: string, sample: Sample | Error = sickSample(url)): FakeEvm {
@@ -75,6 +155,9 @@ export function fakeEvm(url: string, sample: Sample | Error = sickSample(url)): 
     broadcastError: null,
     receipt: { success: true, blockNumber: 1_001n, gasUsed: 180_000n, effectiveGasPrice: 2_000n },
     healthAfter: parseWad('1.6'),
+    prices: [wethPrice, 10n ** 8n],
+    helperConfig: null,
+    simulation: { reverted: false },
     async readSample() {
       if (fake.sample instanceof Error) throw fake.sample;
       return fake.sample;
@@ -82,6 +165,22 @@ export function fakeEvm(url: string, sample: Sample | Error = sickSample(url)): 
     async readHealthFactor() {
       if (fake.healthAfter instanceof Error) throw fake.healthAfter;
       return fake.healthAfter;
+    },
+    async readAssetPrices() {
+      if (fake.prices instanceof Error) throw fake.prices;
+      return fake.prices;
+    },
+    async readHelperConfig() {
+      if (fake.helperConfig instanceof Error) throw fake.helperConfig;
+      if (fake.helperConfig) return fake.helperConfig;
+      if (fake.sample instanceof Error || !fake.sample.collateral) {
+        throw new Error('no helper config');
+      }
+      return helperConfigOf(fake.sample.collateral);
+    },
+    async simulate() {
+      if (fake.simulation instanceof Error) throw fake.simulation;
+      return fake.simulation;
     },
     readNonce: async () => 4,
     readFees: async () => ({ baseFeePerGas: 1_000n, priorityFeePerGas: 100n }),
@@ -108,6 +207,9 @@ export function fakeNear(
     tamper?: (fields: Parameters<typeof unsignedTransaction>[0]) => void;
     nearTx?: string;
     borrower?: Address;
+    /** Collateral mode: what the contract would put in `unwind`. */
+    collateral?: Address;
+    poolFee?: bigint;
     /** The clock to stamp with, for a caller on real time. */
     now?: () => number;
   } = {},
@@ -118,13 +220,23 @@ export function fakeNear(
     async rescue(request) {
       requests.push(request);
       if (behaviour.fail) throw behaviour.fail;
+      const onBehalfOf = behaviour.borrower ?? borrower;
+      const unwind = request.mode === 'collateral';
       const fields = {
         chainId: chain.chainId,
         nonce: request.fees.nonce,
         maxFeePerGas: request.fees.maxFeePerGas,
         maxPriorityFeePerGas: request.fees.maxPriorityFeePerGas,
-        to: chain.pool,
-        data: repayCalldata(chain.usdc, request.amount, 2n, behaviour.borrower ?? borrower),
+        to: unwind ? helper : chain.pool,
+        data: unwind
+          ? unwindCalldata({
+              borrower: onBehalfOf,
+              collateral: behaviour.collateral ?? weth,
+              amount: request.amount,
+              poolFee: behaviour.poolFee ?? poolFee,
+            })
+          : repayCalldata(chain.usdc, request.amount, 2n, onBehalfOf),
+        ...(unwind ? { gas: 600_000n } : {}),
       };
       behaviour.tamper?.(fields);
       return {
@@ -132,7 +244,7 @@ export function fakeNear(
         nearSender: 'keeper.testnet',
         includedAtMs: behaviour.now?.() ?? nowMs + 1_000,
         signedAtMs: behaviour.now?.() ?? nowMs + 4_000,
-        result: mpc.sign(unsignedTransaction(fields), request.id),
+        result: mpc.sign(unsignedTransaction(fields), request.id, unwind ? 'unwind' : 'rescue'),
       };
     },
   };
@@ -190,3 +302,41 @@ export async function harness(over: Partial<RescueContext> = {}): Promise<Harnes
     cleanup: () => rm(evidenceDir, { recursive: true, force: true }),
   };
 }
+
+/**
+ * A harness in collateral mode: the contract signs `unwind`, both endpoints read the
+ * collateral and the helper's settings, and the receipt carries the helper's event for
+ * a sale of 5,000 USDC, the position's `max_per_rescue`, at 0.3% below the oracle.
+ */
+export async function collateralHarness(over: Partial<RescueContext> = {}): Promise<Harness> {
+  const h = await harness({
+    position: collateralTarget,
+    collateral: { asset: weth, helper, poolFee },
+    ...over,
+  });
+  for (const client of [h.a, h.b]) {
+    client.sample = sickSample(client.url, { collateral: collateralOf(h.mpc.address) });
+    client.receipt = {
+      success: true,
+      blockNumber: 1_001n,
+      gasUsed: 420_000n,
+      effectiveGasPrice: 2_000n,
+      logs: [
+        unwoundLog({
+          borrower,
+          rescuer: h.mpc.address,
+          collateral: weth,
+          repaid: COLLATERAL_SALE.repaid,
+          sold: COLLATERAL_SALE.sold,
+        }),
+      ],
+    };
+  }
+  return h;
+}
+
+/** 5,000 USDC for 2.5075 WETH: $1,994.0179 each against an oracle at $2,000. */
+export const COLLATERAL_SALE = {
+  repaid: 5_000n * 10n ** 6n,
+  sold: 2_507_500_000_000_000_000n,
+} as const;

@@ -452,3 +452,81 @@ describe('readNearTransaction', () => {
     );
   });
 });
+
+describe('collateral mode on NEAR', () => {
+  const viewResult = (value: unknown) => ({
+    result: [...new TextEncoder().encode(JSON.stringify(value))],
+    logs: [],
+    block_hash: 'x',
+    block_height: 1,
+  });
+
+  it('calls rescue_from_collateral with the same arguments and no deposit', async () => {
+    const calls = fakeRpc({
+      ...baseHandlers,
+      tx: () => outcomeWith({ SuccessValue: encodeValue({ ...rescueResult, kind: 'unwind' }) }),
+    });
+
+    const outcome = await rescuer().rescue({ ...request, mode: 'collateral' });
+
+    const call = sentTransaction(calls).actions[0]?.functionCall;
+    expect(call?.methodName).toBe('rescue_from_collateral');
+    expect(call?.deposit).toBe(0n);
+    const sentArgs = new TextDecoder().decode(new Uint8Array(call?.args ?? []));
+    expect(JSON.parse(sentArgs)).toEqual(rescueArgs(request));
+    expect(outcome.result.kind).toBe('unwind');
+  });
+
+  it('calls rescue when the mode is reserve or not given', async () => {
+    for (const mode of ['reserve', undefined] as const) {
+      const calls = fakeRpc({
+        ...baseHandlers,
+        tx: () => outcomeWith({ SuccessValue: encodeValue(rescueResult) }),
+      });
+      await rescuer().rescue({ ...request, ...(mode ? { mode } : {}) });
+      expect(sentTransaction(calls).actions[0]?.functionCall?.methodName).toBe('rescue');
+    }
+  });
+
+  it('reads a position with a collateral config, and one without', () => {
+    const base = {
+      owner: 'owner.testnet',
+      keeper: accountId,
+      chain_id: 84532,
+      borrower: '0x1111111111111111111111111111111111111111',
+      max_per_rescue: '5000000',
+      max_per_day: '10000000',
+      cooldown_secs: 600,
+      paused: false,
+      spent_today: '0',
+      day: 20_766,
+      last_rescue_at: 0,
+    };
+    const collateral = { asset: '0x4200000000000000000000000000000000000006', pool_fee: 3000 };
+    expect(positionSchema.parse({ ...base, collateral }).collateral).toEqual(collateral);
+    expect(positionSchema.parse({ ...base, collateral: null }).collateral).toBeNull();
+    // A v0.1 contract has no such field at all.
+    expect(positionSchema.parse(base).collateral).toBeUndefined();
+  });
+
+  it('reads get_chain for the helper, and null for an unknown chain', async () => {
+    const config = {
+      chain_id: 84532,
+      pool: '0x8bab6d1b75f19e9ed9fce8b9bd338844ff79ae27',
+      usdc: '0xba50cd2a20f6da35d788639e581bca8d0b5d4d5f',
+      unwind: '0x5555555555555555555555555555555555555555',
+      gas_limit_unwind: 600000,
+    };
+    const calls = fakeRpc({ query: () => viewResult(config) });
+    const views = createNearViews({ rpcUrl, contract, mpc: 'v1.signer-prod.testnet' });
+
+    expect((await views.getChain(84532))?.unwind).toBe(config.unwind);
+    expect(calls[0]?.params.method_name).toBe('get_chain');
+    expect(
+      JSON.parse(new TextDecoder().decode(base64.decode(calls[0]?.params.args_base64))),
+    ).toEqual({ chain_id: 84532 });
+
+    fakeRpc({ query: () => viewResult(null) });
+    expect(await views.getChain(1)).toBeNull();
+  });
+});

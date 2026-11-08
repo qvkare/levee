@@ -1,6 +1,6 @@
 {
   "positions": [
-    { "id": 1, "trigger": "1.25", "target": "1.6" }
+    { "id": 1, "trigger": "1.25", "target": "1.6", "mode": "collateral", "max_slippage_bps": 100 }
   ],
   "fee_ceilings": {
     "84532": { "max_fee_per_gas": "2000000000", "max_priority_fee_per_gas": "1000000000" },
