@@ -65,8 +65,13 @@ export class PriceBook {
     });
   }
 
-  /** The portfolio marked at the liquidation block and at every later update of its assets. */
+  /** The portfolio marked at the liquidation block and at every later update of its assets, thinned. */
   frozenPath(portfolio: Portfolio, fromBlock: number, fromTime: number): CompactPoint[] {
+    return thinFrozen(this.frozenPoints(portfolio, fromBlock, fromTime));
+  }
+
+  /** As `frozenPath`, with every point: the collateral-mode runs use no thinning. */
+  frozenPoints(portfolio: Portfolio, fromBlock: number, fromTime: number): CompactPoint[] {
     const assets = [...new Set([...portfolio.collateral.map(([a]) => a), ...portfolio.debt.map(([a]) => a)])].sort((a, b) => a - b);
     const slot = new Map(assets.map((asset, i) => [asset, i]));
     const collateral = portfolio.collateral.map(([asset, amount, threshold]) => ({ slot: slot.get(asset)!, value: (amount * threshold) / 1e4 }));
@@ -95,6 +100,6 @@ export class PriceBook {
       });
       points.push(point(this.blocks[row]!, this.times[row]!));
     }
-    return thinFrozen(points);
+    return points;
   }
 }

@@ -1,10 +1,14 @@
 # Levee
 
-Levee repays your Aave debt from a reserve when your health factor crosses a trigger you set. Your position stays in your wallet, and the keeper cannot send funds anywhere else.
+Levee repays your Aave debt when your health factor falls below a trigger you set. It sells just enough of your own collateral to bring the health factor back to your target. Your position stays in your wallet, and every sale is checked on chain against the trigger and price bound you set.
 
 ## The problem
 
-Borrowers get liquidated in fast moves and pay a bonus to the liquidator. Protection bots usually need broad keys, or need the position moved into their own contract. Levee needs neither: Aave lets anyone repay a borrower's debt, so the rescuer never touches collateral.
+Borrowers get liquidated in fast moves and pay the liquidator a bonus. Repaying part of the debt before that point, by selling some collateral, costs the swap instead of the bonus. It has to happen at the right moment, often while the borrower is asleep, so it gets automated, and automation needs a way to act on the position. Levee keeps that way narrow:
+
+- The borrower approves a capped amount of their collateral's aToken to `LeveeUnwind` and calls `authorize` with their trigger, target, price bound, collateral and Uniswap pool. There is no Safe, module or credit delegation.
+- `LeveeUnwind` has no owner and cannot be upgraded. It sells only while the health factor is below the borrower's trigger, only within their bound against Aave's oracle, and only to repay their own USDC debt. `revoke()` stops it at once.
+- When to act and how much is decided by a NEAR contract with no keys. It signs for the rescuer address on every chain through Chain Signatures.
 
 ## Try it with no keys
 
@@ -19,29 +23,34 @@ make judge
 
 | Do | See |
 |---|---|
-| `make verify` | Every recorded run read back from public chains: the NEAR receipt, the rescuer derived from the MPC root key, the EVM sender, target, selector, asset, borrower and amount |
-| `make replay` | One real rescue walked step by step, offline |
-| `make backtest` | The backtest recomputed from cached data, including misses |
+| `make verify` | Every recorded run read back from public chains: the NEAR receipt, the rescuer derived from the MPC root key, the EVM sender, target, calldata and outcome, and that both contract accounts have no keys |
+| `make replay` | The collateral rescue made after the contract lost its keys, walked step by step offline |
+| `make backtest` | Both backtests recomputed from cached data, including misses. About 5 minutes |
 | `make quote-dry` | Live NEAR Intents dry quotes for the reserve routes: Arbitrum to Base, Base to Arbitrum, Base to Hyperliquid. Nothing moves |
-| `make attack-demo` | A real function-call key tries every other method in near-sandbox and is refused. Needs Rust and `cargo-near` |
+| `make attack-demo` | Real function-call keys try every other method in near-sandbox and are refused. Needs Rust and `cargo-near` |
 | `make test` | All suites. Needs Rust, `cargo-near` and Foundry |
 | `curl 'https://levee.qvkare.com/api/risk?address=0x...'` | The same reading as JSON |
 | `curl 'https://levee.qvkare.com/api/route?from=arbitrum&to=base&amount=20'` | A live confidential dry quote for moving a reserve to a rescuer |
 
 ## Live evidence
 
-Thirteen rescues and one aborted read, on one position on Base Sepolia, on 2026-11-07. Records are in `evidence/runs/`, and failures stay there.
+On Base Sepolia and NEAR testnet. Records are in `evidence/runs/`, and failures stay there.
 
-| Hop | Median | p95 |
-|---|---|---|
-| Detection to NEAR inclusion | 1.7 s | 3.5 s |
-| NEAR inclusion to MPC signature | 5.3 s | 6.9 s |
-| Broadcast to Base inclusion | 1.5 s | 1.5 s |
-| Total from detection | 8.4 s | 10.2 s |
+- **Repay from collateral**, 2026-11-08: six rescues and one aborted run on one WETH position, each from health factor 1.48 to 1.80. The last ran after both contract accounts had lost their last key. In the aborted run the keeper's quote put the sale past the borrower's 1% bound, so it sent nothing.
+- **Repay from a reserve**, 2026-11-07: thirteen rescues and one aborted read.
 
-The sample is small and the testnet was calm. The keeper also reads every 5 seconds, which this table does not include. Separately, 15 of 15 signature requests through the contract completed, with a median of 6.6 s (`evidence/mpc-latency-testnet.json`).
+| Hop | Collateral, median | p95 | Reserve, median | p95 |
+|---|---|---|---|---|
+| Detection to NEAR inclusion | 1.6 s | 1.9 s | 1.7 s | 3.5 s |
+| NEAR inclusion to MPC signature | 5.1 s | 6.7 s | 5.3 s | 6.9 s |
+| Broadcast to Base inclusion | 1.0 s | 1.6 s | 1.5 s | 1.5 s |
+| Total from detection | 8.0 s | 9.2 s | 8.4 s | 10.2 s |
 
-Example rescue, health factor 1.06 to 1.50: [NEAR](https://testnet.nearblocks.io/txns/Cxd3vfhi49p3DRBSFMTvT3qPpvqTj6Bwq1zC6UmRFvMn), [Base Sepolia](https://sepolia.basescan.org/tx/0x501ee4e448e7d14594c59e64981aeafa5234913b93f07db0bfbc5bbf880c3b92).
+The samples are small and the testnet was calm. The keeper also reads every 5 seconds, which this table does not include. The team added the liquidity in the testnet pool at Aave's oracle price, so sale prices there are no measure of slippage. Separately, 15 of 15 signature requests through the contract completed, with a median of 6.6 s (`evidence/mpc-latency-testnet.json`).
+
+Collateral rescue after the keys were deleted, health factor 1.48 to 1.80: [NEAR](https://testnet.nearblocks.io/txns/EXWuscQyobKfnFwUFvs7higAinm6RmRpCJ7ThLioan3j), [Base Sepolia](https://sepolia.basescan.org/tx/0xa852c9db6842bb23b92ac90db056a4d989bd872c375fb61c4004baad8901c897).
+
+Reserve rescue, health factor 1.06 to 1.50: [NEAR](https://testnet.nearblocks.io/txns/Cxd3vfhi49p3DRBSFMTvT3qPpvqTj6Bwq1zC6UmRFvMn), [Base Sepolia](https://sepolia.basescan.org/tx/0x501ee4e448e7d14594c59e64981aeafa5234913b93f07db0bfbc5bbf880c3b92).
 
 ## Contracts
 
@@ -78,12 +87,16 @@ Everything below is on testnet. Nothing is deployed on any mainnet.
 
 ## How a rescue runs
 
-1. The keeper reads `getUserAccountData` from at least two RPCs, and acts only if they agree and are fresh.
-2. Below the trigger, it computes the repay needed to reach the target, within the caps.
-3. It calls `rescue(id, amount, fees)` on NEAR. It supplies no calldata, no target and no payload.
-4. The contract checks caps, budget, cooldown and fee ceilings, builds the EIP-1559 transaction itself, and asks the MPC network to sign `Pool.repay(USDC, amount, 2, borrower)`.
-5. The keeper verifies the recovered signer and broadcasts. Anyone could: the signature is public.
-6. The run is written to `evidence/runs/`.
+1. The borrower calls `authorize(rescuer, maxSlippageBps, triggerHf, targetHf, collateral, poolFee)` on `LeveeUnwind` and approves a capped amount of the collateral's aToken to it.
+2. The keeper reads `getUserAccountData` from at least two RPCs, and acts only if they agree and are fresh.
+3. Below the trigger, it computes the USDC repay that brings the health factor to the target, within the caps, and quotes the sale on Uniswap's QuoterV2 from every RPC. It stops here if the quote is past the borrower's bound.
+4. It calls `rescue_from_collateral(id, amount, max_sold, fees)` on NEAR, where `max_sold` is the quote plus 0.5%. It supplies no calldata, no target and no payload.
+5. The contract checks caps, budget, cooldown and fee ceilings, builds the EIP-1559 transaction itself, and asks the MPC network to sign `LeveeUnwind.unwind(borrower, collateral, amount, poolFee, maxSold)`.
+6. The keeper verifies the recovered signer and broadcasts. Anyone could: the signature is public.
+7. On Base, the helper checks that the health factor is below the trigger and that the collateral and pool are the authorized ones. The pool sends the USDC first; the helper repays the debt, takes the aTokens the pool is owed, and withdraws them to the pool. The sale must be within the oracle bound and `maxSold`, and the health factor must rise without passing far beyond the target.
+8. The run is written to `evidence/runs/`.
+
+Repay from a reserve works the same way with `rescue(id, amount, fees)`, which signs `Pool.repay(USDC, amount, 2, borrower)` from USDC held at the rescuer.
 
 The full design is in `docs/SPEC.md`.
 
@@ -91,47 +104,63 @@ The full design is in `docs/SPEC.md`.
 
 | Actor | Can | Cannot |
 |---|---|---|
-| Owner | Register, set caps, pause, approve, withdraw float to the registered borrower | |
-| Keeper | Ask for a repay within caps, and fire early | Change destination, asset or borrower. Exceed caps. Withdraw. Approve |
-| Contract | Sign `approve`, `repay` and `transfer` to fixed targets | Sign arbitrary payloads |
+| Borrower | Authorize, revoke, and set the aToken allowance, on the lending chain without NEAR | |
+| Owner | Register a position, set caps, pause, approve, withdraw float to the registered borrower | |
+| Keeper | Ask for a repay within caps, set `max_sold`, fire early | Change the destination, asset, pool or borrower. Exceed caps. Loosen the borrower's price bound. Withdraw |
+| NEAR contract | Sign `unwind` to the registered helper, and `approve`, `repay` and `transfer` to fixed targets | Sign arbitrary payloads. It has no keys, so nobody can change its code |
+| LeveeUnwind | Sell the authorized collateral in the authorized pool to repay that borrower's USDC debt, below their trigger | Act for anyone else, change its terms, or be upgraded |
 | MPC network | Sign for the derived address | It is trusted for the rescuer key |
 
-The worst a stolen keeper key can do is repay debt early, burn rescuer gas up to the fee ceiling, or burn the daily budget. Caps bound signing, not landing: a signature already issued stays valid until its nonce is used, and it can only repay the registered borrower.
+A stolen keeper key can act only while the borrower's health factor is below their trigger, only on the collateral and pool they named, and not much past their target. Each sale is at most the borrower's bound worse than Aave's oracle, up to the daily cap. In effect it can do what the keeper was meant to do, with worse timing and worse prices within that bound, or burn rescuer gas up to the fee ceiling. The borrower can stop it at once with `revoke()` or a zero allowance. Caps bound signing, not landing: a signature already issued stays valid until its nonce is used, and it can only repay the registered borrower.
 
 ## NEAR pieces
 
 - **Chain Signatures.** The rescuer address on Base belongs to the contract. Without it, this design would need a hot key or a contract on every chain.
-- **Function-call keys.** The keeper's key is limited to `rescue` by the protocol. `make attack-demo` shows it.
-- **NEAR contract as the policy layer.** One policy controls rescuers on several chains, and it has no admin or upgrade path. Both testnet contract accounts have no keys: the last full-access key was deleted on `levee-core-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/3u8yYEBB9eVJbRGjE27xiHru1aAA4W7Mh4C2rrsZ86fu)) and on `levee-core-v2-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA)); `it_still_works_with_every_key_deleted` covers a locked contract in the sandbox.
-
+- **Function-call keys.** The keeper's keys are limited to `rescue_from_collateral` or `rescue` by the protocol. `make attack-demo` shows both.
+- **NEAR contract as the policy layer.** One policy controls rescuers on several chains, and it has no admin or upgrade path. Both testnet contract accounts have no keys: the last full-access key was deleted on `levee-core-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/3u8yYEBB9eVJbRGjE27xiHru1aAA4W7Mh4C2rrsZ86fu)) and on `levee-core-v2-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA)). `make verify` checks it.
 - **NEAR Intents.** The site and `make quote-dry` take live confidential 1Click quotes for the reserve routes, with a partner key. No reserve moves through Intents yet: the reserve layer below is not built.
 
 ## Backtest
 
-`backtest/` replays real Aave liquidations on Base and Arbitrum from 2025-10-10/11 and 2026-01-31 to 02-06: 5,977 positions, 5,008 in scope. With trigger 1.20, target 1.50 and a 60 second delay:
+`backtest/` replays every native USDC borrower on Aave v3 Base and Arbitrum through two crashes and a calm month. Each sale is priced from a real Uniswap v3 QuoterV2 quote at its landing block, against Aave's oracle in the same block. Trigger 1.20, target 1.50, a 60 second delay, and a price bound of 1% or 3%:
 
-| Reserve, share of debt | Saved by Levee | Same money held as USDC collateral |
-|---|---|---|
-| 10% | 36% | 30% |
-| 20% | 60% | 51% |
-| 30% | 85% | 69% |
-| 50% | 95% | 96% |
+| Period | Borrowers | Liquidated | Saved, 1% / 3% | Same USDC as a 30% reserve / repaid upfront | Bonus at risk | Bonus avoided, 1% / 3% | Swap cost, 1% / 3% | Gas, 1% / 3% | Net, 1% / 3% |
+|---|---|---|---|---|---|---|---|---|---|
+| 2025-10-10 to 10-11 | 49,685 | 952 | 635 / 654 | 720 / 731 | $1.40M | $781k / $1.00M | $89k / $467k | $517k / $456k | +$175k / +$78k |
+| 2026-01-31 to 02-06 | 54,479 | 4,077 | 3,424 / 3,547 | 3,541 / 3,541 | $1.42M | $1.07M / $1.14M | $280k / $657k | $18k / $11k | +$774k / +$473k |
+| 2025-12-03 to 2026-01-01, calm | 58,170 | 229 | 114 / 114 | 189 / 191 | $26k | $22k / $22k | $134k / $308k | $9k / $3k | −$122k / −$290k |
 
-Limits: only liquidated positions are sampled, so false alarms are unmeasured. 54% of positions were already below the trigger when armed, and count as upfront repays. Infrastructure is assumed to be up with a fixed delay. See `backtest/results/summary.md`.
+What it says:
+
+- In both crashes, repaying from collateral avoided more liquidation bonus than it cost. In the calm month, at the 1% bound, it cost $1.60 per borrower armed above the trigger over 30 days, and sold 2.0% of their collateral.
+- In 2025-10 it lost $313k on positions under $10k of debt, mostly to gas, and made $487k on larger ones.
+- It saved fewer positions than a reserve or the same USDC repaid upfront, which both need the cash in hand. Most misses were thin Uniswap pools against native USDC: LINK, ARB, AAVE, wstETH, and the largest WBTC and cbBTC positions.
+- The earlier reserve backtest (`backtest/results/portfolio.md`) found that repaying the same USDC upfront protects one position as well as a reserve, with no carry cost. That is why repaying from collateral is the main mode.
+
+Read these with the figures:
+
+- Saved counts include positions already below the trigger when armed, which unwind at once: 416 of 635 in 2025-10.
+- The 2025-10 swap cost includes gains from pools that lagged a falling oracle. Counting no sale better than the oracle, it is $181k and the net is +$83k.
+- The replayed keeper resends a reverted unwind every minute. In 2025-10 gas was high during Arbitrum's 41 gwei spike, and 63% of it went on reverted unwinds. The live keeper quotes before sending; with no gas on reverts, the 2025-10 net would be +$502k.
+- Each sale fills at its quote, alone in its block. Infrastructure is up with a fixed delay. Two crashes say nothing about how often crashes happen, so none of this is annualised.
+
+Method, validation and every table: `backtest/README.md` and `backtest/results/collateral.md`.
 
 ## When it fails
 
-- The reserve runs out. In the backtest this was the main cause of misses.
+- The pool is too thin or off the oracle, so the sale would pass the borrower's bound. The keeper then sends nothing. In the backtest, this caused most misses.
 - A move outruns the rescue, or a liquidator wins the race.
+- Another collateral in the account has an LTV of 0, so Aave refuses the aToken transfer. The keeper records it and sends nothing.
+- The collateral is paused, or the L2 sequencer is down and Aave's sentinel has stopped liquidations.
 - NEAR, the MPC network or the RPCs are down.
-- The rescuer lacks gas or allowance.
+- The rescuer lacks gas, or the aToken allowance is used up. In reserve mode, the reserve runs out.
 
 ## Not built yet
 
 - **Reserve layer.** The off-venue reserve in a NEAR Intents Agent API wallet needs partner access. Today the reserve is USDC held at the rescuer address.
 - **Hyperliquid top-ups.** The site reads Hyperliquid, but Levee does not act on it.
-- **Arbitrum.** The contract supports it and fork tests cover repay. There are no live runs.
-- **Mainnet, audit and a reproducible build.**
+- **Arbitrum.** The contracts support it and fork tests cover both modes there. There are no live runs.
+- **Mainnet, an external audit and a reproducible build.**
 
 ## Repository
 
@@ -139,7 +168,7 @@ Limits: only liquidated positions are sampled, so false alarms are unmeasured. 5
 |---|---|
 | `contracts/levee` | NEAR contract, Rust |
 | `contracts/mock-signer` | MPC stand-in for tests |
-| `evm` | Aave fork tests, Foundry |
+| `evm` | `LeveeUnwind`, its scripts, and Aave and Uniswap fork tests, Foundry |
 | `keeper` | Keeper, CLI and verifier, TypeScript |
 | `web` | Site and risk API, Next.js on Cloudflare Workers |
 | `backtest` | Liquidation replay |

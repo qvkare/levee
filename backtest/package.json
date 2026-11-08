@@ -10,6 +10,9 @@
     "fetch-data": "tsx src/fetch/all.ts",
     "derive": "tsx src/derive.ts",
     "derive-portfolio": "tsx src/portfolio/derive.ts",
+    "fetch-pools": "tsx src/fetch/pools.ts",
+    "fetch-quotes": "tsx src/fetch/quotes.ts",
+    "validate-quotes": "tsx src/fetch/collateralCheck.ts",
     "test": "node --import tsx --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },

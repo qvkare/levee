@@ -54,16 +54,22 @@ export class Rpc {
   }
 
   async call<T = unknown>(method: string, params: unknown[]): Promise<T> {
+    return (await this.callTagged<T>(method, params)).result;
+  }
+
+  /** Like `call`, and says which endpoint answered. `avoid` skips one endpoint, for a re-read elsewhere. */
+  async callTagged<T = unknown>(method: string, params: unknown[], avoid?: string): Promise<{ result: T; url: string }> {
     const maxAttempts = this.opts.maxAttempts ?? 14;
     let lastError: unknown;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const endpoint = this.pick();
+      let endpoint = this.pick();
+      if (avoid !== undefined && endpoint.url === avoid && this.endpoints.length > 1) endpoint = this.pick();
       const wait = endpoint.coolUntil - Date.now();
       if (wait > 0) await sleep(wait);
       try {
         const result = await this.post<T>(endpoint, method, params);
         endpoint.ok++;
-        return result;
+        return { result, url: endpoint.url };
       } catch (err) {
         lastError = err;
         endpoint.fail++;
@@ -71,6 +77,57 @@ export class Rpc {
         if (e.fatal) throw err;
         if (err instanceof RangeTooLargeError) throw err;
         endpoint.coolUntil = Date.now() + Math.min(30_000, 400 * 2 ** Math.min(attempt, 6));
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
+  /** Several calls in one JSON-RPC batch, on one endpoint. Any error in the batch retries the whole of it elsewhere. */
+  async batchTagged(requests: Array<{ method: string; params: unknown[] }>): Promise<{ results: unknown[]; url: string }> {
+    const maxAttempts = this.opts.maxAttempts ?? 14;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const endpoint = this.pick();
+      const wait = endpoint.coolUntil - Date.now();
+      if (wait > 0) await sleep(wait);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.opts.timeoutMs ?? 30_000);
+      try {
+        const response = await fetch(endpoint.url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(requests.map((r, id) => ({ jsonrpc: '2.0', id, method: r.method, params: r.params }))),
+          signal: controller.signal,
+        });
+        const text = await response.text();
+        let body: Array<{ id: number; result?: unknown; error?: { code?: number; message?: string; data?: unknown } }>;
+        try {
+          body = JSON.parse(text);
+        } catch {
+          throw new Error(`${endpoint.url}: HTTP ${response.status}: ${text.slice(0, 160)}`);
+        }
+        if (!Array.isArray(body)) throw new Error(`${endpoint.url}: not a batch answer: ${text.slice(0, 160)}`);
+        const results: unknown[] = new Array(requests.length);
+        for (const item of body) {
+          if (item.error) {
+            const message = `${item.error.message ?? ''} ${item.error.data ?? ''}`.trim() || JSON.stringify(item.error);
+            const error: RpcError = new Error(`${endpoint.url}: ${message}`);
+            if (item.error.code !== undefined) error.code = item.error.code;
+            error.fatal = FATAL_MESSAGES.some((m) => message.toLowerCase().includes(m));
+            throw error;
+          }
+          results[item.id] = item.result;
+        }
+        if (results.some((r) => r === undefined)) throw new Error(`${endpoint.url}: batch answer incomplete`);
+        endpoint.ok++;
+        return { results, url: endpoint.url };
+      } catch (err) {
+        lastError = err;
+        endpoint.fail++;
+        if ((err as RpcError).fatal) throw err;
+        endpoint.coolUntil = Date.now() + Math.min(30_000, 400 * 2 ** Math.min(attempt, 6));
+      } finally {
+        clearTimeout(timer);
       }
     }
     throw lastError instanceof Error ? lastError : new Error(String(lastError));

@@ -1,6 +1,7 @@
 // `pnpm backtest`: reads the committed derived files and writes results. No network.
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { runCollateral } from './collateral/run.ts';
 import { CHAINS, type ChainKey } from './config.ts';
 import { readPositions, readPrices, VALIDATION_FILE, type DerivedPosition } from './data.ts';
 import type { MarketSnapshot } from './fetch/reserves.ts';
@@ -99,6 +100,8 @@ export function run(): void {
   console.log(`wrote ${join(RESULTS_DIR, 'summary.json')} and summary.md`);
   runHyperliquid();
   runPortfolio();
+  // Reads results/summary.json and portfolio.json, written just above.
+  runCollateral();
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) run();

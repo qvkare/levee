@@ -1,6 +1,6 @@
 .PHONY: judge verify replay backtest quote-dry attack-demo test test-contracts test-keeper test-evm test-web
 
-RUN := evidence/runs/2026-11-07T19-23-34Z-base-sepolia-1.json
+RUN := evidence/runs/2026-11-08T10-39-36Z-base-sepolia-1.json
 
 # No keys and no funds. Run `pnpm install` first.
 judge: verify replay backtest quote-dry

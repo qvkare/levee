@@ -1,0 +1,2457 @@
+[
+  {
+    "chain": "base",
+    "period": "2025-10",
+    "block": 36632527,
+    "usdcPrice": 99980000,
+    "assets": [
+      {
+        "asset": 0,
+        "address": "0x4200000000000000000000000000000000000006",
+        "symbol": "WETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xb4cb800910b228ed3d0834cf79d697127bbb00e5",
+            "usdcBalance": 486353.097813,
+            "probeCostBps": -0.9481264616095775,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0xd0b53d9277642d899df5c87a3966a349a798f224",
+            "usdcBalance": 13182027.270521,
+            "probeCostBps": 5.5938997190252415,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0x6c561b446416e1a00e8e93e221854d6ea4171372",
+            "usdcBalance": 5293135.643394,
+            "probeCostBps": 23.734403836541684,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x0b1c2dcbbfa744ebd3fc17ff1a96a1e1eb4b2d69",
+            "usdcBalance": 97526.108339,
+            "probeCostBps": 171.0560398074401,
+            "usable": true
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 1,
+        "address": "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+        "symbol": "cbETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xf0913af89c3cf89256196fe5ea3e5370dc90c026",
+            "usdcBalance": 0.000001,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xfdebedc97d56edd31abdcb887570546b257964f2",
+            "usdcBalance": 0.000009,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xa8e4c55d6daf4d768aeba2378c1ad94c112ef48a",
+            "usdcBalance": 1451.162665,
+            "probeCostBps": 1067.2849077139479,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 2,
+        "address": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "symbol": "USDbC",
+        "decimals": 6,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x06959273e9a65433de71f5a452d529544e07ddd0",
+            "usdcBalance": 38927.544785,
+            "probeCostBps": 0.4453300000006877,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0x92722287d2819012dd8ec07b4e426ac00dd11103",
+            "usdcBalance": 2739.673345,
+            "probeCostBps": 6.735350000000029,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0xc986bd739c99f4fda7b82a8bcb49cb159bf5c993",
+            "usdcBalance": 32.766028,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x4fefc6745c3cbdc8069f6133f61a0951467ddf3f",
+            "usdcBalance": 2.829439,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 100
+      },
+      {
+        "asset": 3,
+        "address": "0xc1cba3fcea344f92d9239c08c0568f6f2f0ee452",
+        "symbol": "wstETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 500,
+            "pool": "0x45837e65e4c44ca260ab40e6dc30ff1b466a00ca",
+            "usdcBalance": 81.129699,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 5,
+        "address": "0x04c0599ae5a44757c0af6f9ec3b93da8976c150a",
+        "symbol": "weETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x35c1281fa244f03d4b7e2c69a019ee5d099fb4ca",
+            "usdcBalance": 0.000003,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x2cbe9598e25662ece3217bf3172d8f092ffbfcb9",
+            "usdcBalance": 0.000389,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 6,
+        "address": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+        "symbol": "cbBTC",
+        "decimals": 8,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xe9e25e35aa99a2a60155010802b81a25c45ba185",
+            "usdcBalance": 5.323497,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xfbb6eed8e7aa03b138556eedaf5d271a5e1e43ef",
+            "usdcBalance": 5838439.720913,
+            "probeCostBps": 1.4119807939128037,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0xec558e484cc9f2210714e345298fdc53b253c27d",
+            "usdcBalance": 136713.419106,
+            "probeCostBps": 52.97763291864044,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x3e7586d52a9d07f8611b8ecf6ccc8a689c34a659",
+            "usdcBalance": 3355.92683,
+            "probeCostBps": 433.2149870212776,
+            "usable": false
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 7,
+        "address": "0x2416092f143378750bb29b79ed961ab195cceea5",
+        "symbol": "ezETH",
+        "decimals": 18,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 9,
+        "address": "0xedfa23602d0ec14714057867a78d01e94176bea0",
+        "symbol": "wrsETH",
+        "decimals": 18,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 10,
+        "address": "0xecac9c5f704e954931349da37f60e39f515c11c1",
+        "symbol": "LBTC",
+        "decimals": 8,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 11,
+        "address": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+        "symbol": "EURC",
+        "decimals": 6,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x6a1c74e023fe2619516f89408e9d8c541e4e3eef",
+            "usdcBalance": 0.056752,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x7279c08a36333e12c3fc81747963264c100d66fb",
+            "usdcBalance": 23453.811938,
+            "probeCostBps": 8.856840301025848,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0x03d8219070e54a55a9ce60889ead2ffd18eb6aa9",
+            "usdcBalance": 13255.806381,
+            "probeCostBps": 78.58067693566007,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0xd99fad95b3d1235b403ee26c5b16531d9aa8e576",
+            "usdcBalance": 15.354826,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 12,
+        "address": "0x63706e401c06ac8513145b7687a14804d17f814b",
+        "symbol": "AAVE",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 500,
+            "pool": "0x91bcf207fd676943967c49f35685992654783dee",
+            "usdcBalance": 0.000358,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xc562998555779318b85284b7af71bebb2ada3461",
+            "usdcBalance": 9285.172887,
+            "probeCostBps": 59.49695970636215,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0xf8643d52bab7bedbd26ca59700692de65a6eee3a",
+            "usdcBalance": 1.197174,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 3000
+      },
+      {
+        "asset": 13,
+        "address": "0x236aa50979d5f3de3bd1eeb40e81137f22ab794b",
+        "symbol": "tBTC",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 500,
+            "pool": "0xbe03ed0c57ee301505c26fa9dbfa8cc5ce255fcf",
+            "usdcBalance": 0.306722,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xeca826e450a8ac6cf9ab228ae12b84d0407212a7",
+            "usdcBalance": 0.060196,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      }
+    ]
+  },
+  {
+    "chain": "base",
+    "period": "2026-02",
+    "block": 41514127,
+    "usdcPrice": 99967167,
+    "assets": [
+      {
+        "asset": 0,
+        "address": "0x4200000000000000000000000000000000000006",
+        "symbol": "WETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xb4cb800910b228ed3d0834cf79d697127bbb00e5",
+            "usdcBalance": 67247.462492,
+            "probeCostBps": 10.340584268189179,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0xd0b53d9277642d899df5c87a3966a349a798f224",
+            "usdcBalance": 3957296.947491,
+            "probeCostBps": 9.762632573460106,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0x6c561b446416e1a00e8e93e221854d6ea4171372",
+            "usdcBalance": 10551277.137074,
+            "probeCostBps": 49.73400412625617,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x0b1c2dcbbfa744ebd3fc17ff1a96a1e1eb4b2d69",
+            "usdcBalance": 22811.009847,
+            "probeCostBps": 149.233690360393,
+            "usable": true
+          }
+        ],
+        "configuredFee": 3000
+      },
+      {
+        "asset": 1,
+        "address": "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+        "symbol": "cbETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xf0913af89c3cf89256196fe5ea3e5370dc90c026",
+            "usdcBalance": 0.000001,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xfdebedc97d56edd31abdcb887570546b257964f2",
+            "usdcBalance": 0.000009,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xa8e4c55d6daf4d768aeba2378c1ad94c112ef48a",
+            "usdcBalance": 1014.006815,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0xe65ef07833be37659919bbe7ec366a2ec889c884",
+            "usdcBalance": 121.40657,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 2,
+        "address": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "symbol": "USDbC",
+        "decimals": 6,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x06959273e9a65433de71f5a452d529544e07ddd0",
+            "usdcBalance": 70304.27233,
+            "probeCostBps": 0.12998999999958016,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0x92722287d2819012dd8ec07b4e426ac00dd11103",
+            "usdcBalance": 3038.729808,
+            "probeCostBps": 7.104409999998396,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0xc986bd739c99f4fda7b82a8bcb49cb159bf5c993",
+            "usdcBalance": 31.34412,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x4fefc6745c3cbdc8069f6133f61a0951467ddf3f",
+            "usdcBalance": 2.842509,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 100
+      },
+      {
+        "asset": 3,
+        "address": "0xc1cba3fcea344f92d9239c08c0568f6f2f0ee452",
+        "symbol": "wstETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 500,
+            "pool": "0x45837e65e4c44ca260ab40e6dc30ff1b466a00ca",
+            "usdcBalance": 150.3647,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 5,
+        "address": "0x04c0599ae5a44757c0af6f9ec3b93da8976c150a",
+        "symbol": "weETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x35c1281fa244f03d4b7e2c69a019ee5d099fb4ca",
+            "usdcBalance": 0.000003,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x2cbe9598e25662ece3217bf3172d8f092ffbfcb9",
+            "usdcBalance": 0.000389,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 6,
+        "address": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+        "symbol": "cbBTC",
+        "decimals": 8,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xe9e25e35aa99a2a60155010802b81a25c45ba185",
+            "usdcBalance": 17.009368,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xfbb6eed8e7aa03b138556eedaf5d271a5e1e43ef",
+            "usdcBalance": 1563540.838407,
+            "probeCostBps": 1.0322654841554701,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0xec558e484cc9f2210714e345298fdc53b253c27d",
+            "usdcBalance": 687617.523719,
+            "probeCostBps": 41.337806973662516,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x3e7586d52a9d07f8611b8ecf6ccc8a689c34a659",
+            "usdcBalance": 1242.548644,
+            "probeCostBps": 1197.3101591858492,
+            "usable": false
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 7,
+        "address": "0x2416092f143378750bb29b79ed961ab195cceea5",
+        "symbol": "ezETH",
+        "decimals": 18,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 9,
+        "address": "0xedfa23602d0ec14714057867a78d01e94176bea0",
+        "symbol": "wrsETH",
+        "decimals": 18,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 10,
+        "address": "0xecac9c5f704e954931349da37f60e39f515c11c1",
+        "symbol": "LBTC",
+        "decimals": 8,
+        "tiers": [
+          {
+            "fee": 3000,
+            "pool": "0x54a18bea7bec0be3a4b8919edaba6f606cd3afeb",
+            "usdcBalance": 0.000003,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 11,
+        "address": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+        "symbol": "EURC",
+        "decimals": 6,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x6a1c74e023fe2619516f89408e9d8c541e4e3eef",
+            "usdcBalance": 272.437417,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x7279c08a36333e12c3fc81747963264c100d66fb",
+            "usdcBalance": 32641.725417,
+            "probeCostBps": 37.59601858651207,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0x03d8219070e54a55a9ce60889ead2ffd18eb6aa9",
+            "usdcBalance": 9309.519936,
+            "probeCostBps": 77.30533303491605,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0xd99fad95b3d1235b403ee26c5b16531d9aa8e576",
+            "usdcBalance": 15.464135,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 12,
+        "address": "0x63706e401c06ac8513145b7687a14804d17f814b",
+        "symbol": "AAVE",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 500,
+            "pool": "0x91bcf207fd676943967c49f35685992654783dee",
+            "usdcBalance": 0.000358,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xc562998555779318b85284b7af71bebb2ada3461",
+            "usdcBalance": 3963.171869,
+            "probeCostBps": 62.22429004578922,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0xf8643d52bab7bedbd26ca59700692de65a6eee3a",
+            "usdcBalance": 0.159732,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 3000
+      },
+      {
+        "asset": 13,
+        "address": "0x236aa50979d5f3de3bd1eeb40e81137f22ab794b",
+        "symbol": "tBTC",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 500,
+            "pool": "0xbe03ed0c57ee301505c26fa9dbfa8cc5ce255fcf",
+            "usdcBalance": 0.306722,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xeca826e450a8ac6cf9ab228ae12b84d0407212a7",
+            "usdcBalance": 0.060196,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      }
+    ]
+  },
+  {
+    "chain": "arbitrum",
+    "period": "2025-10",
+    "block": 387876437,
+    "usdcPrice": 99980917,
+    "assets": [
+      {
+        "asset": 0,
+        "address": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
+        "symbol": "DAI",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x7cf803e8d82a50504180f417b8bc7a493c0a0503",
+            "usdcBalance": 135142.872047,
+            "probeCostBps": 1.6504974103215275,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0x9264e764e6d5d252a5c17c457c9bb059b8831bb1",
+            "usdcBalance": 32.294764,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xd46c8a1940113ae64f960b7aa12ef5dcab0ffe0e",
+            "usdcBalance": 11.235469,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0xbff936a43e6fe6f891789be66043bcc8effee938",
+            "usdcBalance": 11.732849,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 100
+      },
+      {
+        "asset": 1,
+        "address": "0xf97f4df75117a78c1a5a0dbb814af92458539fb4",
+        "symbol": "LINK",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x15f5a316593ee05a4af7f38198c37fe4801abd65",
+            "usdcBalance": 0.017658,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x655c1607f8c2e73d5b4ddabce9ba8792b87592b6",
+            "usdcBalance": 769.476946,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xbbe36e6f0331c6a36ab44bc8421e28e1a1871c1e",
+            "usdcBalance": 75566.193068,
+            "probeCostBps": 39.9062197133393,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x338a8064142b09d4776b1f5f082890d905b508eb",
+            "usdcBalance": 0.061272,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 3000
+      },
+      {
+        "asset": 2,
+        "address": "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
+        "symbol": "USDC",
+        "decimals": 6,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x8e295789c9465487074a65b1ae9ce0351172393f",
+            "usdcBalance": 61200.287041,
+            "probeCostBps": 1.4102100000012996,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0xa9e9cb16e922892aa563a5adb0f7d976efce36fb",
+            "usdcBalance": 18.177081,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xd2d3b78fef22406696ef9e7fe9bbecf98802690d",
+            "usdcBalance": 29.270828,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x41bcf70432c90ba007faab2d3ac4a4a615b6bba3",
+            "usdcBalance": 5.332354,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 100
+      },
+      {
+        "asset": 3,
+        "address": "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
+        "symbol": "WBTC",
+        "decimals": 8,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xbd65e976bd6b0b59232144c7966e1065024b874c",
+            "usdcBalance": 0.001354,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x0e4831319a50228b9e450861297ab92dee15b44f",
+            "usdcBalance": 5581093.252261,
+            "probeCostBps": 4.283863717948755,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0x6985cb98ce393fce8d6272127f39013f61e36166",
+            "usdcBalance": 178743.68178,
+            "probeCostBps": 50.12583843917895,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x719826896832c9deaa868272f2dd55cf1e5ca3e7",
+            "usdcBalance": 4782.563276,
+            "probeCostBps": 386.1826825928105,
+            "usable": false
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 4,
+        "address": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+        "symbol": "WETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x6f38e884725a116c9c7fbf208e79fe8828a2595f",
+            "usdcBalance": 883426.75993,
+            "probeCostBps": -2.5897954268183643,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0xc6962004f452be9203591991d15f6b388e09e8d0",
+            "usdcBalance": 48783440.990002,
+            "probeCostBps": 2.986412027099483,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0xc473e2aee3441bf9240be85eb122abb059a3b57c",
+            "usdcBalance": 5348033.040451,
+            "probeCostBps": 20.31639663379048,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x42fc852a750ba93d5bf772ecdc857e87a86403a9",
+            "usdcBalance": 33735.646224,
+            "probeCostBps": 200.9249138576452,
+            "usable": true
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 5,
+        "address": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+        "symbol": "USD₮0",
+        "decimals": 6,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xbe3ad6a5669dc0b8b12febc03608860c31e2eef6",
+            "usdcBalance": 2042371.386609,
+            "probeCostBps": -2.7126175679681452,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0xbce73c2e5a623054b0e8e2428e956f4b9d0412a5",
+            "usdcBalance": 20143.99494,
+            "probeCostBps": 3.2816914513733586,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0x9957ab69651efe39b17c778e1435258f6a2cd314",
+            "usdcBalance": 1419.060191,
+            "probeCostBps": 61.079379548034666,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0xd7e7ad63359e2aa9e841f6e1326fb7e69479a50b",
+            "usdcBalance": 44.081125,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 100
+      },
+      {
+        "asset": 6,
+        "address": "0xba5ddd1f9d7f570dc94a51479a000e3bce967196",
+        "symbol": "AAVE",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xd4ca40dffaccb389f87c34a84857e4ae77bee846",
+            "usdcBalance": 0.000121,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x8f31cfceaeeb429126b2dae75d131a1195d2e163",
+            "usdcBalance": 0.042787,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x3db70832f48f8c01ee041671f7bb1cfaa2677584",
+            "usdcBalance": 92814.095447,
+            "probeCostBps": 45.5322204154851,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x30dec55b51d7dadf1ac568809ea0bb079d435e85",
+            "usdcBalance": 0.276196,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 3000
+      },
+      {
+        "asset": 7,
+        "address": "0xd22a58f79e9481d1a88e00c343885a588b34b68b",
+        "symbol": "EURS",
+        "decimals": 2,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 8,
+        "address": "0x5979d7b546e38e414f7e9822514be443a4800529",
+        "symbol": "wstETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x4c1fe148ff9bd6c936fa47ee518cc33829d918f7",
+            "usdcBalance": 0.379857,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xab007665a4dfd24830f0ca19206f9fbd7c3aa85f",
+            "usdcBalance": 61.040617,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x7092e723285fe1381a3a59c0d438f53d2c26d9e8",
+            "usdcBalance": 2311.986661,
+            "probeCostBps": 157.56916234286766,
+            "usable": true
+          }
+        ],
+        "configuredFee": 3000
+      },
+      {
+        "asset": 9,
+        "address": "0x3f56e0c36d275367b8c502090edf38289b3dea0d",
+        "symbol": "MAI",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 500,
+            "pool": "0x4fb805f77cbdefb1b8f633a74dd8594b2ebd2270",
+            "usdcBalance": 0.000323,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x37a416dd10f2dedbb2345226f72b2fa1024f552f",
+            "usdcBalance": 0.000778,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x328a62eb11e617c4f12d86164dace00f5112860d",
+            "usdcBalance": 0.000115,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 10,
+        "address": "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8",
+        "symbol": "rETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 3000,
+            "pool": "0xe1772ebf1f1a1f65cac6bbab0b9e3732848c59f2",
+            "usdcBalance": 0.199645,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x4174ee7eee684371705902cb2d8f79beb26dde94",
+            "usdcBalance": 0.000001,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 13,
+        "address": "0x17fc002b466eec40dae837fc4be5c67993ddbd6f",
+        "symbol": "FRAX",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x01c1295cb9ee6449704962dcdd01946914c00f34",
+            "usdcBalance": 470.651358,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xb1a3485c8f23118016ec8b239bb59f7dd7fdc1e3",
+            "usdcBalance": 0.000196,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x71e7e318ad4f832aa94df376a9bcd3d9116db12c",
+            "usdcBalance": 341.949762,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x1ed3d3745f272c14a06a4eeb873d3fb0066b162f",
+            "usdcBalance": 1.037031,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 14,
+        "address": "0x912ce59144191c1204e64559fe8253a0e49e6548",
+        "symbol": "ARB",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x616a2a065bfe53da48e83e7d709fb428aa3c9f5b",
+            "usdcBalance": 5387.67889,
+            "probeCostBps": 163.86380140694047,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0xb0f6ca40411360c03d41c5ffc5f179b8403cdcf8",
+            "usdcBalance": 66574.208764,
+            "probeCostBps": 9.485666495050449,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0xaebdca1bc8d89177ebe2308d62af5e74885dccc3",
+            "usdcBalance": 43925.602221,
+            "probeCostBps": 38.08124164896842,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0xac9a19e85a49bacc28bd2deecab3cdfadbfc3e00",
+            "usdcBalance": 26976.147598,
+            "probeCostBps": 147.0857929492464,
+            "usable": true
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 15,
+        "address": "0x35751007a407ca6feffe80b3cb397736d2cf4dbe",
+        "symbol": "weETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 3000,
+            "pool": "0x42526ead4d21e3687afcdde53dae829a91bbee67",
+            "usdcBalance": 0.000126,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 17,
+        "address": "0x2416092f143378750bb29b79ed961ab195cceea5",
+        "symbol": "ezETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 3000,
+            "pool": "0x3a5120a2cb989649c6ef28e5bac103a9a9c8f158",
+            "usdcBalance": 0.000001,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0xdc75783b90119efe86068da4c7f37f53b06d1a0c",
+            "usdcBalance": 0.00023,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 18,
+        "address": "0x4186bfc76e2e237523cbc30fd220fe055156b41f",
+        "symbol": "rsETH",
+        "decimals": 18,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 19,
+        "address": "0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40",
+        "symbol": "tBTC",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xac7aa0af731ab058617529b987d240e72db4eab3",
+            "usdcBalance": 0.000017,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x8a92980d30c2fcaf1b7a32bb7cd8d36e61875dbe",
+            "usdcBalance": 0.000002,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x224c07cb9b235feada068fd83e8fff95f9511d6b",
+            "usdcBalance": 0.003632,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      }
+    ]
+  },
+  {
+    "chain": "arbitrum",
+    "period": "2026-02",
+    "block": 426968127,
+    "usdcPrice": 99962428,
+    "assets": [
+      {
+        "asset": 0,
+        "address": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
+        "symbol": "DAI",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x7cf803e8d82a50504180f417b8bc7a493c0a0503",
+            "usdcBalance": 27379.317847,
+            "probeCostBps": 3.2330360532162317,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0x9264e764e6d5d252a5c17c457c9bb059b8831bb1",
+            "usdcBalance": 36.45678,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xd46c8a1940113ae64f960b7aa12ef5dcab0ffe0e",
+            "usdcBalance": 2275.411751,
+            "probeCostBps": 42.22238036962756,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0xbff936a43e6fe6f891789be66043bcc8effee938",
+            "usdcBalance": 11.732851,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 100
+      },
+      {
+        "asset": 1,
+        "address": "0xf97f4df75117a78c1a5a0dbb814af92458539fb4",
+        "symbol": "LINK",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x15f5a316593ee05a4af7f38198c37fe4801abd65",
+            "usdcBalance": 0.01731,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x655c1607f8c2e73d5b4ddabce9ba8792b87592b6",
+            "usdcBalance": 34.251856,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xbbe36e6f0331c6a36ab44bc8421e28e1a1871c1e",
+            "usdcBalance": 6872.91381,
+            "probeCostBps": 210.317621033993,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x338a8064142b09d4776b1f5f082890d905b508eb",
+            "usdcBalance": 0.058257,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 3000
+      },
+      {
+        "asset": 2,
+        "address": "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
+        "symbol": "USDC",
+        "decimals": 6,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x8e295789c9465487074a65b1ae9ce0351172393f",
+            "usdcBalance": 67298.455194,
+            "probeCostBps": 0.7237099999990448,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0xa9e9cb16e922892aa563a5adb0f7d976efce36fb",
+            "usdcBalance": 686.339844,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xd2d3b78fef22406696ef9e7fe9bbecf98802690d",
+            "usdcBalance": 9.829764,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x41bcf70432c90ba007faab2d3ac4a4a615b6bba3",
+            "usdcBalance": 4.809829,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 100
+      },
+      {
+        "asset": 3,
+        "address": "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
+        "symbol": "WBTC",
+        "decimals": 8,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xbd65e976bd6b0b59232144c7966e1065024b874c",
+            "usdcBalance": 1273.54098,
+            "probeCostBps": 889.6292492588854,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x0e4831319a50228b9e450861297ab92dee15b44f",
+            "usdcBalance": 2187179.05855,
+            "probeCostBps": 38.1628320546179,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0x6985cb98ce393fce8d6272127f39013f61e36166",
+            "usdcBalance": 169439.011282,
+            "probeCostBps": 82.09129420753358,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x719826896832c9deaa868272f2dd55cf1e5ca3e7",
+            "usdcBalance": 2454.167802,
+            "probeCostBps": 678.4881354236827,
+            "usable": false
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 4,
+        "address": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+        "symbol": "WETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x6f38e884725a116c9c7fbf208e79fe8828a2595f",
+            "usdcBalance": 43472.640232,
+            "probeCostBps": 8.336174818506237,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0xc6962004f452be9203591991d15f6b388e09e8d0",
+            "usdcBalance": 13011421.754028,
+            "probeCostBps": 5.527126227218293,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0xc473e2aee3441bf9240be85eb122abb059a3b57c",
+            "usdcBalance": 1079537.484818,
+            "probeCostBps": 45.81524479447596,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x42fc852a750ba93d5bf772ecdc857e87a86403a9",
+            "usdcBalance": 7232.700613,
+            "probeCostBps": 231.50873432107088,
+            "usable": true
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 5,
+        "address": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+        "symbol": "USD₮0",
+        "decimals": 6,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xbe3ad6a5669dc0b8b12febc03608860c31e2eef6",
+            "usdcBalance": 1044779.353016,
+            "probeCostBps": 3.344747369542489,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0xbce73c2e5a623054b0e8e2428e956f4b9d0412a5",
+            "usdcBalance": 2048.921676,
+            "probeCostBps": 8.222434917359855,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0x9957ab69651efe39b17c778e1435258f6a2cd314",
+            "usdcBalance": 623.444774,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0xd7e7ad63359e2aa9e841f6e1326fb7e69479a50b",
+            "usdcBalance": 2829.44722,
+            "probeCostBps": 114.54747259748154,
+            "usable": true
+          }
+        ],
+        "configuredFee": 100
+      },
+      {
+        "asset": 6,
+        "address": "0xba5ddd1f9d7f570dc94a51479a000e3bce967196",
+        "symbol": "AAVE",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xd4ca40dffaccb389f87c34a84857e4ae77bee846",
+            "usdcBalance": 0.000121,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x8f31cfceaeeb429126b2dae75d131a1195d2e163",
+            "usdcBalance": 0.042041,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x3db70832f48f8c01ee041671f7bb1cfaa2677584",
+            "usdcBalance": 40662.412025,
+            "probeCostBps": 86.02857495909832,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x30dec55b51d7dadf1ac568809ea0bb079d435e85",
+            "usdcBalance": 0.00027,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 3000
+      },
+      {
+        "asset": 7,
+        "address": "0xd22a58f79e9481d1a88e00c343885a588b34b68b",
+        "symbol": "EURS",
+        "decimals": 2,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 8,
+        "address": "0x5979d7b546e38e414f7e9822514be443a4800529",
+        "symbol": "wstETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x4c1fe148ff9bd6c936fa47ee518cc33829d918f7",
+            "usdcBalance": 0.323046,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xab007665a4dfd24830f0ca19206f9fbd7c3aa85f",
+            "usdcBalance": 1.591656,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x7092e723285fe1381a3a59c0d438f53d2c26d9e8",
+            "usdcBalance": 106.401924,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 9,
+        "address": "0x3f56e0c36d275367b8c502090edf38289b3dea0d",
+        "symbol": "MAI",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 500,
+            "pool": "0x4fb805f77cbdefb1b8f633a74dd8594b2ebd2270",
+            "usdcBalance": 0.000323,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x37a416dd10f2dedbb2345226f72b2fa1024f552f",
+            "usdcBalance": 0.000778,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x328a62eb11e617c4f12d86164dace00f5112860d",
+            "usdcBalance": 0.000115,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 10,
+        "address": "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8",
+        "symbol": "rETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 3000,
+            "pool": "0xe1772ebf1f1a1f65cac6bbab0b9e3732848c59f2",
+            "usdcBalance": 0.097018,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x4174ee7eee684371705902cb2d8f79beb26dde94",
+            "usdcBalance": 0.000001,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 13,
+        "address": "0x17fc002b466eec40dae837fc4be5c67993ddbd6f",
+        "symbol": "FRAX",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x01c1295cb9ee6449704962dcdd01946914c00f34",
+            "usdcBalance": 512.804158,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xb1a3485c8f23118016ec8b239bb59f7dd7fdc1e3",
+            "usdcBalance": 0.000196,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x71e7e318ad4f832aa94df376a9bcd3d9116db12c",
+            "usdcBalance": 370.004922,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x1ed3d3745f272c14a06a4eeb873d3fb0066b162f",
+            "usdcBalance": 1.037031,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 14,
+        "address": "0x912ce59144191c1204e64559fe8253a0e49e6548",
+        "symbol": "ARB",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x616a2a065bfe53da48e83e7d709fb428aa3c9f5b",
+            "usdcBalance": 191.817105,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xb0f6ca40411360c03d41c5ffc5f179b8403cdcf8",
+            "usdcBalance": 12871.485531,
+            "probeCostBps": 250.91045363641928,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0xaebdca1bc8d89177ebe2308d62af5e74885dccc3",
+            "usdcBalance": 26415.760722,
+            "probeCostBps": 74.42116115939479,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0xac9a19e85a49bacc28bd2deecab3cdfadbfc3e00",
+            "usdcBalance": 3891.152295,
+            "probeCostBps": 282.03705578610186,
+            "usable": true
+          }
+        ],
+        "configuredFee": 3000
+      },
+      {
+        "asset": 15,
+        "address": "0x35751007a407ca6feffe80b3cb397736d2cf4dbe",
+        "symbol": "weETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 3000,
+            "pool": "0x42526ead4d21e3687afcdde53dae829a91bbee67",
+            "usdcBalance": 0.000126,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 17,
+        "address": "0x2416092f143378750bb29b79ed961ab195cceea5",
+        "symbol": "ezETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 3000,
+            "pool": "0x3a5120a2cb989649c6ef28e5bac103a9a9c8f158",
+            "usdcBalance": 0.000001,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0xdc75783b90119efe86068da4c7f37f53b06d1a0c",
+            "usdcBalance": 0.00023,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 18,
+        "address": "0x4186bfc76e2e237523cbc30fd220fe055156b41f",
+        "symbol": "rsETH",
+        "decimals": 18,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 19,
+        "address": "0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40",
+        "symbol": "tBTC",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xac7aa0af731ab058617529b987d240e72db4eab3",
+            "usdcBalance": 0.000017,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x8a92980d30c2fcaf1b7a32bb7cd8d36e61875dbe",
+            "usdcBalance": 0.000002,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x224c07cb9b235feada068fd83e8fff95f9511d6b",
+            "usdcBalance": 0.003632,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      }
+    ]
+  },
+  {
+    "chain": "base",
+    "period": "calm",
+    "block": 38965327,
+    "usdcPrice": 99986000,
+    "assets": [
+      {
+        "asset": 0,
+        "address": "0x4200000000000000000000000000000000000006",
+        "symbol": "WETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xb4cb800910b228ed3d0834cf79d697127bbb00e5",
+            "usdcBalance": 287114.916853,
+            "probeCostBps": -1.995920948145713,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0xd0b53d9277642d899df5c87a3966a349a798f224",
+            "usdcBalance": 5906922.091823,
+            "probeCostBps": -3.188978405775922,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0x6c561b446416e1a00e8e93e221854d6ea4171372",
+            "usdcBalance": 2589319.147192,
+            "probeCostBps": 8.281240888510233,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x0b1c2dcbbfa744ebd3fc17ff1a96a1e1eb4b2d69",
+            "usdcBalance": 48065.668461,
+            "probeCostBps": 98.34429739087992,
+            "usable": true
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 1,
+        "address": "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+        "symbol": "cbETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xf0913af89c3cf89256196fe5ea3e5370dc90c026",
+            "usdcBalance": 0.000001,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xfdebedc97d56edd31abdcb887570546b257964f2",
+            "usdcBalance": 0.000009,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xa8e4c55d6daf4d768aeba2378c1ad94c112ef48a",
+            "usdcBalance": 1178.894679,
+            "probeCostBps": 1526.1313983402115,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0xe65ef07833be37659919bbe7ec366a2ec889c884",
+            "usdcBalance": 120.683788,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 2,
+        "address": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "symbol": "USDbC",
+        "decimals": 6,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x06959273e9a65433de71f5a452d529544e07ddd0",
+            "usdcBalance": 25760.979948,
+            "probeCostBps": 1.483339999999167,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0x92722287d2819012dd8ec07b4e426ac00dd11103",
+            "usdcBalance": 2010.873665,
+            "probeCostBps": 9.485419999999412,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0xc986bd739c99f4fda7b82a8bcb49cb159bf5c993",
+            "usdcBalance": 31.934576,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x4fefc6745c3cbdc8069f6133f61a0951467ddf3f",
+            "usdcBalance": 2.842509,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 100
+      },
+      {
+        "asset": 3,
+        "address": "0xc1cba3fcea344f92d9239c08c0568f6f2f0ee452",
+        "symbol": "wstETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 500,
+            "pool": "0x45837e65e4c44ca260ab40e6dc30ff1b466a00ca",
+            "usdcBalance": 115.642174,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 5,
+        "address": "0x04c0599ae5a44757c0af6f9ec3b93da8976c150a",
+        "symbol": "weETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x35c1281fa244f03d4b7e2c69a019ee5d099fb4ca",
+            "usdcBalance": 0.000003,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x2cbe9598e25662ece3217bf3172d8f092ffbfcb9",
+            "usdcBalance": 0.000389,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 6,
+        "address": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+        "symbol": "cbBTC",
+        "decimals": 8,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xe9e25e35aa99a2a60155010802b81a25c45ba185",
+            "usdcBalance": 15.75604,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xfbb6eed8e7aa03b138556eedaf5d271a5e1e43ef",
+            "usdcBalance": 2066157.658359,
+            "probeCostBps": -0.20780765606409624,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0xec558e484cc9f2210714e345298fdc53b253c27d",
+            "usdcBalance": 254400.31037,
+            "probeCostBps": 0.8789565330236115,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x3e7586d52a9d07f8611b8ecf6ccc8a689c34a659",
+            "usdcBalance": 1551.926074,
+            "probeCostBps": 1236.7764162738792,
+            "usable": false
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 7,
+        "address": "0x2416092f143378750bb29b79ed961ab195cceea5",
+        "symbol": "ezETH",
+        "decimals": 18,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 9,
+        "address": "0xedfa23602d0ec14714057867a78d01e94176bea0",
+        "symbol": "wrsETH",
+        "decimals": 18,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 10,
+        "address": "0xecac9c5f704e954931349da37f60e39f515c11c1",
+        "symbol": "LBTC",
+        "decimals": 8,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 11,
+        "address": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+        "symbol": "EURC",
+        "decimals": 6,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x6a1c74e023fe2619516f89408e9d8c541e4e3eef",
+            "usdcBalance": 0.056767,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x7279c08a36333e12c3fc81747963264c100d66fb",
+            "usdcBalance": 44765.63363,
+            "probeCostBps": -11.571570495927386,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0x03d8219070e54a55a9ce60889ead2ffd18eb6aa9",
+            "usdcBalance": 5584.891787,
+            "probeCostBps": 49.8526237337682,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0xd99fad95b3d1235b403ee26c5b16531d9aa8e576",
+            "usdcBalance": 15.242089,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 12,
+        "address": "0x63706e401c06ac8513145b7687a14804d17f814b",
+        "symbol": "AAVE",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 500,
+            "pool": "0x91bcf207fd676943967c49f35685992654783dee",
+            "usdcBalance": 0.000358,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xc562998555779318b85284b7af71bebb2ada3461",
+            "usdcBalance": 4783.001493,
+            "probeCostBps": 307.9797982735788,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0xf8643d52bab7bedbd26ca59700692de65a6eee3a",
+            "usdcBalance": 0.372746,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 13,
+        "address": "0x236aa50979d5f3de3bd1eeb40e81137f22ab794b",
+        "symbol": "tBTC",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 500,
+            "pool": "0xbe03ed0c57ee301505c26fa9dbfa8cc5ce255fcf",
+            "usdcBalance": 0.306722,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xeca826e450a8ac6cf9ab228ae12b84d0407212a7",
+            "usdcBalance": 0.060196,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      }
+    ]
+  },
+  {
+    "chain": "arbitrum",
+    "period": "calm",
+    "block": 406557036,
+    "usdcPrice": 99986000,
+    "assets": [
+      {
+        "asset": 0,
+        "address": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
+        "symbol": "DAI",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x7cf803e8d82a50504180f417b8bc7a493c0a0503",
+            "usdcBalance": 148972.315647,
+            "probeCostBps": -1.3970179210809341,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0x9264e764e6d5d252a5c17c457c9bb059b8831bb1",
+            "usdcBalance": 33.431417,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xd46c8a1940113ae64f960b7aa12ef5dcab0ffe0e",
+            "usdcBalance": 128.31055,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0xbff936a43e6fe6f891789be66043bcc8effee938",
+            "usdcBalance": 11.732849,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 100
+      },
+      {
+        "asset": 1,
+        "address": "0xf97f4df75117a78c1a5a0dbb814af92458539fb4",
+        "symbol": "LINK",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x15f5a316593ee05a4af7f38198c37fe4801abd65",
+            "usdcBalance": 0.016906,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x655c1607f8c2e73d5b4ddabce9ba8792b87592b6",
+            "usdcBalance": 412.651933,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0xbbe36e6f0331c6a36ab44bc8421e28e1a1871c1e",
+            "usdcBalance": 15075.595595,
+            "probeCostBps": 142.08182967383243,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x338a8064142b09d4776b1f5f082890d905b508eb",
+            "usdcBalance": 0.058257,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 3000
+      },
+      {
+        "asset": 2,
+        "address": "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
+        "symbol": "USDC",
+        "decimals": 6,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x8e295789c9465487074a65b1ae9ce0351172393f",
+            "usdcBalance": 71097.200916,
+            "probeCostBps": 0.26520000000029853,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0xa9e9cb16e922892aa563a5adb0f7d976efce36fb",
+            "usdcBalance": 1510.484578,
+            "probeCostBps": 10.849349999999536,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0xd2d3b78fef22406696ef9e7fe9bbecf98802690d",
+            "usdcBalance": 22.017539,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x41bcf70432c90ba007faab2d3ac4a4a615b6bba3",
+            "usdcBalance": 4.830371,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 100
+      },
+      {
+        "asset": 3,
+        "address": "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
+        "symbol": "WBTC",
+        "decimals": 8,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xbd65e976bd6b0b59232144c7966e1065024b874c",
+            "usdcBalance": 0.001357,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x0e4831319a50228b9e450861297ab92dee15b44f",
+            "usdcBalance": 2299965.855665,
+            "probeCostBps": 20.323445006695806,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0x6985cb98ce393fce8d6272127f39013f61e36166",
+            "usdcBalance": 71983.629942,
+            "probeCostBps": 30.67077324873102,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x719826896832c9deaa868272f2dd55cf1e5ca3e7",
+            "usdcBalance": 8986.335659,
+            "probeCostBps": 171.95335745376238,
+            "usable": true
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 4,
+        "address": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+        "symbol": "WETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x6f38e884725a116c9c7fbf208e79fe8828a2595f",
+            "usdcBalance": 96850.44381,
+            "probeCostBps": 10.758900589373788,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0xc6962004f452be9203591991d15f6b388e09e8d0",
+            "usdcBalance": 21101070.036839,
+            "probeCostBps": 3.574398152366154,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0xc473e2aee3441bf9240be85eb122abb059a3b57c",
+            "usdcBalance": 2134594.830092,
+            "probeCostBps": 16.82044832689078,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x42fc852a750ba93d5bf772ecdc857e87a86403a9",
+            "usdcBalance": 13215.683731,
+            "probeCostBps": 154.6533081281809,
+            "usable": true
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 5,
+        "address": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+        "symbol": "USD₮0",
+        "decimals": 6,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xbe3ad6a5669dc0b8b12febc03608860c31e2eef6",
+            "usdcBalance": 1639633.682637,
+            "probeCostBps": -2.4109105634118055,
+            "usable": true
+          },
+          {
+            "fee": 500,
+            "pool": "0xbce73c2e5a623054b0e8e2428e956f4b9d0412a5",
+            "usdcBalance": 32658.747972,
+            "probeCostBps": 4.220390993776579,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0x9957ab69651efe39b17c778e1435258f6a2cd314",
+            "usdcBalance": 711.280622,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0xd7e7ad63359e2aa9e841f6e1326fb7e69479a50b",
+            "usdcBalance": 33.502399,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 100
+      },
+      {
+        "asset": 6,
+        "address": "0xba5ddd1f9d7f570dc94a51479a000e3bce967196",
+        "symbol": "AAVE",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xd4ca40dffaccb389f87c34a84857e4ae77bee846",
+            "usdcBalance": 0.000121,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x8f31cfceaeeb429126b2dae75d131a1195d2e163",
+            "usdcBalance": 0.051421,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x3db70832f48f8c01ee041671f7bb1cfaa2677584",
+            "usdcBalance": 56474.239361,
+            "probeCostBps": 164.59711510538045,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0x30dec55b51d7dadf1ac568809ea0bb079d435e85",
+            "usdcBalance": 0.00047,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": 3000
+      },
+      {
+        "asset": 7,
+        "address": "0xd22a58f79e9481d1a88e00c343885a588b34b68b",
+        "symbol": "EURS",
+        "decimals": 2,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 8,
+        "address": "0x5979d7b546e38e414f7e9822514be443a4800529",
+        "symbol": "wstETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x4c1fe148ff9bd6c936fa47ee518cc33829d918f7",
+            "usdcBalance": 0.322209,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xab007665a4dfd24830f0ca19206f9fbd7c3aa85f",
+            "usdcBalance": 1.592913,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x7092e723285fe1381a3a59c0d438f53d2c26d9e8",
+            "usdcBalance": 609.904653,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 9,
+        "address": "0x3f56e0c36d275367b8c502090edf38289b3dea0d",
+        "symbol": "MAI",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 500,
+            "pool": "0x4fb805f77cbdefb1b8f633a74dd8594b2ebd2270",
+            "usdcBalance": 0.000323,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x37a416dd10f2dedbb2345226f72b2fa1024f552f",
+            "usdcBalance": 0.000778,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x328a62eb11e617c4f12d86164dace00f5112860d",
+            "usdcBalance": 0.000115,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 10,
+        "address": "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8",
+        "symbol": "rETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 3000,
+            "pool": "0xe1772ebf1f1a1f65cac6bbab0b9e3732848c59f2",
+            "usdcBalance": 0.11535,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x4174ee7eee684371705902cb2d8f79beb26dde94",
+            "usdcBalance": 0.000001,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 13,
+        "address": "0x17fc002b466eec40dae837fc4be5c67993ddbd6f",
+        "symbol": "FRAX",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x01c1295cb9ee6449704962dcdd01946914c00f34",
+            "usdcBalance": 9.393166,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xb1a3485c8f23118016ec8b239bb59f7dd7fdc1e3",
+            "usdcBalance": 0.000196,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x71e7e318ad4f832aa94df376a9bcd3d9116db12c",
+            "usdcBalance": 359.943133,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0x1ed3d3745f272c14a06a4eeb873d3fb0066b162f",
+            "usdcBalance": 1.037031,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 14,
+        "address": "0x912ce59144191c1204e64559fe8253a0e49e6548",
+        "symbol": "ARB",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0x616a2a065bfe53da48e83e7d709fb428aa3c9f5b",
+            "usdcBalance": 2404.693849,
+            "probeCostBps": 399.99848095245704,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0xb0f6ca40411360c03d41c5ffc5f179b8403cdcf8",
+            "usdcBalance": 25742.545423,
+            "probeCostBps": 30.21745940938958,
+            "usable": true
+          },
+          {
+            "fee": 3000,
+            "pool": "0xaebdca1bc8d89177ebe2308d62af5e74885dccc3",
+            "usdcBalance": 9245.727552,
+            "probeCostBps": 213.65128075758298,
+            "usable": true
+          },
+          {
+            "fee": 10000,
+            "pool": "0xac9a19e85a49bacc28bd2deecab3cdfadbfc3e00",
+            "usdcBalance": 9817.1084,
+            "probeCostBps": 160.07804073181475,
+            "usable": true
+          }
+        ],
+        "configuredFee": 500
+      },
+      {
+        "asset": 15,
+        "address": "0x35751007a407ca6feffe80b3cb397736d2cf4dbe",
+        "symbol": "weETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 3000,
+            "pool": "0x42526ead4d21e3687afcdde53dae829a91bbee67",
+            "usdcBalance": 0.000126,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 17,
+        "address": "0x2416092f143378750bb29b79ed961ab195cceea5",
+        "symbol": "ezETH",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 3000,
+            "pool": "0x3a5120a2cb989649c6ef28e5bac103a9a9c8f158",
+            "usdcBalance": 0.000001,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 10000,
+            "pool": "0xdc75783b90119efe86068da4c7f37f53b06d1a0c",
+            "usdcBalance": 0.00023,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      },
+      {
+        "asset": 18,
+        "address": "0x4186bfc76e2e237523cbc30fd220fe055156b41f",
+        "symbol": "rsETH",
+        "decimals": 18,
+        "tiers": [],
+        "configuredFee": null
+      },
+      {
+        "asset": 19,
+        "address": "0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40",
+        "symbol": "tBTC",
+        "decimals": 18,
+        "tiers": [
+          {
+            "fee": 100,
+            "pool": "0xac7aa0af731ab058617529b987d240e72db4eab3",
+            "usdcBalance": 0.000017,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 500,
+            "pool": "0x8a92980d30c2fcaf1b7a32bb7cd8d36e61875dbe",
+            "usdcBalance": 0.000002,
+            "probeCostBps": null,
+            "usable": false
+          },
+          {
+            "fee": 3000,
+            "pool": "0x224c07cb9b235feada068fd83e8fff95f9511d6b",
+            "usdcBalance": 0.003632,
+            "probeCostBps": null,
+            "usable": false
+          }
+        ],
+        "configuredFee": null
+      }
+    ]
+  }
+]

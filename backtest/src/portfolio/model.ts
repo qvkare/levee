@@ -217,6 +217,51 @@ export class PeriodModel {
     return this.states[member]!;
   }
 
+  // Read-only accessors for the collateral-mode paths, which need every row and the sold asset's
+  // own price, units and threshold. They change nothing above.
+
+  /** AaveOracle USD price of `asset` at price row `row`. */
+  priceAt(asset: number, row: number): number {
+    return this.price[asset]![row]!;
+  }
+
+  /** Hourly index segment and weight for time t, as `value` uses them. `hint` is a segment to start the search from. */
+  segmentOf(t: number, hint = 0): [number, number] {
+    return this.segment(t, hint);
+  }
+
+  /** Normalized income of `asset` in segment h at weight w, interpolated as `value` does. */
+  incomeAt(asset: number, h: number, w: number): number {
+    const inc = this.income[asset]!;
+    return inc[h]! + w * (inc[h + 1]! - inc[h]!);
+  }
+
+  /** Liquidation threshold of `asset` under eMode `emode`, as `decodeStates` applies it. */
+  threshold(emode: number, asset: number): number {
+    return (this.lt.get(emode) ?? this.lt.get(0)!)[asset]!;
+  }
+
+  /** Price rows where any of `assets` changed, ascending. */
+  rowsFor(assets: number[]): Int32Array {
+    return this.rowsOf(assets);
+  }
+
+  blockOfRow(row: number): number {
+    return this.blocks[row]!;
+  }
+
+  timeOfRow(row: number): number {
+    return this.times[row]!;
+  }
+
+  get rowCount(): number {
+    return this.blocks.length;
+  }
+
+  get usdcAsset(): number {
+    return this.usdc;
+  }
+
   /** Index of the last price row at or before `block`. */
   rowAt(block: number): number {
     let low = 0;

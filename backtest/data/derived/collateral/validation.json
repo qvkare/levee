@@ -1,0 +1,484 @@
+{
+  "seed": 20261108,
+  "costUnit": 10000000,
+  "rows": [
+    {
+      "check": "Ladder price against an exact quote of the same unwind, cheapest tier, |difference| in bps",
+      "chain": "arbitrum",
+      "n": 760,
+      "result": "median 0.106, p95 18.060, max 4787.42. Ladder at or above the exact quote in 692 of 760; below it in 68, by at most 5.352 bps, 47 of them by no more than one base unit of the asset. Cap decision changed: 1 at 100 bps, 4 at 300 bps"
+    },
+    {
+      "check": "Every header, oracle price, pool price and quote of a sampled landing block, read again on a different endpoint",
+      "chain": "arbitrum",
+      "n": 26390,
+      "result": "500 blocks, 26390 values, 0 differ. 0 calls could only be answered by the same endpoint"
+    },
+    {
+      "check": "Real swaps that took USDC out of a quoted pool in a sampled landing block, against the same USDC quoted at the block before, |difference| in bps",
+      "chain": "arbitrum",
+      "n": 160,
+      "result": "1000 blocks, 71 with such a swap. First event of its pool in the block: n 74, median 0.0000, p95 0.0005, max 0.235, 73 within 0.1 bps. After another event of its pool in the same block: n 86, median 0.75, p95 60.90"
+    },
+    {
+      "check": "Repeat reverts taken without a quote, quoted at their own landing blocks",
+      "chain": "arbitrum",
+      "n": 1000,
+      "result": "986 revert the same way, 8 revert the other way, 6 would have landed"
+    },
+    {
+      "check": "Ladder price against an exact quote of the same unwind, cheapest tier, |difference| in bps",
+      "chain": "base",
+      "n": 871,
+      "result": "median 0.011, p95 3.634, max 218.27. Ladder at or above the exact quote in 777 of 871; below it in 94, by at most 3.842 bps, 57 of them by no more than one base unit of the asset. Cap decision changed: 0 at 100 bps, 2 at 300 bps"
+    },
+    {
+      "check": "Every header, oracle price, pool price and quote of a sampled landing block, read again on a different endpoint",
+      "chain": "base",
+      "n": 29126,
+      "result": "500 blocks, 29126 values, 0 differ. 82 calls could only be answered by the same endpoint"
+    },
+    {
+      "check": "Real swaps that took USDC out of a quoted pool in a sampled landing block, against the same USDC quoted at the block before, |difference| in bps",
+      "chain": "base",
+      "n": 1364,
+      "result": "1000 blocks, 435 with such a swap. First event of its pool in the block: n 469, median 0.0000, p95 0.0106, max 31.790, 466 within 0.1 bps. After another event of its pool in the same block: n 895, median 1.80, p95 98.05"
+    },
+    {
+      "check": "Repeat reverts taken without a quote, quoted at their own landing blocks",
+      "chain": "base",
+      "n": 1000,
+      "result": "965 revert the same way, 22 revert the other way, 13 would have landed"
+    }
+  ],
+  "detail": {
+    "arbitrum:ladder": {
+      "n": 760,
+      "median": 0.10642890622802881,
+      "p95": 18.059543348607487,
+      "max": 4787.418643990082,
+      "overstated": 692,
+      "flips": {
+        "100": 1,
+        "300": 4
+      },
+      "below": {
+        "n": 68,
+        "median": 0.002964376306646699,
+        "p95": 0.4962232926042365,
+        "max": 5.352060736919517
+      },
+      "withinUnit": 47,
+      "under": [
+        {
+          "bps": -5.352060736919517,
+          "usdc": 1.0754899999956251,
+          "asset": 3,
+          "period": "2026-02",
+          "block": 427039772,
+          "unitBps": 7.763975155279503
+        },
+        {
+          "bps": -2.6284111542662636,
+          "usdc": 1.9265664275965264,
+          "asset": 3,
+          "period": "2025-10",
+          "block": 388187565,
+          "unitBps": 5.405405405405406
+        },
+        {
+          "bps": -0.5396872382157358,
+          "usdc": 5.404320925961069,
+          "asset": 3,
+          "period": "calm",
+          "block": 415277618,
+          "unitBps": 1.6191709844559585
+        },
+        {
+          "bps": -0.4962232926042365,
+          "usdc": 9.802612603999478,
+          "asset": 3,
+          "period": "2025-10",
+          "block": 388187841,
+          "unitBps": 1.0683760683760684
+        },
+        {
+          "bps": -0.4716600942267224,
+          "usdc": 11.10941803739322,
+          "asset": 3,
+          "period": "2026-02",
+          "block": 428926652,
+          "unitBps": 0.6057302077654613
+        },
+        {
+          "bps": -0.4578408016531199,
+          "usdc": 1.0008241840077972,
+          "asset": 3,
+          "period": "calm",
+          "block": 416539157,
+          "unitBps": 8.703220191470844
+        },
+        {
+          "bps": -0.18481340477993768,
+          "usdc": 17.638035999996646,
+          "asset": 3,
+          "period": "2026-02",
+          "block": 427611388,
+          "unitBps": 0.43325679130020367
+        },
+        {
+          "bps": -0.0674563602764966,
+          "usdc": 48.46748464899975,
+          "asset": 3,
+          "period": "2026-02",
+          "block": 428763189,
+          "unitBps": 0.14535306258902875
+        },
+        {
+          "bps": -0.05842193786520511,
+          "usdc": 30.58051840549659,
+          "asset": 3,
+          "period": "2026-02",
+          "block": 428968772,
+          "unitBps": 0.2144542140253056
+        },
+        {
+          "bps": -0.04405419085862228,
+          "usdc": 101.93023076460086,
+          "asset": 3,
+          "period": "calm",
+          "block": 406557276,
+          "unitBps": 0.08942784067535905
+        },
+        {
+          "bps": -0.041024994201777076,
+          "usdc": 144.27474230378965,
+          "asset": 3,
+          "period": "calm",
+          "block": 406557276,
+          "unitBps": 0.0631811720107408
+        },
+        {
+          "bps": -0.03966818233225311,
+          "usdc": 55.90709291095567,
+          "asset": 3,
+          "period": "calm",
+          "block": 410952404,
+          "unitBps": 0.15425195514353143
+        },
+        {
+          "bps": -0.02839746546579036,
+          "usdc": 85.10308786142109,
+          "asset": 3,
+          "period": "2026-02",
+          "block": 426968370,
+          "unitBps": 0.09852799180247108
+        },
+        {
+          "bps": -0.025922419875090696,
+          "usdc": 220.33605030115896,
+          "asset": 3,
+          "period": "2026-02",
+          "block": 428997543,
+          "unitBps": 0.02906055929952428
+        },
+        {
+          "bps": -0.022820971157244685,
+          "usdc": 231.58141088373057,
+          "asset": 3,
+          "period": "2025-10",
+          "block": 387876676,
+          "unitBps": 0.05252652589557727
+        },
+        {
+          "bps": -0.02239163241712916,
+          "usdc": 109.55890104414364,
+          "asset": 3,
+          "period": "2026-02",
+          "block": 429002358,
+          "unitBps": 0.05784927948722399
+        },
+        {
+          "bps": -0.019896167240407436,
+          "usdc": 197.21852386391467,
+          "asset": 3,
+          "period": "calm",
+          "block": 411675492,
+          "unitBps": 0.04342728101793547
+        },
+        {
+          "bps": -0.01707902527736671,
+          "usdc": 461.21611186006055,
+          "asset": 3,
+          "period": "2026-02",
+          "block": 426968370,
+          "unitBps": 0.01818033070021544
+        },
+        {
+          "bps": -0.01648566010481467,
+          "usdc": 258.5022963993199,
+          "asset": 3,
+          "period": "2026-02",
+          "block": 426968370,
+          "unitBps": 0.03243709636088216
+        },
+        {
+          "bps": -0.01537678168683776,
+          "usdc": 361.2574050932907,
+          "asset": 3,
+          "period": "2026-02",
+          "block": 426968370,
+          "unitBps": 0.023210795805344984
+        }
+      ]
+    },
+    "arbitrum:endpoint": {
+      "blocks": 500,
+      "compared": 26390,
+      "mismatches": 0,
+      "sameEndpoint": 0,
+      "examples": []
+    },
+    "arbitrum:swaps": {
+      "blocks": 1000,
+      "withSwap": 71,
+      "swaps": 160,
+      "first": {
+        "n": 74,
+        "median": 0.000001482032274680023,
+        "p95": 0.0005007348957697388,
+        "max": 0.23543819519966647
+      },
+      "later": {
+        "n": 86,
+        "median": 0.7486461180572501,
+        "p95": 60.900292109712375,
+        "max": 190.71694738230337
+      },
+      "firstWithin01": 73
+    },
+    "arbitrum:standIns": {
+      "n": 1000,
+      "outcomes": {
+        "same": 986,
+        "landed": 6,
+        "other": 8
+      },
+      "population": 467117
+    },
+    "base:ladder": {
+      "n": 871,
+      "median": 0.01129184738157818,
+      "p95": 3.6341568833075932,
+      "max": 218.27417261283566,
+      "overstated": 777,
+      "flips": {
+        "100": 0,
+        "300": 2
+      },
+      "below": {
+        "n": 94,
+        "median": 0.004463806099197498,
+        "p95": 2.1330398012731067,
+        "max": 3.8416271052765794
+      },
+      "withinUnit": 57,
+      "under": [
+        {
+          "bps": -3.8416271052765794,
+          "usdc": 1.2520770033588633,
+          "asset": 6,
+          "period": "calm",
+          "block": 40234904,
+          "unitBps": 7.002801120448179
+        },
+        {
+          "bps": -3.167807781007115,
+          "usdc": 2.1116203607640975,
+          "asset": 6,
+          "period": "calm",
+          "block": 39231143,
+          "unitBps": 4.275331338178709
+        },
+        {
+          "bps": -2.350214960231689,
+          "usdc": 1.0489252473779516,
+          "asset": 6,
+          "period": "2025-10",
+          "block": 36671618,
+          "unitBps": 10.17293997965412
+        },
+        {
+          "bps": -2.2136178444909227,
+          "usdc": 1.126805821666494,
+          "asset": 6,
+          "period": "calm",
+          "block": 39778239,
+          "unitBps": 7.8247261345852905
+        },
+        {
+          "bps": -2.1330398012731067,
+          "usdc": 1.0004730834794264,
+          "asset": 6,
+          "period": "2026-02",
+          "block": 41801899,
+          "unitBps": 6.863417982155114
+        },
+        {
+          "bps": -1.5248162278103106,
+          "usdc": 1.0259136413224041,
+          "asset": 6,
+          "period": "calm",
+          "block": 39810239,
+          "unitBps": 8.76424189307625
+        },
+        {
+          "bps": -1.2606544750937143,
+          "usdc": 1.8900820793892021,
+          "asset": 6,
+          "period": "2025-10",
+          "block": 36632557,
+          "unitBps": 6.435006435006435
+        },
+        {
+          "bps": -1.2587491483062596,
+          "usdc": 1.2054302536416799,
+          "asset": 6,
+          "period": "calm",
+          "block": 39733202,
+          "unitBps": 7.304601899196494
+        },
+        {
+          "bps": -1.2558743590285193,
+          "usdc": 2.685696682371481,
+          "asset": 6,
+          "period": "2025-10",
+          "block": 36670909,
+          "unitBps": 3.9525691699604746
+        },
+        {
+          "bps": -0.8546587405311445,
+          "usdc": 10.3413839961,
+          "asset": 6,
+          "period": "2026-02",
+          "block": 41514157,
+          "unitBps": 0.8132726089785296
+        },
+        {
+          "bps": -0.8438431042501193,
+          "usdc": 10.98926458580662,
+          "asset": 6,
+          "period": "2025-10",
+          "block": 36670896,
+          "unitBps": 0.9933445912387008
+        },
+        {
+          "bps": -0.5302734083845184,
+          "usdc": 6.348147210175869,
+          "asset": 6,
+          "period": "2026-02",
+          "block": 41547761,
+          "unitBps": 1.2072920439454304
+        },
+        {
+          "bps": -0.4202663232022452,
+          "usdc": 7.3640040319748215,
+          "asset": 6,
+          "period": "2026-02",
+          "block": 41514157,
+          "unitBps": 1.1420740063956145
+        },
+        {
+          "bps": -0.2910482755902333,
+          "usdc": 12.004846254325955,
+          "asset": 6,
+          "period": "2026-02",
+          "block": 41757897,
+          "unitBps": 0.5466273095003826
+        },
+        {
+          "bps": -0.23209015680425438,
+          "usdc": 20.433524664302315,
+          "asset": 6,
+          "period": "2025-10",
+          "block": 36670972,
+          "unitBps": 0.49694379565671126
+        },
+        {
+          "bps": -0.20832672786963435,
+          "usdc": 22.207918595503564,
+          "asset": 6,
+          "period": "2026-02",
+          "block": 41773689,
+          "unitBps": 0.27341827527751955
+        },
+        {
+          "bps": -0.14832465057956767,
+          "usdc": 17.965105068884966,
+          "asset": 6,
+          "period": "2026-02",
+          "block": 41766651,
+          "unitBps": 0.35160507717731443
+        },
+        {
+          "bps": -0.14828778150066668,
+          "usdc": 10.998813929796908,
+          "asset": 6,
+          "period": "2026-02",
+          "block": 41766844,
+          "unitBps": 0.5770673437590167
+        },
+        {
+          "bps": -0.13513643087437188,
+          "usdc": 28.094650435003242,
+          "asset": 6,
+          "period": "2026-02",
+          "block": 41547074,
+          "unitBps": 0.27873787490244173
+        },
+        {
+          "bps": -0.12933819188543083,
+          "usdc": 24.63228485129459,
+          "asset": 6,
+          "period": "2026-02",
+          "block": 41540704,
+          "unitBps": 0.3283856561145409
+        }
+      ]
+    },
+    "base:endpoint": {
+      "blocks": 500,
+      "compared": 29126,
+      "mismatches": 0,
+      "sameEndpoint": 82,
+      "examples": []
+    },
+    "base:swaps": {
+      "blocks": 1000,
+      "withSwap": 435,
+      "swaps": 1364,
+      "first": {
+        "n": 469,
+        "median": 0.000008934507578217676,
+        "p95": 0.01056107674979323,
+        "max": 31.790110588235663
+      },
+      "later": {
+        "n": 895,
+        "median": 1.795321549522555,
+        "p95": 98.04826161891044,
+        "max": 482.15434684437344
+      },
+      "firstWithin01": 466
+    },
+    "base:standIns": {
+      "n": 1000,
+      "outcomes": {
+        "same": 965,
+        "landed": 13,
+        "other": 22
+      },
+      "population": 70922
+    }
+  }
+}

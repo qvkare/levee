@@ -8,6 +8,8 @@ Replays real Aave v3 liquidations on Base and Arbitrum against a simulated Levee
 
 **A second question.** Why would a borrower not simply repay the same USDC upfront? [`results/portfolio.md`](results/portfolio.md) and `results/portfolio.json` answer it over every native USDC borrower on both pools, liquidated or not, with one reserve shared across two chains, in a calm month as well as the two crashes, and with the interest the reserve costs.
 
+**A third question.** With no reserve at all, does selling just enough of the borrower's own collateral to repay, as `docs/SPEC.md` section 9 proposes, beat doing nothing, by how much, and what does it cost on false alarms? [`results/collateral.md`](results/collateral.md) and `results/collateral.json` answer it on the same borrowers and paths, with a real Uniswap v3 quote at every unwind's landing block.
+
 Everything here is read-only. It uses no keys and no funds, and no rescue in it has happened. A "saved" position is a simulation result.
 
 ## Findings
@@ -37,6 +39,24 @@ Unless stated: T 1.20, G 1.50, R 30%, D 60 s. Details in [`results/portfolio.md`
 14. **Sharing one reserve.** At R 30% a shared reserve saved 111 of 144 liquidated positions in the real pairs in 2025-10, against 114 for the same budget repaid upfront and 113 for two separate reserves, and 398, 399 and 400 of 430 in 2026-02. Bonus avoided was the same to within $150. At R 5% sharing saved more (54 against 41, and 122 against 89) but in 2025-10 avoided less bonus, $239k against $319k: two Base positions of $1.7M each lost the whole budget to a larger Arbitrum partner that was liquidated anyway. First come, first served gives the reserve to whichever position falls first, not to the one it can save. With a 300 s route, the off-venue reserve that sharing across chains needs, it saved 106 instead of 111 in 2025-10.
 15. **Validation.** Rebuilt HF matches `getUserAccountData` at every read with $1 or more of debt to a worst error of 0.06%, and at a seeded sample of 7,856 member and block pairs to 0.024%. On the headline positions' committed direct reads, 100.0% are within 0.5%. Below $1 of debt, Aave's 8-decimal base currency moves HF by whole percents, so dust is left out of the error figures, not out of the results. An independent Python re-implementation reproduces the population figures.
 
+### Repay from collateral
+
+**Against doing nothing, collateral mode paid for itself in both crashes and lost money in the calm month. It protected less than the same USDC repaid upfront, and needs no cash.** At T 1.20 and a 100 bps cap, over every native USDC borrower on both pools, it avoided $781k of liquidation bonus in the 2025-10 crash, $1.07M in 2026-02 and $22k in the calm month, and paid $606k, $298k and $144k in swap costs and gas. The net was +$175k, +$774k and −$122k, or $0.25, $1.16 and −$0.21 per $1,000 of debt. It pays on positions of about $10k of debt and up in both crashes. It is not worth it on small positions, at a 300 bps cap, or as a cost that runs in quiet months, and the 2025-10 figure rests on two things that flatter or hurt it: pools that had not caught up with the oracle, and a gas spike on Arbitrum. Details in [`results/collateral.md`](results/collateral.md).
+
+Unless stated: T 1.20, G 1.50, D 60 s, cooldown 60 s, the cheapest usable fee tier at each unwind, a 100 bps cap. Every figure is for one borrower acting alone; no one else sells into the same pools.
+
+16. **One line per period.** Across 49,685 borrowers in the 2025-10 crash, collateral mode avoided $781k of liquidation bonus and paid $89k in swap costs, of which $56k on borrowers who were not liquidated anyway, and $517k in gas. Across 54,479 in 2026-02: $1.07M avoided, $279k in swap costs, $199k of it on borrowers not liquidated, and $18k in gas. Across 58,170 in the calm month: $22k avoided, $134k in swap costs, almost all on borrowers not liquidated, and $9k in gas.
+17. **It saves fewer positions than a reserve or an upfront repay.** Of liquidated members it saved 635 of 952 in 2025-10, 3,424 of 4,077 in 2026-02 and 114 of 229 in the calm month, against 720, 3,541 and 189 for the reserve at R 30% counted the same way, and 731, 3,541 and 191 for the same USDC repaid upfront. It avoided 69%, 83% and 83% of the bonus upfront avoided. On the 5,008 liquidated positions of `summary.md` it saved 4,059 and avoided $1.85M of $2.80M, against 4,263 and $2.42M for the reserve and 4,272 and $2.42M upfront. As for the reserve, most saves are positions armed below T, whose unwind fires at once: in 2025-10, 416 of the 635, and $700k of the $781k avoided.
+18. **Where it misses: thin pools and late follow-ups.** In 2025-10, 128 liquidated positions failed after an unwind reverted on the cap or for lack of liquidity, and 114 because the next unwind was late. Uniswap v3 against native USDC could not take LINK, ARB, AAVE or wstETH in size, or the largest WBTC positions: 3 WBTC positions with $7.3M of debt and $214k of bonus at risk failed this way in 2025-10, and 4 cbBTC positions with $6.0M and $125k on Base in 2026-02. Collateral with no usable pool at all (wstETH, weETH, ezETH, wrsETH and LBTC on Base, and others) left 7.7% to 9.3% of members `no_pool`; on Base in 2026-02 that was $130M of $380M of debt, though only $10k of bonus at risk among those liquidated there.
+19. **Swap cost is about 15 to 35 bps a dollar at the 100 bps cap, and double at 300.** Dollar-weighted against AaveOracle at the landing block: 15 bps in 2025-10, 33 bps in 2026-02 and 34 bps in the calm month, and 62 to 67 bps at 300 bps. The median unwind cost −3 to 10 bps; the cost sits in the large unwinds.
+20. **Gas was the largest cost in the 2025-10 crash.** Arbitrum's base fee reached 41 gwei during it, up to $88 for one 600,000-gas unwind. 63% of the $517k of gas was paid by unwinds that reverted: a position too large for its pool retries every minute (assumption 28). With no gas on reverts, which bounds what a keeper that checked a quote before sending could save, the 2025-10 net would be $502k. In 2026-02 and the calm month gas was $18k and $9k.
+21. **Some 2025-10 unwinds sold into stale pools.** Uniswap v3 pools for AAVE and ARB on Arbitrum priced their asset up to about 50% above a falling AaveOracle, and the unwinds that sold there were paid more than the oracle. Counting every unwind at no better than the oracle raises the 2025-10 swap cost from $89k to $181k and halves the net to $83k. In 2026-02 the same correction moves the net from $774k to $744k.
+22. **False alarms.** Of members armed above T that crossed it and were never liquidated or below HF 1, 2,137 of 3,502 in 2025-10, 5,965 of 8,556 in 2026-02 and 2,378 of 3,580 in the calm month had an unwind land. They paid $46, $17 and $23 each in swap cost and gas, and sold 19%, 16% and 23% of their collateral, with a median of 27%, 25% and 29% per borrower that unwound: deleveraging they did not need. In the calm month, members armed above T paid $1.60 each in swap cost and gas over the 30 days, and sold 2.0% of their collateral. Of the calm month's $134k of swap cost, $78k was false alarms and $57k members armed below T, which unwind at once.
+23. **Small positions lose.** In 2025-10 the net was −$313k on positions under $10k of debt, mostly gas, and +$487k on the larger ones. In 2026-02, when gas was cheap, every band above $100 was positive. In the calm month the $100k-and-up band, which had no liquidations, paid $118k in swap costs.
+24. **A 300 bps cap buys little and costs a lot.** It saved 19, 123 and 0 more positions and avoided $220k, $69k and $0 more bonus, but its swap cost was $378k, $377k and $174k higher, most of it on borrowers not liquidated, so the net was lower in every period: +$78k, +$473k and −$290k.
+25. **Fixing the fee tier changes little.** Using only the tier with the most USDC, as the spec's `pool_fee` would, saved 628 instead of 635 in 2025-10 and 3,418 instead of 3,424 in 2026-02, and raised swap cost by $12k and $30k.
+26. **Validation.** The quotes are real: every header, oracle price, pool price and quote of 500 sampled landing blocks per chain, read again on another endpoint, agreed, 55,516 values in all. Real swaps that were the first event of their pool in a landing block match a quote for the same USDC at the block before to a median of 0.0000 bps, with 539 of 543 within 0.1 bps. The ladder line changed 1 of 1,631 sampled cap decisions at 100 bps and 6 at 300 bps. Of 1,000 repeat reverts per chain taken without a quote, 13 on Base and 6 on Arbitrum would have landed. The independent Python check reproduces the T 1.20 rows of every period and chain.
+
 ## Run
 
 ```sh
@@ -44,7 +64,7 @@ pnpm install
 pnpm backtest    # from the repo root. Offline, reads data/derived, writes results/
 ```
 
-`pnpm backtest` makes no network calls and is deterministic: a re-run gives byte-identical results. It takes about 90 seconds and 1.5 GB of memory, most of it for the population parts.
+`pnpm backtest` makes no network calls and is deterministic: a re-run gives byte-identical results. It takes about 5 minutes and 1.5 GB of memory, most of it for the population and collateral-mode parts.
 
 ```sh
 pnpm --filter @levee/backtest test       # simulation tests, including a hand-worked case
@@ -52,9 +72,18 @@ pnpm --filter @levee/backtest typecheck
 pnpm --filter @levee/backtest fetch-data # rebuilds data/raw and data/derived from the chain
 ```
 
-`fetch-data` needs no key. The headline steps took about 90 minutes on free endpoints, with rate limits, and the population steps about four hours more. It resumes where it stopped. Raw responses are about 2.5 GB and git-ignored. The committed files in `data/derived` are enough to reproduce every result. `pnpm --filter @levee/backtest derive-portfolio` rebuilds the population files from `data/raw` alone.
+`fetch-data` needs no key. The headline steps took about 90 minutes on free endpoints, with rate limits, the population steps about four hours more, and the collateral-mode quotes about two hours more. It resumes where it stopped. Raw responses are about 2.5 GB and git-ignored. The committed files in `data/derived` are enough to reproduce every result. `pnpm --filter @levee/backtest derive-portfolio` rebuilds the population files from `data/raw` alone.
 
 To add a window, add it to `WINDOWS` in `src/config.ts` and run `fetch-data`.
+
+The repay-from-collateral steps run at the end of `fetch-data`, or alone:
+
+```sh
+pnpm --filter @levee/backtest fetch-pools      # usable Uniswap v3 pools at each period start
+pnpm --filter @levee/backtest fetch-quotes     # quotes at every landing block, in rounds; resumes [--chain base|arbitrum] [--period 2025-10|2026-02|calm]
+pnpm --filter @levee/backtest validate-quotes  # ladder error, second endpoint, real swaps, repeat reverts
+python3 backtest/scripts/verify_collateral.py  # independent check of the collateral-mode headline
+```
 
 ## Scope
 
@@ -95,6 +124,19 @@ Added on 2026-11-08 for the population parts:
 | | Blast public | 10 blocks per query for logs. Not used for logs |
 | Action times | Tenderly public gateway | Returns `blockTimestamp` on every log, so actions are placed in time with no extra reads |
 | Hyperliquid account history | `api.hyperliquid.xyz/info` | `clearinghouseState` is the current state only. `portfolio` returns an account-value history with no margin. The `hyperliquid-archive` S3 bucket answers 403 without AWS credentials. No free historical source of account margin was found |
+
+Added on 2026-11-08 for repay from collateral:
+
+| Need | Source | Result |
+|---|---|---|
+| Uniswap v3 quotes, oracle prices and headers at landing blocks, Base | `mainnet.base.org`, Tenderly (both hostnames), thirdweb, Nodies, dRPC, Blast public | Worked, with rate limits. Every call is a Multicall3 `eth_call` of up to 60 quotes |
+| | Sentio | Caps `eth_call` at 10M gas, too little for a batch of quotes. Not used |
+| | `base.merkle.io` | Now answers "pruned history unavailable" below block 51,000,000. Not used |
+| | 1RPC, BlockPI, PublicNode, Ankr | Pruned, down, or need a token or key |
+| Same, Arbitrum | Pocket Network, Blast public, Tenderly (both hostnames), thirdweb, Nodies | Worked, with tight rate limits: this was the slowest step |
+| | Sentio | 10M gas cap, as on Base. Not used |
+| | dRPC, 1RPC, OnFinality, Ankr, PublicNode, ZAN | No state at these blocks, or need a token or key |
+| Swap logs in landing blocks, for validation | Tenderly public gateway, `mainnet.base.org`, `arb1.arbitrum.io` | Worked. Pocket Network is not used for logs |
 
 Archive access exists, so health factor comes from the protocol itself. The fallback of rebuilding it from reserve data was not needed before a liquidation. It is used only after one, as described below.
 
@@ -202,6 +244,78 @@ Added after the method above was committed. They fix details it left open and ch
 - Thinning for the simulation keeps, below 1.30, every read, every crossing of 1.0 or a trigger, every low, and a point each time HF moves 0.15% or debt 0.2%. At or above 1.30, the highest trigger, the keeper never acts, so points there are left out, and runs of 256 price rows where a bound on HF stays at or above 1.30 are not evaluated at all. A test holds the results to those of a run that evaluates every row.
 - The synthetic draws use a fresh generator, seeded 20261108, for each window and each version.
 
+## Method: repay from collateral
+
+This part asks whether the mode in `docs/SPEC.md` section 9 beats doing nothing, by how much, and what it costs on false alarms. It was written and committed before any collateral-mode code existed or any collateral-mode result was computed. Results go to `results/collateral.md` and `results/collateral.json`. Nothing here changes `summary.*`, `portfolio.*` or `hyperliquid.*`.
+
+**The mode.** There is no reserve. When HF is below T, the keeper sends one unwind. In one transaction it sells just enough of one collateral asset on a Uniswap v3 pool against native USDC to receive R USDC, and repays R of the borrower's USDC debt. The unwind lands D seconds after detection, as a repay does in the reserve mode, and the swap executes at the landing block.
+
+**Uniswap v3.** Factory `0x33128a8fC17869897dcE68Ed026d694621f6FDfD` and QuoterV2 `0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a` on Base, factory `0x1F98431c8aD98523631AE4a59f267346ea31F984` and QuoterV2 `0x61fFE014bA17989E743c5F6cB21bF9697530B21e` on Arbitrum. On 2026-11-08 each QuoterV2's `factory()` returned the factory listed with it. Fee tiers 100, 500, 3000 and 10000. Only pools directly against native USDC count, with no route through a third token.
+
+**Usable pools.** Read at each period's first block, on each chain. For every reserve with a liquidation threshold above zero other than native USDC, and every fee tier, take the pool from `getPool`. A tier is usable if the pool exists and `quoteExactOutputSingle` for 1,000 USDC out succeeds at no more than 300 bps worse than AaveOracle at that block. An asset is usable if at least one tier is. The list holds for the whole period. An asset's configured tier is its usable tier whose pool held the most native USDC at that block.
+
+**Which collateral to sell.** At arming, from the portfolio in force then, rank the position's collateral (enabled as collateral, a threshold above zero under its eMode, not native USDC) by oracle value. The position sells the largest usable one, and keeps it for the whole period, as the spec fixes it at `register`. A tie goes to the asset listed first in the period's price file. A position with no usable collateral is `no_pool` and never unwinds.
+
+**Sizing.** The keeper rule is the tracked rule in Method step 4 and the population section: it checks each observation, keeps one unwind in flight, waits 60 s from its last send, and sizes on the state at detection. At a detection point with capacity CL and debt D, both net of earlier unwinds, and the sold asset's threshold L_c:
+
+```
+R = (G × D − CL) / (G − L_c × (1 + s))
+```
+
+as in `docs/SPEC.md` section 9, with s the configured tier's fee plus `max_slippage_bps`. R is capped by the USDC debt left and by the collateral left: `R × (1 + s) / price` may not exceed the units of the asset on the path less the units already sold. An unwind is sent only if R is at least $1. Without that floor, interest on a fully repaid USDC debt makes the keeper send a few cents every cooldown, each paying gas.
+
+**Landing block.** On Base, the first block at or after the landing time t: `ceil((t − 1686789347) / 2)`. On Arbitrum, interpolated linearly in time between the nearest rows of the period's price file before and after t, and rounded up; beyond the last row, extrapolated at the period's mean block time. The header of each landing block is read, and its time against t is reported.
+
+**Quotes.** At each landing block, one Multicall3 `eth_call` reads `QuoterV2.quoteExactOutputSingle(asset, USDC, amount, fee, 0)` on every usable tier of the asset, AaveOracle's price of the asset, of USDC and of WETH, and each pool's `slot0`. One block serves many unwinds of different sizes, from different triggers, targets and slippage settings, so quotes are taken at fixed amounts, 10^(k/8) USDC for k from 0 to 64, and an amount between two of them is priced on the straight line between their quotes. In an exact-output swap the collateral paid is convex in the USDC received, so the line can overstate the cost but not understate it. Where the upper amount cannot be filled, the amount itself is quoted. Every landing block that any simulated unwind needs is quoted; nothing is sampled except the validation below. Raw responses are git-ignored, and a compact derived file is committed.
+
+**Which tier.** The main result takes the cheapest usable tier at each unwind. A sensitivity uses only the configured tier, as the spec's fixed `pool_fee` would.
+
+**The slippage cap.** `max_in = R × price(USDC) / price(asset) × (1 + max_slippage_bps / 10000)`, at AaveOracle's prices in the landing block, as the helper computes it. If the quote needs more than `max_in`, or no tier can fill R, the unwind reverts: nothing moves and gas is paid. The keeper tries again at its next observation below T once the cooldown has passed, sized again. The grid is 100 and 300 bps.
+
+**Effects of a landed unwind.** Debt falls by R. As in the capped rule of the population section, a landed amount counts only up to the USDC debt still on the path, because the uncapped rule counts a borrower's own later repays twice. Units sold accumulate. At every later point, capacity falls by the units sold, capped at the units of that asset on the path, times its oracle price and threshold at that point. So the sold collateral keeps falling in value after it is sold, as it would have in the portfolio.
+
+**Saved and the reasons for a miss.** A position is saved under the rule in Method step 5. For a liquidated position that is not saved, the first of these that holds: `no_pool`; `no_warning`, HF never below T before the liquidation block; `slippage_cap`, an unwind reverted on the cap or for lack of liquidity before the position failed; `too_slow`, nothing landed before the liquidation; `collateral_exhausted`, the chosen asset was all sold or an unwind was cut by what was left; `usdc_debt_exhausted`; `follow_up_too_slow`.
+
+**Costs.** Swap cost, per landed unwind: the collateral paid at AaveOracle's price minus the USDC received at AaveOracle's price, both at the landing block. It is negative when the pool pays more than the oracle. It is split into the gap between the pool's price before the swap and the oracle, and the fee and price impact. Gas, per unwind sent, landed or reverted: 600,000 gas, the top of the spec's estimate, at the landing block's base fee and AaveOracle's WETH price, with no priority fee. The L1 data fee and the NEAR fees, about 13 Tgas a rescue, are left out. Net benefit is gross bonus avoided minus swap cost minus gas, shown per position and per $1,000 of debt at arming.
+
+**Paths.** Collateral-mode runs use every observation, with no thinning. A population member's path has a point at every price update of its assets and every read, from arming to the period end, frozen after a liquidation as before. A headline position keeps its committed observations and then has its frozen portfolio at every price update after the liquidation. A member that is not liquidated and never falls below 1.30, the highest trigger, cannot unwind at any T, and is counted without being simulated. The units and threshold of the sold asset come from the member's rebuilt reads, and after a liquidation from the frozen portfolio.
+
+**Grid.** The population, in all three periods: every T, G 1.50, D 60 s, cooldown 60 s, both slippage settings, cheapest tier; and T 1.20 with the configured tier. Liquidated positions in the headline set: every T, G and D in the existing grid with T below G, both slippage settings, cooldown 60 s; and cooldowns of 0, 10, 60 and 300 s at T 1.20, G 1.50, D 60 s. The headline cell is T 1.20, G 1.50, D 60 s, cooldown 60 s, cheapest tier, with 100 and 300 bps shown side by side.
+
+**Comparisons.** Doing nothing is the real outcome: every liquidated position is liquidated and pays the bonus. Reserve mode and the same USDC repaid upfront are read from `results/summary.json` and `results/portfolio.json`, at R 30% unless stated. Collateral mode needs no cash, so its comparison with upfront is about protection only.
+
+**False alarms.** As in the population section: crossed T, not liquidated, HF never below 1 on the path. For them: swap cost, gas, and collateral sold as a share of their collateral's oracle value at arming, in total and per borrower. In the calm period, the same per member per 30 days.
+
+**Results.** Saved and bonus avoided against the three comparisons; swap cost, gas and net per position and per $1,000 of debt, split by the existing size bands; members armed below T apart, because their unwind fires at once; the reasons table; one plain line per period at T 1.20: "Across N borrowers in this period, collateral mode avoided $X of liquidation bonus and paid $Y in swap costs, of which $Z on borrowers who recovered anyway." No crash frequency is estimated.
+
+**Validation.**
+
+- Ladder error: 1,000 unwinds per chain, drawn with a Mulberry32 generator seeded 20261108 from the population runs at T 1.20, quoted again at their exact amount on every usable tier. The difference from the ladder price is reported, with the number of cap decisions it changes.
+- Second endpoint: 500 landing blocks per chain, drawn the same way, read again in full on a different endpoint than the one that answered. Quotes must agree exactly.
+- Real swaps: for 1,000 landing blocks per chain, drawn the same way, every log of the quoted pools in that block. For each swap that took USDC out of the pool, its USDC amount is quoted at the block before, on that pool, and the collateral quoted is compared with the collateral the swap really paid. Swaps that were not the first event of their pool in the block are shown apart, since the pool had already moved.
+- Oracle: AaveOracle prices read with the quotes, against the committed price files at the same block.
+- Arbitrum landing blocks: header time against the landing time.
+- An independent Python re-implementation, sharing no code with the TypeScript, of the population runs at T 1.20, G 1.50, D 60 s and both slippage settings, from the committed files. Counts and bonus must match exactly, dollar sums within 0.5%.
+
+### Implementation notes
+
+Added after the method above was committed, and before any saved count, bonus avoided or cost was computed. The first changes how many unwinds are quoted; the others fix details the method left open.
+
+- **Repeat reverts are not all quoted.** The rule above retries a reverted unwind at the next observation once the cooldown has passed. A few positions are too large for their pools and retry at almost every oracle update for days. In a dry run of Arbitrum's 2025-10 window, which guessed every missing quote, 675,000 of 854,000 unwinds reverted, and the runs needed 15,700 landing blocks; the free Arbitrum endpoints served about one block a second, and 2026-02 and the calm month are longer. So, under the sampling the brief allows: once a run has had five reverts in a row, each quoted at its own landing block, a further unwind of that run that lands in the same UTC hour as its last quoted one is not quoted. It is taken to revert the same way, cap or fill, and to pay the same gas. The first unwind of each new hour is quoted, and a landing ends the streak. The same dry run then needed 3,800 landing blocks. The error is bounded in Validation: 1,000 of these stand-ins per chain, drawn with the seeded generator, are quoted at their own landing blocks, and the number that would have landed is reported. Where one would have, that run's later path is not the one shown. This was decided after seeing how many reverting retries the dry run needed, and before any outcome was computed.
+- An unwind still in flight when a run stops, because the position failed or the period ended, counts as sent. Its gas and swap are left out: it would land on a liquidated position or after the period.
+- Quotes are fetched in rounds. What the keeper does next depends on each quote, so the fetch simulates with the quotes it has, guesses each missing one as the run's last outcome to find what the run would need next, fetches everything found, and repeats until no run needs a quote. A run that used a guess is thrown away and run again; no guess reaches a result.
+- A quote that fails inside a Multicall3 batch is asked again on its own, smallest amount first for each pool, because a heavy quote can leave too little gas for the ones after it. Once one fails on its own, larger amounts on that pool in that block are not asked. The lookup applies the same fact: a pool that could not fill an amount at a block cannot fill a larger one.
+- A new landing block's header, oracle prices, pool prices and first quotes go in one JSON-RPC batch. Sentio, which caps `eth_call` at 10M gas, and `base.merkle.io`, now pruned, are not used. Tenderly's second public hostname and Blast's public Base endpoint are added.
+- On Arbitrum, the price-file rows used to find a landing block are every AaveOracle update of the period.
+- A member's "assets", whose price updates give its path a point, are those that move its HF: collateral that counts under its eMode, and debt. This is what the population path rebuild already used.
+- For a headline position, the sold asset's units at an observation come from the member's rebuilt read in force at that block, or its first read if none applies yet.
+- The unthinned path of a member that was not liquidated and never fell below 1.30 is never built. Its outcome is known: no unwind at any T.
+
+Added after the first results were computed. They change how results are labelled and add figures; they change no outcome:
+
+- A miss where HF crossed T but no unwind was ever sent before the position failed, because every R the rule asked for was under the $1 floor, is `under_minimum`, not `too_slow`. In the calm month most `too_slow` misses were dust positions of this kind, which the label hid.
+- Gas paid by reverted unwinds, and swap cost with every unwind counted at no better than the oracle, are reported next to the totals. Many reverts are retries the naive keeper of assumption 28 would not send if it checked a quote first, and some unwinds in the 2025-10 crash sold into pools that had not caught up with the oracle.
+
 ## Assumptions
 
 1. **The infrastructure works.** Keeper, RPCs, NEAR and the MPC network all work through the worst minutes of the event, with a fixed delay D.
@@ -232,6 +346,19 @@ For the population, shared-reserve, calm-period and carry parts, in addition:
 23. **Carry is the USDC APR as a simple yearly rate.** An idle reserve earns nothing, as in the spec today. A drawn reserve stops costing carry; that is ignored, which overstates carry by at most the share drawn.
 24. **Synthetic pairs set how often both positions fall together by construction.** The two versions bracket it. Only real pairs say where it actually sits.
 
+For repay from collateral, in addition to 1 to 4, 7, 9 to 11, 16 to 18, 20 and 21:
+
+25. **The swap fills at the quote.** The quote is the pool at the end of the landing block. No trade lands before the unwind in that block, no one front-runs it, and other Levee positions selling the same asset in the same block do not move the price it gets. In a real crash with many users, the price would be worse.
+26. **Only Uniswap v3 pools directly against native USDC.** No route through WETH or another token, no other DEX, no aggregator. On Base most of the liquidity is elsewhere, so the cost here can be higher than a router would get, and liquid staking tokens with no direct USDC pool are `no_pool`.
+27. **The helper can use any usable fee tier,** taking the cheapest at each unwind, as the brief asks. The spec fixes one `pool_fee` per position; the configured-tier sensitivity shows the difference.
+28. **The keeper does not check a quote before sending.** The built keeper does, and sends nothing when the quote is past the bound; this replay models the simpler one. It sizes R on the formula and sends. A revert costs gas, and the keeper tries again at its next observation below T once the cooldown has passed, at the size the formula gives then. It does not try a smaller amount.
+29. **Repeat reverts after five in a row are not all quoted.** Within the same UTC hour they take the last quoted outcome. Validation measures how often that is wrong.
+30. **Gas is 600,000 per unwind sent, at the landing block's base fee,** with no priority fee, no L1 data fee and no NEAR fees. The spec expects 350,000 to 600,000 gas, not measured. A revert is charged the full amount.
+31. **The aToken allowance, `max_slippage_bps`, `max_per_rescue` and `max_per_day` never bind** other than as the cap above. The sold asset is never frozen, paused or in isolation mode, and the borrower never revokes.
+32. **The sold collateral is valued at the oracle.** Swap cost is measured against AaveOracle at the landing block. The deleveraging itself, collateral the borrower no longer holds when the price recovers, is not counted as a cost.
+33. **A landed repay counts only up to the USDC debt still on the path,** and units sold only up to the units still held, as the capped rule in the population section does. Assumption 19 does not apply here.
+34. **USDC received repays USDC debt one for one** (assumption 7). The swap cost uses AaveOracle's USDC price, so a USDC quote off $1 shows up in the cost.
+
 ## Failure conditions
 
 | Condition | In this backtest |
@@ -245,6 +372,12 @@ For the population, shared-reserve, calm-period and carry parts, in addition:
 | Keeper down, or RPCs disagree under load | **Not modelled.** The spec acts only if two RPCs agree within 0.5%, which may fail in a crash |
 | Sequencer or NEAR congestion | **Not modelled** beyond D |
 | Gas above the contract's fee ceiling | **Not modelled** |
+| Collateral mode: pool price worse than the oracle by more than `max_slippage_bps` | Modelled: the unwind reverts, gas is paid, and a miss is `slippage_cap` |
+| Collateral mode: pool too thin for the amount | Modelled the same way, as a revert for lack of liquidity |
+| Collateral mode: no pool for the borrower's collateral | Modelled: `no_pool` |
+| Collateral mode: the chosen asset runs out | Modelled: `collateral_exhausted` |
+| Collateral mode: allowance too small, asset frozen, paused or isolated, borrower revoked | **Not modelled** |
+| Collateral mode: other sellers in the same block | **Not modelled.** Each unwind gets the pool as it was |
 
 ## Limits
 
@@ -263,6 +396,15 @@ For the population parts:
 - **Arming every member at the period start, with the same T and R.** About 7% to 14% of members were below T 1.20 at the start. Their repay fires at once, as an upfront repay would. Results show the share drawn by members armed above T apart.
 - **The borrow scan may have missed a few dollars of debt.** On Base, members' USDC debt at each period start fell short of the debt token's `totalSupply` by $4.61 to $4.70, out of $230M to $345M, which is at most a few tiny borrowers. On Arbitrum the gap was $0.11.
 - **The re-read grid.** Between an action and the next grid read, a member's old portfolio stands, for up to 60 s in a crash and 300 s in the calm month. The random validation sample rarely lands in such a gap, so it bounds this error only loosely. The headline positions' direct reads, which cover the run-up to each liquidation, agree to 0.5% at 100.0% of points.
+
+For repay from collateral:
+
+- **Each unwind sees the pool as it was.** In a crash where many Levee positions sell the same asset into the same pool, later sellers get worse prices. Nothing here models that, so costs and saves are for one borrower acting alone, or for a few.
+- **One venue.** Only direct Uniswap v3 pools against native USDC were quoted. A route through WETH, Uniswap v4, Aerodrome on Base or an aggregator could be cheaper or deeper, and would let liquid staking tokens be sold. The helper in the spec uses one Uniswap v3 pool, which is what is measured.
+- **Deleveraging is counted in collateral sold, not in dollars lost.** A borrower whose collateral was sold near the bottom of a crash holds less of it when the price recovers. That is the same exposure an upfront repay or the reserve removes, but it is not valued here.
+- **The keeper is naive about reverts.** It does not quote before sending and does not try a smaller amount, so a position too large for its pool reverts over and over and pays gas each time. A keeper that sized down to what the pool can fill would save some of these positions in part and pay less gas. That keeper is not measured.
+- **Gas is assumed, at 600,000 per unwind.** The built helper measured 529,000 to 595,000 on forks and 528,000 to 546,000 on testnet, so the assumption is a little high. Gas matters only for small positions and for runs that revert many times.
+- **Two crashes and one calm month,** as for the population parts. No crash frequency is estimated.
 
 ## Validation
 
@@ -295,6 +437,26 @@ To run it: `python3 backtest/scripts/verify_portfolio.py [--period 2025-10|2026-
 
 Tests cover the simulation, including a hand-worked position written out in `test/simulate.test.ts`, as well as scope, thinning, frozen paths and aggregation.
 
+For repay from collateral, `results/collateral.md` has the full table. Samples are drawn with Mulberry32 seeded 20261108, one generator per chain, from the population runs at T 1.20, both caps.
+
+| Check | Base | Arbitrum |
+|---|---|---|
+| Every header, oracle price, pool price and quote of 500 sampled landing blocks, read again on another endpoint | 29,126 values, 0 differ. 82 calls could only be re-read on the same endpoint | 26,390 values, 0 differ |
+| Real swaps that took USDC out of a quoted pool in 1,000 sampled landing blocks, the first event of their pool in the block, against a quote of the same USDC at the block before | 469 swaps, median 0.0000 bps, 466 within 0.1 bps, worst 31.8 bps | 74 swaps, median 0.0000 bps, 73 within 0.1 bps, worst 0.24 bps |
+| The same, for swaps after another event of their pool in that block, when the pool had already moved | 895 swaps, median 1.8 bps | 86 swaps, median 0.75 bps |
+| The ladder line against an exact quote of the same unwind, 1,000 per chain, both quotable in 871 and 760 | median 0.011 bps, p95 3.6 bps. Cap decisions changed: 0 at 100 bps, 2 at 300 bps | median 0.106 bps, p95 18 bps. Cap decisions changed: 1 at 100 bps, 4 at 300 bps |
+| Where the line was below the exact quote | 94 cases, by at most 3.8 bps, the largest on cbBTC sales under $30, where one satoshi is up to 10 bps: rounding to the smallest unit | 68 cases, by at most 5.4 bps, the largest on WBTC sales under $20 |
+| Repeat reverts taken without a quote, 1,000 per chain, quoted at their own landing blocks | 965 revert the same way, 22 the other way, 13 would have landed | 986 the same way, 8 the other way, 6 would have landed |
+| AaveOracle price of the sold asset read with the quotes, against the committed price files, at every unwind of the headline cell | 18,336, all equal to float rounding | 35,202, all equal to float rounding |
+| Landing block's header time against the landing time | 18,336, all 0 s | 35,202, range −6 to +5 s, 99.93% within 2 s |
+| Independent Python re-implementation, T 1.20, G 1.50, D 60 s, both caps, every period | Every count, the bonus and every dollar sum match: 102 checks | Same: 102 checks |
+
+To run the last check: `python3 backtest/scripts/verify_collateral.py [--period 2025-10|2026-02|calm] [--chain base|arbitrum]`. It shares no code with the TypeScript, reuses only the decoders of `verify_portfolio.py`, rebuilds every path, the sold asset, the landing blocks and the ladder lookups from the committed files, and checks members, `no_pool`, liquidated, saved, bonus avoided, crossings, false alarms and every unwind count exactly, and repaid, sold, swap cost and gas within 0.5%: 204 checks, all matching. It takes about an hour.
+
+So the ladder line overstates the cost where it errs, apart from rounding of a token's smallest unit on sales of a few dollars, which the pre-registered method did not foresee.
+
+Tests cover the collateral rule, with a hand-worked rescue, its reverts and misses, in `test/unwind.test.ts`; the landing block, the ladder, the cheapest tier, the cap and repeat reverts in `test/quotes.test.ts`; and the sold-asset choice and unthinned paths in `test/collateralPaths.test.ts`.
+
 ## Hyperliquid
 
 `results/hyperliquid.md` is a separate reference table for 2025-10-10, from `ConejoCapital/HyperMultiAssetedADL` at a pinned commit and hash. It holds liquidation fills only, with no survivors, account margin, mark prices or timing. So it supports reserve arithmetic and a table conditional on liquidation, not a survival rate and not a rescue result. It stays out of every Aave number.
@@ -312,7 +474,11 @@ Tests cover the simulation, including a hand-worked position written out in `tes
 | `src/sim/tracked.ts` | The keeper rule on population paths, and on several paths sharing one reserve |
 | `src/portfolio` | Population files, path rebuild, aggregation and Markdown for `portfolio.md` |
 | `src/calm.ts` | The calm-period rule |
+| `src/sim/unwind.ts` | The repay-from-collateral keeper rule. Pure |
+| `src/collateral` | Pools, quote lookup, collateral-mode paths, runs, aggregation and Markdown for `collateral.md` |
+| `src/fetch/pools.ts`, `quotes.ts`, `collateralCheck.ts` | Usable pools, quotes at landing blocks in rounds, and the quote validation |
 | `data/derived` | Committed inputs to the run |
+| `data/derived/collateral` | Usable pools per period, quotes per chain and period, and the quote validation |
 | `data/derived/portfolio` | Population files per chain and period, calm-period prices and markets, the validation sample |
 | `data/derived/daily.json`, `calm.json` | Daily WETH price and USDC rates, and the calm period the rule picked |
 | `data/raw` | Raw responses, git-ignored |
