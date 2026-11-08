@@ -98,8 +98,10 @@ export function decodeActions(range: BlockRange, logs: RawLog[]): Action[] {
   return out;
 }
 
+export const readActionLogs = (range: BlockRange): RawLog[] => readLogs(logName(range), range.fromBlock, range.toBlock);
+
 export function readActions(range: BlockRange): Action[] {
-  return decodeActions(range, readLogs(logName(range), range.fromBlock, range.toBlock));
+  return decodeActions(range, readActionLogs(range));
 }
 
 export async function fetchActions(only?: ChainKey): Promise<void> {

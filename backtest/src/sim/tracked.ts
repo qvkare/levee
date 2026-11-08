@@ -32,6 +32,8 @@ export interface TrackedOutcome {
   reserve: number;
   /** USD landed before the run stopped. */
   repaid: number;
+  /** USD sent: landed, plus a repay still in flight when the run stopped. This is what the reserve gave up. */
+  fired: number;
   landings: Landing[];
   firstDetection: number | null;
   armedBelowTrigger: boolean;
@@ -118,7 +120,7 @@ function step(book: Book, point: TrackedPoint, params: Params, reserve: { unspen
 
 function outcomeOf(book: Book, reserve: number): TrackedOutcome {
   const repaid = book.landings.reduce((sum, l) => sum + l.amount, 0);
-  const base = { reserve, repaid, landings: book.landings, firstDetection: book.firstDetection, armedBelowTrigger: book.armedBelowTrigger };
+  const base = { reserve, repaid, fired: book.fired, landings: book.landings, firstDetection: book.firstDetection, armedBelowTrigger: book.armedBelowTrigger };
   const liquidation = book.path.liquidation;
   if (liquidation === null) return { ...base, saved: true, reason: null };
   if (!book.failedAt) return { ...base, saved: true, reason: 'saved' };

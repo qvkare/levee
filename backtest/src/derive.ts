@@ -130,7 +130,7 @@ function compactPortfolio(holdings: { collateral: Holding[]; debt: Holding[] }):
 }
 
 /** Only rows where a price moved, so a stable asset costs almost nothing. */
-function compactPrices(chain: ChainKey, window: string, market: MarketSnapshot, rows: Map<number, number[]>, blockTime: (block: number) => number): WindowPrices {
+export function compactPrices(chain: ChainKey, window: string, market: MarketSnapshot, rows: Map<number, number[]>, blockTime: (block: number) => number): WindowPrices {
   const blocks = [...rows.keys()].sort((a, b) => a - b);
   const series = market.reserves.map((reserve, assetIndex) => {
     const at: number[] = [];
