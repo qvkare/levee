@@ -1,7 +1,8 @@
 /**
- * Reads backtest/results/summary.json at build time. Every figure on the site comes from this file,
- * and the file's own warnings decide what is shown: one cell is not shown alone. Only prerendered pages
- * may call readBacktest, because a Worker has no such folder.
+ * Reads backtest/results/summary.json at build time: the reserve mode's backtest, now the second
+ * mode's. The collateral backtest is in backtest-collateral.ts. The file's own warnings decide what is
+ * shown: one cell is not shown alone. Only prerendered pages may call readBacktest, because a Worker
+ * has no such folder.
  */
 import { existsSync, readFileSync } from "node:fs";
 

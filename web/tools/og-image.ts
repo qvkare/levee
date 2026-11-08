@@ -74,9 +74,14 @@ const laneLines = lanes
   .join("");
 
 const station = (s: number, lane: number, fill = "#fff", r = 9) => `<circle cx="${X(s)}" cy="${Y(lane)}" r="${r}" fill="${fill}" stroke="${C.ink}" stroke-width="4"/>`;
+// The helper is the terminus: an ink square on your position's lane.
+const terminus = replay.mode === "collateral" ? `<rect x="${X(t.included) - 12}" y="${Y(0) - 12}" width="24" height="24" rx="4" fill="${C.ink}" stroke="${C.ink}" stroke-width="4"/>` : station(t.included, 0, C.P, 11);
 const total = (replay.marks.included / 1000).toFixed(1);
-const p50 = ((proof.overall.p50Ms ?? 0) / 1000).toFixed(1);
+const { overall } = proof.modes.collateral.timing;
+const p50 = ((overall.p50Ms ?? 0) / 1000).toFixed(1);
 const trigger = replay.trigger?.toFixed(2) ?? "";
+const arrival = replay.sale?.sold ? `LeveeUnwind sold ${replay.sale.sold}` : `Repaid ${replay.amount}`;
+const after = replay.chosen === "keyless" ? ", after the contract lost its last key" : "";
 
 const html = `<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face{font-family:Overpass;src:url(data:font/woff2;base64,${font("overpass-latin-wght.woff2")}) format("woff2");font-weight:100 900}
@@ -91,25 +96,25 @@ svg text{font-family:Overpass,sans-serif}.b{font-weight:800}.m{font-family:"Over
   <text x="92" y="76" class="b" font-size="32">Levee</text>
   <rect x="938" y="44" width="222" height="40" rx="7" fill="#fff" stroke="${C.ink}" stroke-width="2.5"/>
   <text x="1049" y="71" text-anchor="middle" font-size="19" font-weight="700">Testnet · unaudited</text>
-  <text x="40" y="160" class="b" font-size="46" letter-spacing="-1.4">When your health factor crosses</text>
-  <text x="40" y="214" class="b" font-size="46" letter-spacing="-1.4">the trigger, NEAR signs the repay</text>
-  <text x="1160" y="196" text-anchor="end" class="b" font-size="104" letter-spacing="-3">${p50} s</text>
-  <text x="1160" y="226" text-anchor="end" font-size="17" font-weight="600" fill="${C.ink2}">detection to repay</text>
-  <text x="1160" y="248" text-anchor="end" font-size="17" font-weight="600" fill="${C.ink2}">median of ${proof.overall.samples} testnet runs</text>
+  <text x="40" y="160" class="b" font-size="46" letter-spacing="-1.4">Below your trigger, Levee repays</text>
+  <text x="40" y="214" class="b" font-size="46" letter-spacing="-1.4">your Aave debt from your collateral</text>
+  <text x="1160" y="182" text-anchor="end" class="b" font-size="96" letter-spacing="-3">${p50} s</text>
+  <text x="1160" y="214" text-anchor="end" font-size="17" font-weight="600" fill="${C.ink2}">detection to repay, median of</text>
+  <text x="1160" y="236" text-anchor="end" font-size="17" font-weight="600" fill="${C.ink2}">${overall.samples} testnet rescues from collateral</text>
   <rect x="${X(TMIN)}" y="${Y(0) - 24}" width="${X(0) - X(TMIN)}" height="${Y(3) - Y(0) + 48}" rx="6" fill="${C.tint2}"/>
   ${laneLines}
   ${segments}
-  ${station(0, 0, C.amber)}${station(t.near, 2)}${station(t.signed, 3)}${station(t.sent, 1)}${station(t.included, 0, C.P, 11)}
+  ${station(0, 0, C.amber)}${station(t.near, 2)}${station(t.signed, 3)}${station(t.sent, 1)}${terminus}
   <rect x="${X(0) - 140}" y="282" width="132" height="46" rx="8" fill="${C.amber}"/>
   <text x="${X(0) - 128}" y="300" font-size="13" font-weight="700">Below trigger ${trigger}</text>
   <text x="${X(0) - 128}" y="321" class="b" font-size="20">HF ${replay.healthBefore.toFixed(2)}</text>
   <rect x="${X(t.signed) - 214}" y="${(Y(2) + Y(3)) / 2 - 22}" width="196" height="44" rx="8" fill="${C.M}"/>
   <text x="${X(t.signed) - 202}" y="${(Y(2) + Y(3)) / 2 - 3}" class="b" font-size="16" fill="#fff">Signed by MPC</text>
   <text x="${X(t.signed) - 202}" y="${(Y(2) + Y(3)) / 2 + 15}" class="m" font-size="14" font-weight="600" fill="#fff">took ${((replay.marks.signed - replay.marks.near) / 1000).toFixed(2)} s</text>
-  <rect x="${X(t.included) - 170}" y="282" width="196" height="46" rx="8" fill="${C.P}"/>
-  <text x="${X(t.included) - 158}" y="300" font-size="13" font-weight="700" fill="#fff">Repaid ${replay.amount}</text>
-  <text x="${X(t.included) - 158}" y="321" class="b" font-size="20" fill="#fff">HF ${replay.healthAfter.toFixed(2)} at ${total} s</text>
-  <text x="40" y="600" font-size="17" font-weight="600" fill="${C.ink2}">A real ${replay.chain} rescue, drawn to time · signed by NEAR Chain Signatures · levee.qvkare.com</text>
+  <rect x="${X(t.included) - 258}" y="276" width="284" height="52" rx="8" fill="${replay.mode === "collateral" ? C.ink : C.P}"/>
+  <text x="${X(t.included) - 244}" y="297" font-size="14" font-weight="700" fill="#fff">${arrival}</text>
+  <text x="${X(t.included) - 244}" y="318" class="b" font-size="19" fill="#fff">Repaid ${replay.amount}, HF ${replay.healthAfter.toFixed(2)}</text>
+  <text x="40" y="600" font-size="17" font-weight="600" fill="${C.ink2}">A real ${replay.chain} rescue at ${total} s${after} · signed by NEAR Chain Signatures · levee.qvkare.com</text>
 </svg></body></html>`;
 
 const file = `${tmpdir()}/levee-og-image.html`;

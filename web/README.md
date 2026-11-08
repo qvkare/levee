@@ -2,7 +2,7 @@
 
 # Levee web
 
-The Levee site and public risk tool. Paste any address and read how close it is to liquidation on Aave (Base and Arbitrum) and Hyperliquid. No wallet and no login.
+The Levee site and public risk tool. Levee repays Aave debt from the borrower's own collateral when health factor falls below their trigger, and the site shows how, with every testnet run and the backtest. Paste any address and read how close it is to liquidation on Aave (Base and Arbitrum) and Hyperliquid. No wallet and no login.
 
 It runs on Cloudflare Workers at `levee.qvkare.com`. Unaudited. It reads public data and holds no funds.
 
@@ -25,12 +25,14 @@ Use `run` for `deploy`: `pnpm deploy` without it is a pnpm command of its own.
 
 | Path | What it is |
 |---|---|
-| `/` | The offer and the address box, a replay of one real testnet rescue drawn to time across four lanes, the stops of a rescue, who can do what, the timetable of every run, the backtest, and a real reading of one public address on the distance line, read again in the browser. Prerendered |
+| `/` | The offer, what ran live, and the address box, a replay of one real testnet rescue from collateral drawn to time across four lanes and ending at the helper, the stops of a rescue and the terminus, who can do what, the timetable of every run in both modes, the collateral backtest with its caveats, and a real reading of one public address on the distance line, read again in the browser. Prerendered |
 | `/a/[address]` | Any address on the distance line, then every figure, what each Aave position holds and what Levee would do. Rendered on the server and read again in the browser every minute. `?target=1.75` sets the repay target. `?fall=11.1` marks the nearest Aave position's collateral down by that percentage and says it is a simulation |
-| `/how` | The full line stop by stop, with a live dry quote from `/api/route` under the planned stop, the formula, who can do what, what a stolen key cannot do, failure conditions, the measured hops, what is not built yet, limits, how to read a distance, and the API shape. Prerendered |
-| `/proof` | The timetable, every hop's p50, p95 and slowest, every file in `../evidence/runs` with explorer links, failures included, every signing sample, the fork rehearsal under its own label, and the backtest with all three rows, its misses and its limits. Prerendered |
+| `/how` | The full line stop by stop, the terminus and the helper's checks, the formula, who can do what, what a stolen key cannot do, what is different, failure conditions, the measured hops of both modes, the reserve as the second mode with a live dry quote from `/api/route` under its planned stop, what is not built yet, limits, how to read a distance, and the API shape. Prerendered |
+| `/proof` | The timetable, the contracts with explorer links and the two key deletions, every hop's median and p95 per mode, every file in `../evidence/runs` with explorer links and the sale of each collateral run, failures included, every signing sample, the fork rehearsal under its own label, the collateral backtest with its money, misses, size split and caveats, and the reserve backtest as the second mode's. Prerendered |
 
-The replay on the home page is the landed run whose detection-to-inclusion time is the median of all landed runs. Code picks it at build time. The fall before detection is in no record, so it is drawn in a zone marked untimed.
+The replay on the home page is the landed run the claims ledger ties to both contract accounts having no keys (`contracts-keyless-rescue-after`). Without such a claim it is the landed collateral run at the median total. Code picks it at build time. The fall before detection is in no record, so it is drawn in a zone marked untimed.
+
+Testnet sale prices come from a pool the team seeded at Aave's oracle price, and every page that prints one says so.
 
 A reading with a position inside its last 5% turns its band amber and zooms the line to that 5%. The home page passes over a third party's address in that state, because the state is for an address someone asked about.
 
@@ -114,18 +116,19 @@ All optional. Copy `.env.example` to `.dev.vars` for local Worker runs. In produ
 | `RISK_BASE_RPC_URLS`, `RISK_ARBITRUM_RPC_URLS` | Comma-separated mainnet RPC URLs, tried before the public fallbacks. These differ from the keeper's `BASE_RPC_URLS`, which may point at a testnet |
 | `RISK_PUBLIC_RPC_FALLBACK` | `off` uses only the URLs above |
 | `RISK_HYPERLIQUID_INFO_URL` | Defaults to the public info endpoint |
-| `LEVEE_EVIDENCE_DIR` | Where `/how` and `/proof` read run records at build time. Defaults to `../evidence/runs`. The signing test and the fork rehearsal are read from the folder above it |
-| `LEVEE_BACKTEST_SUMMARY` | The backtest summary read at build time. Defaults to `../backtest/results/summary.json` |
+| `LEVEE_EVIDENCE_DIR` | Where `/how` and `/proof` read run records at build time. Defaults to `../evidence/runs`. The claims ledger, the signing test and the fork rehearsal are read from the folder above it |
+| `LEVEE_BACKTEST_COLLATERAL` | The collateral backtest read at build time. Defaults to `../backtest/results/collateral.json` |
+| `LEVEE_BACKTEST_SUMMARY` | The reserve-mode backtest summary read at build time. Defaults to `../backtest/results/summary.json` |
 
 ## Hosting
 
 `wrangler.jsonc` targets `levee.qvkare.com` as a custom domain, with `workers_dev` off. OpenNext builds the Worker. Prerendered pages come from the read-only static assets cache, so no KV or R2 binding is needed, and there is no revalidation: `/`, `/how` and `/proof` change on deploy. The home page takes a fresh reading in the browser. If that fails it keeps the reading from the build and marks it as an example.
 
-Run records and the backtest are read at build time only. A Worker has neither folder, so deploy after adding runs. Every figure the site states about Levee is worked out once, in `lib/proof-model.ts`, and `next.config.ts` inlines the result as `LEVEE_PROOF`, so prerendered pages and pages rendered on the Worker print the same numbers. Pages read it as `PROOF` from `lib/proof.ts`.
+Run records, the claims ledger and the backtests are read at build time only. A Worker has none of those folders, so deploy after adding runs. Every figure the site states about Levee is worked out once, in `lib/proof-model.ts`, and `next.config.ts` inlines the result as `LEVEE_PROOF`, so prerendered pages and pages rendered on the Worker print the same numbers. Pages read it as `PROOF` from `lib/proof.ts`. Contract addresses and the key deletions are data in `lib/contracts.ts`. Tests hold the hop table, the backtest table, the caveats' figures and every contract link to the root README and the claims ledger, so the two cannot drift apart without a failing test.
 
 The repository is private, so `GITHUB_URL` in `lib/links.ts` is empty and nothing links to it. Set it, and the footer and the proof cards pick it up.
 
-The mark is `public/levee-mark.svg`, and `public/levee-mark-profile.svg` is its dark form. `app/favicon.ico`, `app/icon.png` and `app/apple-icon.png` are rendered from those two files. `app/opengraph-image.png` is the link preview: the four lanes, the route of the replayed run and its time, rendered by `node tools/og-image.ts` from the same figures. A test fails when its alt text no longer matches the run records, which means it is time to render it again.
+The mark is `public/levee-mark.svg`, and `public/levee-mark-profile.svg` is its dark form. `app/favicon.ico`, `app/icon.png` and `app/apple-icon.png` are rendered from those two files. `app/opengraph-image.png` is the link preview: the four lanes, the route of the replayed run ending at the helper's square, and the median of the collateral rescues, rendered by `node tools/og-image.ts` from the same figures. A test fails when its alt text no longer matches the run records, which means it is time to render it again.
 
 The fonts are Overpass and Overpass Mono (OFL), in `app/fonts`. The Overpass file has one change from upstream: its GDEF table marked the middle dot and the spacing accents as combining marks, which made browsers draw them with no width, so they are base glyphs now.
 
@@ -137,6 +140,7 @@ The fonts are Overpass and Overpass Mono (OFL), in `app/fonts`. The Overpass fil
 - No real account inside the last 5% was found to test against. The amber state is covered by unit tests and `?fall=` on a real position.
 - The stablecoin list is by address. A new reserve counts as volatile until it is added.
 - A malformed URL escape such as `/a/%E0%A4%A` gets a plain 500 from the framework. The form cannot produce one.
-- Every live run so far is on Base Sepolia, from one position. The hop table says so, and a p95 over that few runs is the slowest run.
-- The stolen-key table and the boards state rules from the spec. They should link to tests and transactions when those exist.
+- Every live run so far is on Base Sepolia, from one position: six rescues from collateral and thirteen from a reserve. The hop table says so, and a p95 over that few runs is the slowest run.
+- The stolen-key table and the boards state rules from the spec and name the claims ledger. They should link to each test and transaction.
+- `make verify` reads the contract accounts' key lists live. The site states the deletions from `lib/contracts.ts` at build time and does not read NEAR itself.
 - The replay draws the fall before detection from the record's own figures: health factor goes from where the previous run left it to the reading at detection. How long that took is not recorded.

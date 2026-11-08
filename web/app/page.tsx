@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AddressForm } from "@/components/address-form.tsx";
 import { BacktestSection } from "@/components/backtest.tsx";
 import { Badge } from "@/components/badge.tsx";
@@ -15,9 +16,22 @@ import { PROOF } from "@/lib/proof.ts";
  */
 export const dynamic = "force-static";
 
+/** What ran live, in one line under the offer, from the run records. */
+function heroProof(): string | null {
+  const { counts, days } = PROOF.modes.collateral;
+  if (counts.success === 0) return null;
+  const chain = counts.chains.join(" and ");
+  const refused = counts.aborted > 0 ? ` and ${counts.aborted} the keeper refused` : "";
+  // Runs are newest first, so the first landed collateral run is the last rescue.
+  const last = PROOF.runs.find((run) => run.mode === "collateral" && run.outcome === "success");
+  const keyless = PROOF.keyless ? `, ${last?.id === PROOF.keyless.run ? "the last" : "one"} after both contract accounts lost their last key` : "";
+  return `Live on ${chain}, ${days}: ${counts.success} rescues from collateral${refused}${keyless}. Nothing is on a mainnet.`;
+}
+
 export default async function Home() {
   const reading = await getHomeReading();
   const { replay } = PROOF;
+  const proofLine = heroProof();
 
   return (
     <main id="main">
@@ -28,12 +42,20 @@ export default async function Home() {
             <Badge lane="K" size="s" />
             <Badge lane="N" size="s" />
             <Badge lane="M" size="s" />
-            <span className="t">Aave v3 on Base and Arbitrum, signed on NEAR</span>
+            <span className="t">Aave v3, signed on NEAR</span>
           </p>
-          <h1>When your health factor crosses the trigger, NEAR signs the repay</h1>
+          <h1>Below your trigger, Levee repays your Aave debt from your own collateral</h1>
           <p className="lede">
-            Levee watches your Aave loan. At your trigger, a <b>NEAR contract signs one repay</b> from your USDC reserve, inside caps you set. <b>The position stays in your wallet</b>, and the keeper can’t send funds anywhere else.
+            When your health factor falls below the trigger you set, <b>a NEAR contract with no keys signs one call</b> that sells just enough of your collateral to repay USDC debt back to your target. <b>The position stays in your wallet.</b> On Base, an ownerless helper checks the trigger and the price against Aave’s oracle before anything moves.
           </p>
+          {proofLine && (
+            <p className="hero-proof">
+              {proofLine}{" "}
+              <Link href="/proof" prefetch={false}>
+                Every run
+              </Link>
+            </p>
+          )}
         </div>
         <AddressForm title="Check any address" lede="How far each Aave and Hyperliquid position is from liquidation. No wallet, no login." example={{ address: reading.report.address, label: "a public Aave borrower" }} />
       </div>
@@ -56,17 +78,17 @@ export default async function Home() {
           <h2 className="big" id="rules-h">
             Who can do what
           </h2>
-          <p>Each line has one job. The contract enforces the limits, so a stolen keeper key stays inside them.</p>
+          <p>Each actor has one job. The helper on Base and the contract on NEAR enforce the limits, so a stolen keeper key stays inside them.</p>
         </div>
         <Boards />
         <WorstCase />
       </section>
 
-      <Timetable next={{ href: "/proof", title: "Every run and every hop", body: "Per-hop times, each signing sample and the full backtest" }} />
+      <Timetable next={{ href: "/proof", title: "Every run and every hop", body: "Per-hop times, the contracts and their keys, and the full backtest" }} />
 
       <BacktestSection />
 
-      <ReadSection reading={reading} trigger={PROOF.trigger} />
+      <ReadSection reading={reading} trigger={PROOF.readingTrigger} />
     </main>
   );
 }

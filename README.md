@@ -36,15 +36,15 @@ make judge
 
 On Base Sepolia and NEAR testnet. Records are in `evidence/runs/`, and failures stay there.
 
-- **Repay from collateral**, 2026-11-08: six rescues and one aborted run on one WETH position, each from health factor 1.48 to 1.80. The last ran after both contract accounts had lost their last key. In the aborted run the keeper's quote put the sale past the borrower's 1% bound, so it sent nothing.
+- **Repay from collateral**, 2026-11-08: seven rescues and one aborted run on one WETH position, each from health factor 1.48 to 1.80. The last two ran after both contract accounts had lost their last key. In the aborted run the keeper's quote put the sale past the borrower's 1% bound, so it sent nothing.
 - **Repay from a reserve**, 2026-11-07: thirteen rescues and one aborted read.
 
 | Hop | Collateral, median | p95 | Reserve, median | p95 |
 |---|---|---|---|---|
 | Detection to NEAR inclusion | 1.6 s | 1.9 s | 1.7 s | 3.5 s |
-| NEAR inclusion to MPC signature | 5.1 s | 6.7 s | 5.3 s | 6.9 s |
-| Broadcast to Base inclusion | 1.0 s | 1.6 s | 1.5 s | 1.5 s |
-| Total from detection | 8.0 s | 9.2 s | 8.4 s | 10.2 s |
+| NEAR inclusion to MPC signature | 5.2 s | 6.7 s | 5.3 s | 6.9 s |
+| Broadcast to Base inclusion | 0.5 s | 1.6 s | 1.5 s | 1.5 s |
+| Total from detection | 7.9 s | 9.2 s | 8.4 s | 10.2 s |
 
 The samples are small and the testnet was calm. The keeper also reads every 5 seconds, which this table does not include. The team added the liquidity in the testnet pool at Aave's oracle price, so sale prices there are no measure of slippage. Separately, 15 of 15 signature requests through the contract completed, with a median of 6.6 s (`evidence/mpc-latency-testnet.json`).
 
@@ -126,7 +126,7 @@ A stolen keeper key can act only while the borrower's health factor is below the
 
 | Period | Borrowers | Liquidated | Saved, 1% / 3% | Same USDC as a 30% reserve / repaid upfront | Bonus at risk | Bonus avoided, 1% / 3% | Swap cost, 1% / 3% | Gas, 1% / 3% | Net, 1% / 3% |
 |---|---|---|---|---|---|---|---|---|---|
-| 2025-10-10 to 10-11 | 49,685 | 952 | 635 / 654 | 720 / 731 | $1.40M | $781k / $1.00M | $89k / $467k | $517k / $456k | +$175k / +$78k |
+| 2025-10-10 to 10-11 | 49,685 | 952 | 635 / 654 | 720 / 731 | $1.40M | $781k / $1.00M | $89k / $466k | $517k / $456k | +$175k / +$78k |
 | 2026-01-31 to 02-06 | 54,479 | 4,077 | 3,424 / 3,547 | 3,541 / 3,541 | $1.42M | $1.07M / $1.14M | $280k / $657k | $18k / $11k | +$774k / +$473k |
 | 2025-12-03 to 2026-01-01, calm | 58,170 | 229 | 114 / 114 | 189 / 191 | $26k | $22k / $22k | $134k / $308k | $9k / $3k | −$122k / −$290k |
 
@@ -134,7 +134,8 @@ What it says:
 
 - In both crashes, repaying from collateral avoided more liquidation bonus than it cost. In the calm month, at the 1% bound, it cost $1.60 per borrower armed above the trigger over 30 days, and sold 2.0% of their collateral.
 - In 2025-10 it lost $313k on positions under $10k of debt, mostly to gas, and made $487k on larger ones.
-- It saved fewer positions than a reserve or the same USDC repaid upfront, which both need the cash in hand. Most misses were thin Uniswap pools against native USDC: LINK, ARB, AAVE, wstETH, and the largest WBTC and cbBTC positions.
+- At the 1% bound it saved fewer positions than a reserve or the same USDC repaid upfront, which both need the cash in hand. At 3% in 2026-02 it saved slightly more, 3,547 against 3,541.
+- In 2025-10 the commonest reason for a miss was a sale the pool could not fill within the bound, 128 of 317 at 1%, followed by follow-up unwinds that came too late, 114. In 2026-02 late follow-ups led.
 - The earlier reserve backtest (`backtest/results/portfolio.md`) found that repaying the same USDC upfront protects one position as well as a reserve, with no carry cost. That is why repaying from collateral is the main mode.
 
 Read these with the figures:
@@ -148,7 +149,7 @@ Method, validation and every table: `backtest/README.md` and `backtest/results/c
 
 ## When it fails
 
-- The pool is too thin or off the oracle, so the sale would pass the borrower's bound. The keeper then sends nothing. In the backtest, this caused most misses.
+- The pool is too thin or off the oracle, so the sale would pass the borrower's bound. The keeper then sends nothing. In the 2025-10 backtest this was the commonest single reason for a miss.
 - A move outruns the rescue, or a liquidator wins the race.
 - Another collateral in the account has an LTV of 0, so Aave refuses the aToken transfer. The keeper records it and sends nothing.
 - The collateral is paused, or the L2 sequencer is down and Aave's sentinel has stopped liquidations.

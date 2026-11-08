@@ -6,6 +6,8 @@ export interface Column<Row> {
   plain?: boolean;
   /** Tabular figures. */
   num?: boolean;
+  /** Kept on one line above phone width: an address, a network name. */
+  nowrap?: boolean;
   cell: (row: Row) => ReactNode;
 }
 
@@ -30,7 +32,7 @@ export function TextTable<Row>({ columns, rows, rowKey, label }: { columns: Colu
           {rows.map((row) => (
             <tr key={rowKey(row)} role="row">
               {columns.map((column) => (
-                <td key={column.label} role="cell" data-label={column.label} data-plain={column.plain || undefined} className={column.num ? "num" : undefined}>
+                <td key={column.label} role="cell" data-label={column.label} data-plain={column.plain || undefined} className={[column.num ? "num" : "", column.nowrap ? "nowrap" : ""].filter(Boolean).join(" ") || undefined}>
                   <span>{column.cell(row)}</span>
                 </td>
               ))}

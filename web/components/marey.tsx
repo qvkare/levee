@@ -31,10 +31,32 @@ export function Marey({ runs }: { runs: ProofRun[] }) {
   const Y = (index: number) => 20 + index * ((HEIGHT - 80) / 4);
   const ticks = Array.from({ length: Math.floor(slowest / 2) + 1 }, (_, index) => index * 2);
   const pointsOf = (run: ProofRun) => [0, run.marks.near, run.marks.signed, run.marks.sent, run.marks.included].map((ms, index) => `${X((ms ?? 0) / 1000)},${Y(index)}`).join(" ");
-  const others = landed.filter((run) => !run.replayed);
+  // Reserve runs first, so the main mode's lines sit on top.
+  const others = landed.filter((run) => !run.replayed).sort((a, b) => (a.mode === b.mode ? 0 : a.mode === "reserve" ? -1 : 1));
+  const modes = new Set(landed.map((run) => run.mode));
 
   return (
     <div className="chart" ref={ref}>
+      <ul className="keyrow keyrow-runs" aria-hidden="true">
+        {replayed && (
+          <li>
+            <i className="key-P" />
+            Replayed run
+          </li>
+        )}
+        {modes.has("collateral") && (
+          <li>
+            <i className="key-K" />
+            From collateral
+          </li>
+        )}
+        {modes.has("reserve") && (
+          <li>
+            <i className="key-dash" />
+            From a reserve
+          </li>
+        )}
+      </ul>
       <svg className="marey" viewBox={`0 0 ${width} ${HEIGHT}`} width={width} height={HEIGHT} aria-hidden="true">
         {STOPS.map((stop, index) => (
           <g key={stop.label}>
@@ -57,7 +79,7 @@ export function Marey({ runs }: { runs: ProofRun[] }) {
           </g>
         ))}
         {others.map((run) => (
-          <polyline key={run.id} className="run-line" points={pointsOf(run)} />
+          <polyline key={run.id} className={`run-line run-${run.mode}`} points={pointsOf(run)} />
         ))}
         {replayed && (
           <>
@@ -72,12 +94,15 @@ export function Marey({ runs }: { runs: ProofRun[] }) {
             <text className="t-xs w7 f-ink2" x={X(slowest) + 10} y={Y(4) + 5}>
               slowest {slowest.toFixed(1)} s
             </text>
-            <text className="t-xs w7 f-ink2" x={X(fastest) - 10} y={Y(4) - 9} textAnchor="end">
-              fastest {fastest.toFixed(1)} s
-            </text>
+            {/* When the replayed run is the fastest, its own label says so. */}
+            {replayed?.marks.included !== fastest * 1000 && (
+              <text className="t-xs w7 f-ink2" x={X(fastest) - 10} y={Y(4) - 9} textAnchor="end">
+                fastest {fastest.toFixed(1)} s
+              </text>
+            )}
             {replayed && (
-              <text className="t-xs w8 f-P" x={X((replayed.marks.included as number) / 1000) + 8} y={Y(4) + 22}>
-                replayed {((replayed.marks.included as number) / 1000).toFixed(1)} s
+              <text className="t-xs w8 f-P" x={X((replayed.marks.included as number) / 1000) - 10} y={Y(4) - 9} textAnchor="end">
+                replayed {((replayed.marks.included as number) / 1000).toFixed(1)} s{replayed.marks.included === fastest * 1000 ? ", the fastest" : ""}
               </text>
             )}
           </>

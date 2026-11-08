@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { evidenceDir, evmLink, latencyTable, nearLink, parseMpcLatency, parseRun, percentile, readMpcLatency, readRehearsal, readRuns, tally } from "./evidence.ts";
+import { evidenceDir, evmLink, latencyTable, median, nearLink, parseClaims, parseMpcLatency, parseRun, percentile, readClaims, readMpcLatency, readRehearsal, readRuns, tally } from "./evidence.ts";
 
 const success = {
   run_id: "2026-11-09T10-12-03Z-base-1",
@@ -70,6 +70,50 @@ test("runs are read from the folder, newest first, and a missing folder is empty
   assert.deepEqual(readRuns(join(dir, "nothing-here")), []);
 });
 
+test("a collateral run is parsed with its sale, and a record with no mode is a reserve run", () => {
+  const collateral = parseRun(
+    "file",
+    JSON.stringify({
+      ...success,
+      mode: "collateral",
+      collateral: "0x4200000000000000000000000000000000000006",
+      max_sold: "3304812972593412",
+      sold: "3288371117008371",
+      swap: { repaid: "7306896", sold: "3288371117008371", collateral_price_base: "223286000000", usdc_price_base: "99977300", effective_price_base: "222153676536", discount_bps: "50" },
+      trace: { trigger: "1.5", target: "1.8", collateral: { asset: "0x4200000000000000000000000000000000000006", helper: "0x308a7b2872F6006522280026a750fCD1c5Bd63D2", pool_fee: "3000" } },
+    }),
+  );
+  assert.equal(collateral.mode, "collateral");
+  assert.equal(collateral.collateral, "0x4200000000000000000000000000000000000006");
+  assert.equal(collateral.maxSold, "3304812972593412");
+  assert.equal(collateral.sold, "3288371117008371");
+  assert.deepEqual(collateral.swap, { repaid: "7306896", sold: "3288371117008371", discountBps: 50 });
+  assert.equal(collateral.trace?.helper, "0x308a7b2872F6006522280026a750fCD1c5Bd63D2");
+  const reserve = parseRun("file", JSON.stringify(success));
+  assert.equal(reserve.mode, "reserve");
+  assert.equal(reserve.swap, null);
+  // An aborted collateral run keeps nulls where it sold nothing.
+  const aborted = parseRun("file", JSON.stringify({ ...success, outcome: "aborted", mode: "collateral", max_sold: null, sold: null, swap: null }));
+  assert.equal(aborted.sold, null);
+  assert.equal(aborted.swap, null);
+});
+
+test("the claims ledger is read, with the accounts that must have no keys", () => {
+  const claims = parseClaims(JSON.stringify({ claims: [{ id: "a", claim: "A test.", test: { path: "p", name: "n" } }, { id: "b", claim: "No keys.", run: "r", no_access_keys: ["x.testnet", 3] }, { claim: "no id" }] }));
+  assert.deepEqual(claims, [
+    { id: "a", claim: "A test.", run: null, noAccessKeys: [] },
+    { id: "b", claim: "No keys.", run: "r", noAccessKeys: ["x.testnet"] },
+  ]);
+  assert.deepEqual(parseClaims("nope"), []);
+  assert.ok(readClaims().some((claim) => claim.noAccessKeys.length > 0));
+});
+
+test("a median is the middle value, or the mean of the two middle values", () => {
+  assert.equal(median([]), null);
+  assert.equal(median([3, 1, 2]), 2);
+  assert.equal(median([4, 1, 3, 2]), 2.5);
+});
+
 test("percentiles are nearest rank, so a small sample's p95 is its slowest", () => {
   assert.equal(percentile([], 0.5), null);
   assert.equal(percentile([3, 1, 2], 0.5), 2);
@@ -104,7 +148,7 @@ test("signing figures are worked out from the samples", () => {
   assert.equal(parsed?.runs, 3);
   assert.equal(parsed?.signed, 2);
   assert.equal(parsed?.failed, 1);
-  assert.equal(parsed?.p50Ms, 6000);
+  assert.equal(parsed?.p50Ms, 6500);
   assert.equal(parsed?.slowestMs, 7000);
   assert.equal(parseMpcLatency("nope"), null);
 });

@@ -1,17 +1,22 @@
 import Link from "next/link";
-import { CONTRACT_URL, GITHUB_URL } from "@/lib/links.ts";
+import { CONTRACT_URL, GITHUB_URL, UNWIND_URL } from "@/lib/links.ts";
 import { Brand } from "./site-header.tsx";
 
 export function SiteFooter() {
   return (
     <footer className="site-foot">
       <Brand className="brand brand-plate" />
-      <p>Levee is unaudited and its live runs are on testnet. Don’t use it with funds you can’t lose. This site reads public data, holds no funds and asks for no wallet. A NEAR hackathon entry.</p>
+      <p>Levee repays Aave debt from the borrower’s own collateral. It is unaudited, and it runs on testnet only: nothing is deployed on any mainnet. Don’t use it with funds you can’t lose. This site reads public data, holds no funds and asks for no wallet. A NEAR hackathon entry.</p>
       <nav aria-label="Footer">
         <ul>
           <li>
             <a href={CONTRACT_URL} rel="noreferrer">
-              Contract on NearBlocks
+              Levee v0.2 on NearBlocks
+            </a>
+          </li>
+          <li>
+            <a href={UNWIND_URL} rel="noreferrer">
+              LeveeUnwind on Basescan
             </a>
           </li>
           {GITHUB_URL && (

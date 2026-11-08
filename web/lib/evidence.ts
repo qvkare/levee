@@ -1,6 +1,6 @@
 /**
- * Reads evidence/runs/*.json at build time (spec section 6). A record that cannot be parsed is
- * listed as unreadable and not dropped, because failed runs stay visible.
+ * Reads evidence/runs/*.json at build time (spec section 6), and the claims ledger. A record that
+ * cannot be parsed is listed as unreadable and not dropped, because failed runs stay visible.
  *
  * Only prerendered pages may call readRuns. A Worker has no evidence folder at runtime, and a page
  * rendered there would report no runs whatever had happened.
@@ -10,6 +10,9 @@ import { dirname } from "node:path";
 
 export type Outcome = "success" | "failed" | "aborted" | "unreadable";
 
+/** How a run repaid: by selling the borrower's collateral, or from USDC held at the rescuer. */
+export type Mode = "collateral" | "reserve";
+
 /** Each moment of a run, in milliseconds. Null when the run did not get there. */
 export interface Timestamps {
   detected: number | null;
@@ -17,6 +20,16 @@ export interface Timestamps {
   signed: number | null;
   broadcast: number | null;
   included: number | null;
+}
+
+/** The sale's effective price against Aave's oracle at that block, from the Unwound event. */
+export interface Swap {
+  /** USDC base units. */
+  repaid: string | null;
+  /** Collateral base units. */
+  sold: string | null;
+  /** How far under the oracle the sale was, the pool fee included. */
+  discountBps: number | null;
 }
 
 export interface EvidenceRun {
@@ -40,6 +53,15 @@ export interface EvidenceRun {
   evmBlock: number | null;
   /** The Levee contract the keeper called. */
   nearContract: string | null;
+  /** A record with no mode is a reserve run (spec section 6). */
+  mode: Mode;
+  /** The collateral's address, for a collateral run. */
+  collateral: string | null;
+  /** The keeper's cap on the sale, in collateral base units. */
+  maxSold: string | null;
+  /** What the helper sold, in collateral base units. */
+  sold: string | null;
+  swap: Swap | null;
   trace: RunTrace | null;
 }
 
@@ -53,6 +75,8 @@ export interface RunTrace {
   collateralBase: string | null;
   debtBase: string | null;
   thresholdBps: string | null;
+  /** The helper the keeper called, for a collateral run. */
+  helper: string | null;
 }
 
 const OUTCOMES: readonly string[] = ["success", "failed", "aborted"];
@@ -81,7 +105,15 @@ function traceOf(raw: unknown): RunTrace | null {
     collateralBase: text(first.total_collateral_base),
     debtBase: text(first.total_debt_base),
     thresholdBps: text(first.liquidation_threshold_bps),
+    helper: text(record(trace.collateral).helper),
   };
+}
+
+function swapOf(raw: unknown): Swap | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const swap = record(raw);
+  const discount = text(swap.discount_bps);
+  return { repaid: text(swap.repaid), sold: text(swap.sold), discountBps: discount !== null && /^-?\d+(\.\d+)?$/.test(discount) ? Number(discount) : null };
 }
 
 function latency({ detected, included }: Timestamps): number | null {
@@ -107,6 +139,11 @@ export function parseRun(id: string, raw: string): EvidenceRun {
     evmTx: null,
     evmBlock: null,
     nearContract: null,
+    mode: "reserve",
+    collateral: null,
+    maxSold: null,
+    sold: null,
+    swap: null,
     trace: null,
   };
   let fields: Record<string, unknown>;
@@ -138,6 +175,11 @@ export function parseRun(id: string, raw: string): EvidenceRun {
     evmTx: text(fields.evm_tx),
     evmBlock: count(fields.evm_block),
     nearContract: text(fields.near_contract),
+    mode: fields.mode === "collateral" ? "collateral" : "reserve",
+    collateral: text(fields.collateral),
+    maxSold: text(fields.max_sold),
+    sold: text(fields.sold),
+    swap: swapOf(fields.swap),
     trace: traceOf(fields.trace),
   };
 }
@@ -189,6 +231,14 @@ export function percentile(values: number[], p: number): number | null {
   return sorted[Math.ceil(p * sorted.length) - 1] ?? null;
 }
 
+/** The middle value, or the mean of the two middle values, as the README prints a median. */
+export function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const half = sorted.length / 2;
+  return sorted.length % 2 === 1 ? (sorted[Math.floor(half)] as number) : ((sorted[half - 1] as number) + (sorted[half] as number)) / 2;
+}
+
 interface Hop {
   id: string;
   label: string;
@@ -203,7 +253,7 @@ export const HOPS: Hop[] = [
   { id: "near", label: "Rescue call included", where: "NEAR", from: "detected", to: "nearIncluded" },
   { id: "mpc", label: "Signature back from MPC", where: "NEAR", from: "nearIncluded", to: "signed" },
   { id: "send", label: "Signature checked, sent", where: "Keeper", from: "signed", to: "broadcast" },
-  { id: "evm", label: "Repay included", where: "EVM chain", from: "broadcast", to: "included" },
+  { id: "evm", label: "Included", where: "EVM chain", from: "broadcast", to: "included" },
 ];
 
 export interface LatencyRow {
@@ -217,10 +267,10 @@ export interface LatencyRow {
 }
 
 function latencyRow(id: string, label: string, where: string, values: number[]): LatencyRow {
-  return { id, label, where, samples: values.length, p50Ms: percentile(values, 0.5), p95Ms: percentile(values, 0.95), slowestMs: percentile(values, 1) };
+  return { id, label, where, samples: values.length, p50Ms: median(values), p95Ms: percentile(values, 0.95), slowestMs: percentile(values, 1) };
 }
 
-/** p50, p95 and the slowest per hop, and overall, computed from every run that recorded both ends. */
+/** The median, p95 and the slowest per hop, and overall, computed from every run that recorded both ends. */
 export function latencyTable(runs: EvidenceRun[]): { hops: LatencyRow[]; overall: LatencyRow } {
   const hops = HOPS.map(({ id, label, where, from, to }) => {
     const values = runs.flatMap(({ timestamps }) => {
@@ -249,7 +299,8 @@ export interface Tally {
 export function tally(runs: EvidenceRun[]): Tally {
   const count = (outcome: Outcome) => runs.filter((run) => run.outcome === outcome).length;
   const chainIds = new Set(runs.flatMap((run) => (run.chainId === null ? [] : [run.chainId])));
-  const positions = new Set(runs.flatMap((run) => (run.positionId === null ? [] : [`${run.chainId}:${run.positionId}`])));
+  // An Aave position is a borrower on a chain, whichever Levee contract registered it.
+  const positions = new Set(runs.flatMap((run) => (run.borrower !== null ? [`${run.chainId}:${run.borrower.toLowerCase()}`] : run.positionId !== null ? [`${run.chainId}:#${run.positionId}`] : [])));
   return {
     total: runs.length,
     success: count("success"),
@@ -303,7 +354,7 @@ export function parseMpcLatency(raw: string): MpcLatency | null {
       runs: samples.length,
       signed: signed.length,
       failed: samples.length - signed.length,
-      p50Ms: percentile(times, 0.5),
+      p50Ms: median(times),
       p95Ms: percentile(times, 0.95),
       slowestMs: percentile(times, 1),
       samples,
@@ -324,6 +375,37 @@ function readOptional(path: string): string | null {
 export function readMpcLatency(root: string = evidenceRoot()): MpcLatency | null {
   const raw = readOptional(`${root}/mpc-latency-testnet.json`);
   return raw === null ? null : parseMpcLatency(raw);
+}
+
+/** One entry of evidence/claims.json: a public claim and the run or test behind it. */
+export interface Claim {
+  id: string;
+  claim: string;
+  run: string | null;
+  /** NEAR accounts that must have no access keys, as make verify reads them. */
+  noAccessKeys: string[];
+}
+
+export function parseClaims(raw: string): Claim[] {
+  try {
+    const claims = record(JSON.parse(raw)).claims;
+    if (!Array.isArray(claims)) return [];
+    return claims.flatMap((entry: unknown) => {
+      const fields = record(entry);
+      const id = text(fields.id);
+      const claim = text(fields.claim);
+      if (!id || !claim) return [];
+      const keys = Array.isArray(fields.no_access_keys) ? fields.no_access_keys.filter((account: unknown): account is string => typeof account === "string") : [];
+      return [{ id, claim, run: text(fields.run), noAccessKeys: keys }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function readClaims(root: string = evidenceRoot()): Claim[] {
+  const raw = readOptional(`${root}/claims.json`);
+  return raw === null ? [] : parseClaims(raw);
 }
 
 export interface Rehearsal {

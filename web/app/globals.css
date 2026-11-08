@@ -26,10 +26,10 @@
   --N: #087f5b; /* Levee contract on NEAR */
   --N-dark: #066b4c;
   --M: #6b3fd4; /* MPC network */
-  --grey: #8a94a0; /* what Levee cannot reach, and plain collateral */
+  --grey: #8a94a0; /* the backtest's comparisons that need cash, and reserve runs */
   --grey-ink: #5e6873;
 
-  /* Amber: below the trigger, and what is being re-measured. Nothing else */
+  /* Amber: below the trigger, and the last 5%. Nothing else */
   --amber: #f2a100;
   --amber-soft: #fff0c7;
   --amber-ink: #7a5300;
@@ -324,6 +324,21 @@ main {
 
 .lede b {
   color: var(--ink);
+}
+
+/* What ran live, under the offer */
+.hero-proof {
+  max-width: 690px;
+  margin-top: var(--s4);
+  padding: var(--s3) 0 0;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-size: var(--t-s);
+}
+
+.hero-proof a {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 /* The address box on the position's blue */
@@ -779,7 +794,7 @@ h2.big {
   border-radius: 6px 0 0 6px;
 }
 
-.stop:nth-child(6) .track {
+.stop:last-child .track {
   border-radius: 0 6px 6px 0;
 }
 
@@ -810,6 +825,13 @@ h2.big {
 
 .plan .dot {
   border-style: dashed;
+}
+
+/* The helper's stop is square and ink, like the terminus it is */
+.helper .dot {
+  border-radius: 7px;
+  background: var(--ink);
+  color: #fff;
 }
 
 .stop .who,
@@ -878,13 +900,44 @@ h2.big {
 .terminus code {
   font-size: var(--t-code);
   font-weight: 600;
-  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 
-.terminus p:last-child {
+/* The call breaks between its arguments, never inside one */
+.terminus code span {
+  display: inline-block;
+}
+
+.terminus-body {
   grid-column: 2;
   color: var(--on-dark);
   font-size: var(--t-s);
+}
+
+.terminus-body p + ul,
+.terminus-body ul + p {
+  margin-top: var(--s2);
+}
+
+.terminus-body li {
+  position: relative;
+  padding: 2px 0 2px 20px;
+  color: #fff;
+}
+
+.terminus-body li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--on-dark);
+}
+
+.terminus + .formula {
+  margin-top: var(--s5);
 }
 
 /* The full line on /how, run down the page */
@@ -909,6 +962,11 @@ h2.big {
 
 .stop-v:last-child {
   padding-bottom: 0;
+}
+
+/* The line ends at its last stop, unless that stop is planned and drawn dashed */
+.stop-v:last-child:not(.plan) .track {
+  display: none;
 }
 
 .stop-v.plan .track {
@@ -993,8 +1051,27 @@ h2.big {
 
 .boards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+/* Two actors with a board and no lane: the helper, ink like the terminus, and the owner */
+.c-U {
+  --c: var(--ink);
+}
+
+.c-O {
+  --c: var(--ink-2);
+}
+
+.board.c-O header {
+  background: var(--tint-2);
+  color: var(--ink);
+}
+
+.board.c-O .badge-on {
+  background: var(--ink);
+  color: #fff;
 }
 
 .board {
@@ -1282,6 +1359,58 @@ h2.big {
   font-size: var(--t-xs);
 }
 
+/* Each mode's runs under their own head */
+.dep-group + .dep-group {
+  margin-top: var(--s4);
+}
+
+.dep-group h4 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s2);
+  justify-content: space-between;
+  padding: var(--s2) 0 6px;
+  border-top: 2px solid var(--on-dark-2);
+  font-size: var(--t-s);
+  font-weight: 800;
+}
+
+.dep-group h4 span {
+  color: var(--on-dark-2);
+  font-size: var(--t-xs);
+  font-weight: 600;
+}
+
+/* Marey lines by mode, and their key */
+.run-collateral {
+  stroke: var(--K);
+}
+
+.run-reserve {
+  stroke: var(--grey);
+  stroke-dasharray: 5 4;
+}
+
+.keyrow-runs {
+  margin: 0 0 var(--s2);
+}
+
+.key-P {
+  background: var(--P);
+}
+
+.key-K {
+  background: var(--K);
+  opacity: 0.6;
+}
+
+.keyrow i.key-dash {
+  height: 0;
+  border-top: 4px dashed var(--grey);
+  border-radius: 0;
+  background: none;
+}
+
 .mpc {
   display: grid;
   grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
@@ -1344,9 +1473,23 @@ h2.big {
 
 .signs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   margin-top: var(--s7);
+}
+
+.sign-card-U {
+  --c: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+
+.sign-card-U:hover {
+  background: var(--dark-raise);
+}
+
+.sign-card-U:focus-visible {
+  outline-color: var(--P-light);
 }
 
 .sign-card {
@@ -1396,28 +1539,132 @@ h2.big {
 
 /* Backtest */
 
-.re {
-  display: inline-block;
-  margin-bottom: var(--s4);
-  padding: 5px var(--s3) 3px;
-  border-radius: 6px;
-  background: var(--amber);
-  color: var(--ink);
-  font-size: var(--t-xs);
+.bt-body {
+  display: grid;
+  gap: var(--s5);
+}
+
+.bt-panels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s6);
+  margin-top: var(--s4);
+}
+
+.bt-panel {
+  min-width: 0;
+}
+
+.bt-panel figcaption {
+  margin-bottom: var(--s3);
+  padding-bottom: var(--s2);
+  border-bottom: 2px solid var(--ink);
+  font-size: var(--t-s);
+}
+
+.bt-panel figcaption b {
   font-weight: 800;
 }
 
-.bt-wrap {
-  display: grid;
-  grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
-  gap: 28px;
-  align-items: start;
+.bt-panel figcaption small {
+  display: block;
+  color: var(--ink-2);
+  font-size: var(--t-xs);
+  font-weight: 600;
 }
 
-.bt-side {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--s3);
+  align-items: center;
+  padding: 6px 0;
+}
+
+.bar-label {
+  grid-column: 1 / -1;
+  color: var(--ink-3);
+  font-size: var(--t-xs);
+  font-weight: 700;
+}
+
+.bar-track {
+  height: 14px;
+  border-radius: 3px;
+  background: var(--tint);
+}
+
+.bar {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+.bar-ink .bar {
+  background: var(--ink);
+}
+
+.bar-ink-hollow .bar {
+  border: 2px solid var(--ink);
+  background: #fff;
+}
+
+.bar-grey .bar {
+  background: var(--grey);
+}
+
+.bar-val {
+  min-width: 84px;
+  font-size: var(--t-s);
+  font-weight: 800;
+  text-align: right;
+}
+
+.bar-val small {
+  color: var(--ink-2);
+  font-size: var(--t-xs);
+  font-weight: 600;
+}
+
+.bar-none .bar-val {
+  grid-column: 1 / -1;
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  text-align: left;
+}
+
+.bt-net {
+  margin-top: var(--s2);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--rule);
+  font-size: var(--t-xs);
+  font-weight: 700;
+}
+
+.bt-findings {
+  max-width: 980px;
+}
+
+.bt-money {
+  min-width: 640px;
+}
+
+.bt-money thead th small {
+  font-weight: 600;
+}
+
+.bt-money td {
+  white-space: nowrap;
+}
+
+.bt-caveats .prose-list {
+  max-width: 980px;
+}
+
+.bt-caveats .prose-list li {
+  font-size: var(--t-s);
 }
 
 .note {
@@ -1428,19 +1675,6 @@ h2.big {
 
 .note p + p {
   margin-top: var(--s2);
-}
-
-.note-dark {
-  background: var(--ink);
-  color: #fff;
-}
-
-.note-dark b {
-  color: var(--amber);
-}
-
-.note-dark p + p {
-  color: var(--on-dark);
 }
 
 .note-plain {
@@ -1477,26 +1711,6 @@ h2.big {
   border-radius: 3px;
 }
 
-.key-ink {
-  background: var(--ink);
-}
-.key-amber {
-  background: var(--amber);
-}
-.key-grey {
-  background: var(--grey);
-}
-
-.bt-line {
-  fill: none;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-
-.bt-dot {
-  fill: #fff;
-  stroke-width: 3;
-}
 
 /* The distance line */
 
@@ -1752,6 +1966,29 @@ th small {
   overflow-wrap: anywhere;
 }
 
+.runs-table {
+  min-width: 1240px;
+}
+
+/* Wide enough that a run id breaks once, at a hyphen */
+.runs-table tbody th {
+  min-width: 176px;
+}
+
+.hops-table {
+  min-width: 560px;
+}
+
+.hops-table thead th.group {
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+}
+
+/* An address breaks anywhere rather than widen its table */
+.addr {
+  overflow-wrap: anywhere;
+}
+
 .tx-links {
   display: flex;
   flex-wrap: wrap;
@@ -1779,6 +2016,10 @@ th small {
 /* Tables of words: rows stack at phone width, and the roles stay */
 .prose-table td[data-plain] {
   color: var(--ink-3);
+}
+
+.prose-table td.nowrap {
+  white-space: nowrap;
 }
 
 .prose-table tbody td:first-child {
@@ -2237,6 +2478,9 @@ th small {
   .boards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .signs {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .proof-grid,
   .bt-wrap,
   .how-grid {
@@ -2249,7 +2493,7 @@ th small {
   .terminus {
     grid-template-columns: minmax(0, 1fr);
   }
-  .terminus p:last-child {
+  .terminus-body {
     grid-column: auto;
   }
 }
@@ -2360,7 +2604,7 @@ th small {
   .stop:first-child .track,
   .stop:nth-child(4) .track,
   .stop:nth-child(5) .track,
-  .stop:nth-child(6) .track {
+  .stop:last-child .track {
     border-radius: 0;
   }
   .stop.plan .track {
@@ -2374,11 +2618,18 @@ th small {
   .stop .who {
     margin-top: var(--s2);
   }
+  .stop:last-child:not(.plan) .track {
+    display: none;
+  }
   .terminus {
     padding: 22px;
   }
   .terminus code {
     font-size: var(--t-l);
+  }
+  .bt-panels {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s5);
   }
   .boards {
     grid-template-columns: minmax(0, 1fr);
@@ -2455,6 +2706,9 @@ th small {
   .stack td {
     padding: var(--s1) 0;
     border: 0;
+  }
+  .stack td.nowrap {
+    white-space: normal;
   }
   .stack td::before {
     content: attr(data-label);

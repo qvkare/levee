@@ -66,6 +66,20 @@ export function dollars(value: number): string {
   return `$${new Intl.NumberFormat("en-US", { maximumSignificantDigits: 4 }).format(value)}`;
 }
 
+/** Backtest dollars as the backtest prints them: $1.40M, $780.8k, $9.1k, $427. */
+export function usdShort(value: number): string {
+  const sign = value < 0 ? "−" : "";
+  const abs = Math.abs(value);
+  if (abs >= 999_950) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
+  if (abs >= 1000) return `${sign}$${(abs / 1e3).toFixed(1)}k`;
+  return `${sign}$${Math.round(abs)}`;
+}
+
+/** A net figure, with its sign either way: +$174.7k, −$122.0k. */
+export function signedUsdShort(value: number): string {
+  return value > 0 ? `+${usdShort(value)}` : usdShort(value);
+}
+
 /** A threshold or bonus with no needless zero: 84%, 5%, 77.5%. */
 export function plainShare(fraction: number): string {
   return `${Number((fraction * 100).toFixed(1))}%`;

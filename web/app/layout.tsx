@@ -19,7 +19,7 @@ const mono = localFont({
   display: "swap",
 });
 
-const DESCRIPTION = "When your Aave health factor crosses the trigger you set, a NEAR contract signs one repay from your USDC reserve. The position stays in your wallet. Check any address, no wallet and no login.";
+const DESCRIPTION = "When your Aave health factor falls below the trigger you set, Levee sells just enough of your own collateral to repay USDC debt back to your target. A NEAR contract with no keys signs it, and an ownerless helper checks the trigger and the price on chain. Live on testnet. Check any address, no wallet and no login.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://levee.qvkare.com"),

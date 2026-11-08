@@ -1,17 +1,20 @@
 import Link from "next/link";
-import { seconds } from "@/lib/format.ts";
-import { CONTRACT_ID, CONTRACT_URL, GITHUB_URL } from "@/lib/links.ts";
-import { PROOF, type ProofRun, type Signing } from "@/lib/proof.ts";
+import { countWord, seconds } from "@/lib/format.ts";
+import { CONTRACT_ID, CONTRACT_URL, GITHUB_URL, UNWIND_URL } from "@/lib/links.ts";
+import { PROOF, type Mode, type ModeFigures, type ProofRun, type Signing } from "@/lib/proof.ts";
 import { Badge } from "./badge.tsx";
 import { Marey } from "./marey.tsx";
 
 const STATUS: Record<ProofRun["outcome"], string> = { success: "Landed", failed: "Did not land", aborted: "Stopped itself", unreadable: "Unreadable" };
+
+export const MODE_NAMES: Record<Mode, string> = { collateral: "Repay from collateral", reserve: "Repay from a reserve" };
 
 const shortChain = (run: ProofRun) => run.chain.split(" ")[0] ?? run.chain;
 
 function Departure({ run }: { run: ProofRun }) {
   const landed = run.outcome === "success";
   const label = run.time ?? run.id;
+  const note = !landed ? (run.why ?? run.reason) : run.keyless ? "Landed after both contract accounts lost their last key." : null;
   return (
     <li className={`dep dep-${run.outcome}${run.replayed ? " dep-me" : ""}`}>
       <span className="dep-t mono">{label}</span>
@@ -33,23 +36,34 @@ function Departure({ run }: { run: ProofRun }) {
           </a>
         )}
       </span>
-      {!landed && (run.why ?? run.reason) && <span className="dep-why">{run.why ?? run.reason}</span>}
+      {note && <span className="dep-why">{note}</span>}
     </li>
   );
 }
 
-/** Every run, newest first, failures included. */
+/** Every run, newest first, failures included, under its mode. */
 export function Departures({ runs }: { runs: ProofRun[] }) {
+  const groups = (["collateral", "reserve"] as Mode[]).map((mode) => ({ mode, figures: PROOF.modes[mode], runs: runs.filter((run) => run.mode === mode) })).filter((group) => group.runs.length > 0);
   return (
     <div className="depart">
       <h3>
         Departures <span>UTC, {PROOF.days}</span>
       </h3>
-      <ol className="deps" aria-label="Every run, newest first">
-        {runs.map((run) => (
-          <Departure key={run.id} run={run} />
-        ))}
-      </ol>
+      {groups.map((group) => (
+        <section key={group.mode} className="dep-group" aria-label={MODE_NAMES[group.mode]}>
+          <h4>
+            {MODE_NAMES[group.mode]}
+            <span>
+              {[group.figures.versions.join(" and "), group.figures.days].filter(Boolean).join(" · ")}
+            </span>
+          </h4>
+          <ol className="deps" aria-label={`${MODE_NAMES[group.mode]}, newest first`}>
+            {group.runs.map((run) => (
+              <Departure key={run.id} run={run} />
+            ))}
+          </ol>
+        </section>
+      ))}
     </div>
   );
 }
@@ -98,7 +112,7 @@ export function SigningSummary({ signing }: { signing: Signing }) {
   );
 }
 
-/** The contract on NearBlocks, the source when it is public, and one more place to go. */
+/** The contract on NearBlocks, the helper on Basescan, the source when it is public, and one more place to go. */
 export function OutLinks({ next }: { next: { href: string; title: string; body: string } }) {
   return (
     <div className="signs">
@@ -108,7 +122,16 @@ export function OutLinks({ next }: { next: { href: string; title: string; body: 
         </span>
         <span>
           <b>{CONTRACT_ID}</b>
-          <small>The contract on NearBlocks, with every rescue call</small>
+          <small>The v0.2 contract on NearBlocks, with every rescue call</small>
+        </span>
+      </a>
+      <a className="sign-card sign-card-U" href={UNWIND_URL} rel="noreferrer">
+        <span className="badge badge-on" aria-hidden="true">
+          U
+        </span>
+        <span>
+          <b>LeveeUnwind</b>
+          <small>The helper on Basescan Sepolia, with every unwind</small>
         </span>
       </a>
       {GITHUB_URL ? (
@@ -116,7 +139,7 @@ export function OutLinks({ next }: { next: { href: string; title: string; body: 
           <Badge lane="I" />
           <span>
             <b>Source on GitHub</b>
-            <small>Contract, keeper, site and evidence</small>
+            <small>Contracts, keeper, site and evidence</small>
           </span>
         </a>
       ) : (
@@ -132,17 +155,26 @@ export function OutLinks({ next }: { next: { href: string; title: string; body: 
   );
 }
 
-/** The run count, outcomes, place, day and times, in two or three sentences. */
-export function intro(): string {
-  const { counts, overall, days } = PROOF;
-  const parts = [`${counts.success} ${counts.success === 1 ? "repay" : "repays"} landed`];
-  if (counts.aborted) parts.push(`${counts.aborted} ${counts.aborted === 1 ? "run" : "runs"} stopped ${counts.aborted === 1 ? "itself" : "themselves"}`);
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+/** One mode's runs in a sentence: what landed, what stopped, when, and how long. */
+export function modeSentence(figures: ModeFigures): string {
+  const { counts, timing, days } = figures;
+  const parts = [`${counts.success} landed`];
+  if (counts.aborted) parts.push(`${counts.aborted} stopped ${counts.aborted === 1 ? "itself" : "themselves"}`);
   if (counts.failed) parts.push(`${counts.failed} did not land`);
   const head = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0];
-  const where = `${counts.positions === 1 ? "One test position" : `${counts.positions} test positions`} on ${counts.chains.join(" and ")}, ${days}.`;
-  const slow = overall.slowestMs === overall.p95Ms ? `slowest ${seconds(overall.slowestMs ?? 0)}` : `p95 ${seconds(overall.p95Ms ?? 0)}`;
+  const median = timing.overall.p50Ms === null ? "" : `, median ${seconds(timing.overall.p50Ms)} from detection to inclusion`;
+  return `${MODE_NAMES[figures.mode]}: ${head}, ${days}${median}.`;
+}
+
+/** The run count, outcomes, place, days and times, mode by mode. */
+export function intro(): string {
+  const { counts, modes } = PROOF;
+  const sentences = (["collateral", "reserve"] as Mode[]).filter((mode) => modes[mode].counts.total > 0).map((mode) => modeSentence(modes[mode]));
+  const where = `${counts.positions === 1 ? "One test position" : `${countWord(counts.positions)} test positions`} on ${counts.chains.join(" and ")}.`;
   const mainnet = counts.testnetOnly ? " Nothing here has run on a mainnet." : "";
-  return `${head}. ${where} Median ${seconds(overall.p50Ms ?? 0)} from detection to inclusion, ${slow}.${mainnet}`;
+  return `${sentences.join(" ")} ${where}${mainnet}`;
 }
 
 /** The timetable: every landed run on one chart, every run on the board, and signing on its own. */
@@ -153,7 +185,7 @@ export function Timetable({ id = "proof", next, replayAbove = true }: { id?: str
     <section className="s" id={id} aria-labelledby={`${id}-h`}>
       <div className="sh">
         <h2 className="big" id={`${id}-h`}>
-          Timetable of {counts.total} testnet {counts.total === 1 ? "run" : "runs"}
+          Timetable of {plural(counts.total, "testnet run", "testnet runs")}
         </h2>
         <p>{intro()}</p>
       </div>

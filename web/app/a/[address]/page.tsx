@@ -70,8 +70,8 @@ export default async function Page({ params, searchParams }: Props) {
       key={`${report.address}:${fall}`}
       report={simulated?.report ?? report}
       whatIf={simulated?.whatIf ?? null}
-      trigger={PROOF.trigger}
-      measured={{ p50Ms: PROOF.overall.p50Ms, samples: PROOF.overall.samples }}
+      trigger={PROOF.readingTrigger}
+      measured={{ p50Ms: PROOF.modes.collateral.timing.overall.p50Ms, samples: PROOF.modes.collateral.timing.overall.samples }}
     />
   );
 }

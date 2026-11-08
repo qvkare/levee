@@ -1,31 +1,39 @@
 import type { Metadata } from "next";
-import { BacktestBody, BacktestTable, Remeasured, backtestIntro } from "@/components/backtest.tsx";
+import { BacktestBody, BacktestMisses, BacktestSizes, ReserveBacktest, backtestIntro } from "@/components/backtest.tsx";
 import { MeasuredTable } from "@/components/measured-table.tsx";
-import { Timetable, intro } from "@/components/timetable.tsx";
-import { countShare, countWord, dollars, integer, joined, seconds, usd } from "@/lib/format.ts";
-import { PROOF, type BacktestFigures, type ProofRun, type Signing } from "@/lib/proof.ts";
+import { TextTable, type Column } from "@/components/text-table.tsx";
+import { MODE_NAMES, Timetable, intro } from "@/components/timetable.tsx";
+import { ACCOUNTS, OWN, THIRD_PARTY, type ContractRow, type KeyDeletion } from "@/lib/contracts.ts";
+import { countWord, integer, joined, seconds } from "@/lib/format.ts";
+import { day } from "@/lib/proof-model.ts";
+import { PROOF, type Keyless, type ProofRun, type Signing } from "@/lib/proof.ts";
 
-/** Built once, from the run records and the backtest summary inlined at build time. */
+/** Built once, from the run records, the claims ledger and the backtests inlined at build time. */
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Proof",
-  description: "Every recorded Levee run, the aborted one included, with explorer links and every hop, the signing test, the fork rehearsal, and the backtest with its misses and limits.",
+  description: "Every recorded Levee run on testnet, the aborted ones included, with explorer links and every hop, the contracts and their deleted keys, the signing test, and the collateral backtest with its caveats.",
 };
 
 const OUTCOME_NAMES: Record<ProofRun["outcome"], string> = { success: "Landed", failed: "Did not land", aborted: "Stopped itself", unreadable: "Unreadable" };
 
 const at = (ms: number | null) => (ms === null ? "none" : `${(ms / 1000).toFixed(2)} s`);
 
+const SEEDED = "The team added the liquidity in the testnet pool at Aave’s oracle price, so testnet sale prices are no measure of slippage. Slippage is measured in the backtest, from historical Uniswap quotes.";
+
 function RunsTable({ runs }: { runs: ProofRun[] }) {
   return (
     <div className="scroll" tabIndex={0} role="region" aria-label="Every recorded run">
-      <table className="wide-table">
+      <table className="wide-table runs-table">
         <thead>
           <tr>
             <th scope="col">Run, UTC</th>
+            <th scope="col">Mode</th>
             <th scope="col">Outcome</th>
             <th scope="col">Repaid</th>
+            <th scope="col">Sold, and the keeper’s cap</th>
+            <th scope="col">Price against the oracle, seeded pool</th>
             <th scope="col">Health factor</th>
             <th scope="col">On NEAR</th>
             <th scope="col">Signed</th>
@@ -41,14 +49,30 @@ function RunsTable({ runs }: { runs: ProofRun[] }) {
                 {run.time ?? "unknown"}
                 <small className="mono">{run.id}</small>
               </th>
+              <td>
+                {run.mode === "collateral" ? "Collateral" : "Reserve"}
+                {run.version && <small>{run.version}</small>}
+              </td>
               <td className="wrap">
                 {OUTCOME_NAMES[run.outcome]}
                 {run.replayed && <small>Replayed on the home page</small>}
+                {run.keyless && <small>Landed after both contract accounts lost their last key</small>}
                 {run.why && <small>{run.why}</small>}
                 {run.reason && <small className="mono">{run.reason}</small>}
               </td>
-              <td>{run.amount ?? "none"}</td>
-              <td>{run.healthBefore ? `${Number(run.healthBefore).toFixed(4)} to ${run.healthAfter ? Number(run.healthAfter).toFixed(2) : "not read"}` : "not read"}</td>
+              <td>
+                {run.outcome === "success" ? (run.amount ?? "none") : "none"}
+                {run.outcome !== "success" && run.amount && <small>sized at {run.amount}</small>}
+              </td>
+              <td>
+                {run.sale?.sold ?? "none"}
+                {run.sale?.maxSold && <small>cap {run.sale.maxSold}</small>}
+              </td>
+              <td>{run.sale?.discountBps == null ? "none" : `${run.sale.discountBps} bps under`}</td>
+              <td>
+                {run.healthBefore ? (run.healthAfter ? `${Number(run.healthBefore).toFixed(4)} to ${Number(run.healthAfter).toFixed(4)}` : Number(run.healthBefore).toFixed(4)) : "not read"}
+                {run.healthBefore && !run.healthAfter && <small>{run.outcome === "success" ? "after not read" : "nothing landed"}</small>}
+              </td>
               <td>{at(run.marks.near)}</td>
               <td>{at(run.marks.signed)}</td>
               <td>{at(run.marks.sent)}</td>
@@ -118,83 +142,70 @@ function SigningSamples({ signing }: { signing: Signing }) {
   );
 }
 
-const pct = (fraction: number) => `${Math.round(fraction * 100)}%`;
+const address = (row: ContractRow) => (
+  <a className="mono addr" href={row.href} rel="noreferrer">
+    {row.address}
+  </a>
+);
 
-function BacktestDetail({ backtest }: { backtest: BacktestFigures }) {
-  const share = (count: number, total: number) => `${countShare(count, total)}%`;
-  const cell = backtest.rows.find((row) => row.share === backtest.reserveShare);
+const CONTRACT_COLUMNS: Column<ContractRow>[] = [
+  { label: "Contract", plain: true, cell: (row) => row.name },
+  { label: "Network", nowrap: true, cell: (row) => row.network },
+  { label: "Address", nowrap: true, cell: address },
+  {
+    label: "Source",
+    plain: true,
+    cell: (row) =>
+      row.sourceHref ? (
+        <a href={row.sourceHref} rel="noreferrer">
+          {row.source}
+        </a>
+      ) : (
+        (row.source ?? "")
+      ),
+  },
+];
+
+const ACCOUNT_COLUMNS: Column<ContractRow>[] = CONTRACT_COLUMNS.slice(0, 3).map((column, index) => (index === 0 ? { ...column, label: "Account" } : column));
+
+const DELETION_COLUMNS: Column<KeyDeletion>[] = [
+  { label: "Account", nowrap: true, cell: (row) => <span className="mono addr">{row.account}</span> },
+  { label: "Version", nowrap: true, cell: (row) => row.version },
+  { label: "Last full-access key, deleted", plain: true, cell: (row) => <span className="mono addr">{row.key}</span> },
+  {
+    label: "NEAR transaction",
+    cell: (row) => (
+      <a className="mono addr" href={row.href} rel="noreferrer">
+        {row.tx}
+      </a>
+    ),
+  },
+  { label: "Block", nowrap: true, cell: (row) => integer(row.block) },
+];
+
+function KeylessSection({ keyless }: { keyless: Keyless }) {
+  const run = PROOF.runs.find((entry) => entry.id === keyless.run);
   return (
     <>
-      <h3 className="sub">All three rows</h3>
-      <BacktestTable backtest={backtest} />
-      <p className="note-line">Saved means the position outlived the window. No single column is the result: most positions needed a reserve near 30% of debt, so one reserve size flatters or hurts by where it falls.</p>
-
-      <h3 className="sub">Where Levee did no better</h3>
-      <ul className="prose-list">
-        {backtest.rows
-          .filter((row) => row.collateral >= row.levee)
-          .map((row) => (
-            <li key={row.share}>
-              At a {pct(row.share)} reserve, plain USDC collateral survived more often than Levee: {share(row.collateral, row.positions)} against {share(row.levee, row.positions)}.
-            </li>
-          ))}
-        {backtest.upfrontNeverWorse && <li>Repaying the same USDC at the start, with no keeper at all, did at least as well as Levee at every reserve size.</li>}
-        <li>
-          {integer(backtest.armedBelow)} of the {integer(backtest.positions)} positions were already below the trigger when the replay began, so their repay fired at once. That is an upfront repay. Among the {integer(backtest.armedAbove)} where a race really ran, {integer(backtest.savedArmedAbove)} ({share(backtest.savedArmedAbove, backtest.armedAbove)}) were saved at a {pct(backtest.reserveShare)} reserve.
-        </li>
-        {cell && (
-          <li>
-            At that reserve, {integer(backtest.bothSurvive)} positions survived either way, so Levee added no survival there. {integer(backtest.collateralOnly)} survived as plain collateral and were lost with Levee, because its repay came too late.
-          </li>
-        )}
-      </ul>
-
-      <h3 className="sub">The misses, at a {pct(backtest.reserveShare)} reserve</h3>
+      <TextTable columns={DELETION_COLUMNS} rows={keyless.deletions} rowKey={(row) => row.account} label="Key deletions" />
       <p className="prose">
-        {integer(backtest.notSaved)} of {integer(backtest.positions)} were lost. {integer(backtest.failedLaterInWindow)} of those outlived the first real liquidation and fell below 1.00 later.
-      </p>
-      <div className="scroll" tabIndex={0} role="region" aria-label="Why positions were lost">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Why</th>
-              <th scope="col">Positions</th>
-              <th scope="col">Share</th>
-            </tr>
-          </thead>
-          <tbody>
-            {backtest.misses.map((miss) => (
-              <tr key={miss.reason}>
-                <th scope="row">{miss.name}</th>
-                <td>{integer(miss.count)}</td>
-                <td>{share(miss.count, backtest.positions)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <h3 className="sub">What it leaves out</h3>
-      <ul className="prose-list">
-        <li>Not modelled: MPC down, keeper down, RPCs disagreeing under load, congestion beyond the delay, gas above the fee ceiling.</li>
-        <li>Only liquidated positions are in the sample. Borrowers who crossed the trigger and recovered are missing, so false alarms are not measured.</li>
-        <li>A saved position still holds the fallen collateral, and its owner may have done better or worse than the liquidated outcome.</li>
-        <li>
-          {integer(backtest.excluded)} more positions are out of scope, because their debt was in something other than native USDC. The largest groups: {joined(backtest.topExclusions.map((row) => `${row.reason} (${integer(row.positions)})`))}.
-        </li>
-        <li>
-          The windows differ. At a {pct(backtest.reserveShare)} reserve, {backtest.byWindow.map((row) => `${row.label}: ${share(row.saved, row.positions)} saved`).join(". ")}.
-        </li>
-      </ul>
-      <p className="note-line">
-        Debt liquidated in the sample: {dollars(backtest.liquidatedDebtUsd)}. Reserve used on saved positions at this reserve size: {usd(backtest.reserveUsedOnSavedUsd)} of {usd(backtest.reserveHeldUsd)} held.
+        Neither account has an access key left, so nobody can change either contract’s code or sign as the contract account. {run ? `The rescue at ${run.time} UTC on ${run.detectedAt === null ? "" : day(run.detectedAt)}` : "A rescue"} landed after both deletions, its NEAR call at block {integer(keyless.afterBlock)}
+        {run?.near && run.evm ? (
+          <>
+            : <a href={run.near.href}>NEAR</a>, <a href={run.evm.href}>{run.chain}</a>.
+          </>
+        ) : (
+          "."
+        )}{" "}
+        The claims ledger records it as <code>{keyless.claimId}</code>, and <code>make verify</code> reads both key lists from NEAR and fails if any key is there.
       </p>
     </>
   );
 }
 
 export default function ProofPage() {
-  const { runs, hops, overall, counts, signing, rehearsal, backtest } = PROOF;
+  const { runs, modes, counts, signing, rehearsal, backtest, reserveBacktest, keyless } = PROOF;
+  const collateralRuns = modes.collateral.counts.total;
 
   return (
     <main id="main">
@@ -205,32 +216,52 @@ export default function ProofPage() {
 
       <Timetable id="timetable" replayAbove={false} next={{ href: "/how", title: "How a rescue runs", body: "The line stop by stop, who can do what, and when it fails" }} />
 
+      <section className="s s-tint" id="contracts" aria-labelledby="contracts-h">
+        <div className="sh">
+          <h2 className="big" id="contracts-h">
+            Contracts and keys
+          </h2>
+          <p>Everything here is on testnet. Nothing is deployed on any mainnet. The last full-access key on each Levee contract account was deleted.</p>
+        </div>
+        {keyless && <KeylessSection keyless={keyless} />}
+        <h3 className="sub">Levee’s own</h3>
+        <TextTable columns={CONTRACT_COLUMNS} rows={OWN} rowKey={(row) => row.address} label="Levee's own contracts" />
+        <h3 className="sub">Accounts Levee acts through</h3>
+        <TextTable columns={ACCOUNT_COLUMNS} rows={ACCOUNTS} rowKey={(row) => row.address} label="Accounts Levee acts through" />
+        <h3 className="sub">Third-party contracts it calls</h3>
+        <TextTable columns={ACCOUNT_COLUMNS.map((column, index) => (index === 0 ? { ...column, label: "Contract" } : column))} rows={THIRD_PARTY} rowKey={(row) => row.address} label="Third-party contracts" />
+      </section>
+
       {counts.total > 0 && (
-        <section className="s s-tint" id="hops" aria-labelledby="hops-h">
+        <section className="s" id="hops" aria-labelledby="hops-h">
           <div className="sh">
             <h2 className="big" id="hops-h">
               Each hop
             </h2>
-            <p>p50 and p95 are nearest rank, over the {overall.samples} runs that landed. With this few runs the p95 is the slowest run. The run that stopped itself finished no hop, so it is in the list below and out of these times.</p>
+            <p>Medians, and p95 by nearest rank, over the runs that landed in each mode. With this few runs the p95 is the slowest run. A run that stopped itself finished no hop, so it is in the list below and out of these times.</p>
           </div>
-          <MeasuredTable hops={hops} overall={overall} />
+          <MeasuredTable modes={[modes.collateral, modes.reserve]} />
         </section>
       )}
 
       {counts.total > 0 && (
-        <section className="s" id="runs" aria-labelledby="runs-h">
+        <section className="s s-tint" id="runs" aria-labelledby="runs-h">
           <div className="sh">
             <h2 className="big" id="runs-h">
               Every run
             </h2>
-            <p>Each row is a file in evidence/runs, read when this site was built. Times are from detection. Failed and aborted runs stay on the list.</p>
+            <p>
+              Each row is a file in evidence/runs, read when this site was built. Times are from detection. Failed and aborted runs stay on the list.
+              {collateralRuns > 0 && ` ${SEEDED}`}
+            </p>
           </div>
           <RunsTable runs={runs} />
+          {collateralRuns > 0 && <p className="note-line">The price includes the pool fee. Each unwind landed just above its target, because the keeper sizes for the fee and the whole bound.</p>}
         </section>
       )}
 
       {signing && (
-        <section className="s s-tint" id="signing" aria-labelledby="signing-h">
+        <section className="s" id="signing" aria-labelledby="signing-h">
           <div className="sh">
             <h2 className="big" id="signing-h">
               Every signing sample
@@ -244,7 +275,7 @@ export default function ProofPage() {
       )}
 
       {rehearsal && (
-        <section className="s" id="fork" aria-labelledby="fork-h">
+        <section className="s s-tint" id="fork" aria-labelledby="fork-h">
           <div className="sh">
             <h2 className="big" id="fork-h">
               The fork rehearsal
@@ -252,7 +283,7 @@ export default function ProofPage() {
             <p>{rehearsal.label}</p>
           </div>
           <p className="prose">
-            It repaid {rehearsal.amount ?? "nothing"}, and health factor went from {rehearsal.healthBefore ?? "unread"} to {rehearsal.healthAfter ?? "unread"} in {rehearsal.latencyMs === null ? "an unrecorded time" : seconds(rehearsal.latencyMs)}. It is kept apart from the runs above, because no public explorer can show a fork.{" "}
+            A rehearsal of the reserve mode. It repaid {rehearsal.amount ?? "nothing"}, and health factor went from {rehearsal.healthBefore ?? "unread"} to {rehearsal.healthAfter ?? "unread"} in {rehearsal.latencyMs === null ? "an unrecorded time" : seconds(rehearsal.latencyMs)}. It is kept apart from the runs above, because no public explorer can show a fork.{" "}
             {rehearsal.near && (
               <>
                 The NEAR side is public on <a href={rehearsal.near.href}>NearBlocks</a>.
@@ -263,32 +294,45 @@ export default function ProofPage() {
       )}
 
       {backtest && (
-        <section className="s s-tint" id="backtest" aria-labelledby="backtest-h">
-          <Remeasured />
+        <section className="s" id="backtest" aria-labelledby="backtest-h">
           <div className="sh">
             <h2 className="big" id="backtest-h">
-              Backtest on {integer(backtest.positions)} liquidated positions
+              Backtest: repay from collateral
             </h2>
             <p>{backtestIntro(backtest)}</p>
           </div>
           <BacktestBody backtest={backtest} />
-          <BacktestDetail backtest={backtest} />
+          <h3 className="sub">Why liquidated positions were missed</h3>
+          <BacktestMisses backtest={backtest} />
+          <h3 className="sub">Net by size of position</h3>
+          <BacktestSizes backtest={backtest} />
+          <p className="note-line">Method, validation and every table: backtest/README.md and backtest/results/collateral.md, recomputed by make backtest.</p>
+
+          {reserveBacktest && (
+            <>
+              <h3 className="sub">{MODE_NAMES.reserve}, the second mode</h3>
+              <ReserveBacktest backtest={reserveBacktest} />
+            </>
+          )}
         </section>
       )}
 
-      <section className="s" id="limits" aria-labelledby="limits-h">
+      <section className="s s-tint" id="limits" aria-labelledby="limits-h">
         <div className="sh">
           <h2 className="big" id="limits-h">
             Limits of this proof
           </h2>
         </div>
         <ul className="prose-list">
-          <li>Every live run is on {joined(counts.chains) || "a testnet"}, from {counts.positions === 1 ? "one position" : `${counts.positions} positions`}, on {PROOF.days}. Nothing has run on a mainnet or during a crash.</li>
           <li>
-            {countWord(overall.samples)} landed {overall.samples === 1 ? "run is" : "runs are"} too few for a p95 to mean much. With this many it is the slowest run.
+            Every live run is on {joined(counts.chains) || "a testnet"}, from {counts.positions === 1 ? "one position" : `${countWord(counts.positions).toLowerCase()} positions`}, on {PROOF.days}. Nothing has run on a mainnet or during a crash.
           </li>
+          <li>
+            {countWord(modes.collateral.timing.overall.samples)} landed collateral {modes.collateral.timing.overall.samples === 1 ? "run is" : "runs are"} too few for a p95 to mean much. With this many it is the slowest run.
+          </li>
+          {collateralRuns > 0 && <li>{SEEDED}</li>}
           <li>The replay on the home page draws the fall before detection. No record times it, and the page says so.</li>
-          <li>The backtest is a simulation and is being re-measured. It assumes the keeper, RPCs, NEAR and MPC all worked through the worst minutes.</li>
+          <li>The backtest is a simulation. It assumes the keeper, RPCs, NEAR and the MPC network all worked through the worst minutes, and that each sale filled at its quote, alone in its block.</li>
           <li>Levee is unaudited. Don’t use it with funds you can’t lose.</li>
         </ul>
       </section>

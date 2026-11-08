@@ -345,14 +345,14 @@ export function readingLine(entry: LineEntry, report: RiskReport): string {
 }
 
 /**
- * Which Aave positions are under the trigger the testnet runs used, and what a repay to target would
+ * Which Aave positions are under the trigger the backtest used, and what a repay to target would
  * take. `strong` is the part to set in bold. Null without a trigger.
  */
 export function triggerSentence(line: DistanceLine, trigger: number | null): { strong: string; rest: string } | null {
   if (trigger === null) return null;
   const aave = line.entries.filter((entry): entry is AaveEntry => entry.kind === "aave" && entry.position.healthFactor !== null);
   const t = trigger.toFixed(2);
-  const used = `, the trigger used in the testnet runs.`;
+  const used = `, the trigger the backtest used.`;
   if (aave.length === 0) return { strong: "No Aave debt here", rest: ", and Levee repays only on Aave." };
   const under = aave.filter((entry) => (entry.position.healthFactor as number) < trigger);
   const first = under.find((entry) => (entry.reach === "repays" || entry.reach === "part") && (entry.position.repay?.usd ?? 0) > 0);

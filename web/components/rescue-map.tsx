@@ -52,7 +52,8 @@ function geometry(layout: Layout, W: number, viewport: number, tmax: number): Ge
   const H = 760;
   const y0 = 26;
   const gap = 44;
-  const pps = (H - 24 - y0) / (tmax - TMIN);
+  // The sign at the terminus hangs below the last stop, so the line stops short of the frame's foot to leave it room.
+  const pps = (H - 150 - y0) / (tmax - TMIN);
   const lane = (index: number) => 22 + index * gap;
   return { layout, W, H, viewport, tmax, gap, pps, lane, at: (t, index) => [lane(index), y0 + (t - TMIN) * pps], axis: 0 };
 }
@@ -199,11 +200,28 @@ function Drawing({ replay, times, geo, t, onJump, clip }: { replay: Replay; time
     { text: health.toFixed(2), size: "xxl", weight: 800, lh: 1.02 },
     ...(trigger === null ? [] : [{ text: `Trigger ${trigger.toFixed(2)}`, size: "xs" as const, weight: 600 as const }]),
   ];
-  const afterLines: SignLine[] = [
-    { text: `Repaid ${replay.amount}`, size: "s", weight: 800 },
-    { text: replay.healthAfter.toFixed(2), size: "xxl", weight: 800, lh: 1 },
-    { text: horizontal ? blockLine : "health factor", size: "xs", weight: 600 },
-  ];
+  const sold = replay.sale?.sold;
+  // The sign at the terminus names the helper. Wide, it keeps three lines so it stays clear of the band's head;
+  // on a phone it is narrow, so the sale takes a line of its own.
+  const afterLines: SignLine[] = !sold
+    ? [
+        { text: `Repaid ${replay.amount}`, size: "s", weight: 800 },
+        { text: replay.healthAfter.toFixed(2), size: "xxl", weight: 800, lh: 1 },
+        { text: horizontal ? blockLine : "health factor", size: "xs", weight: 600 },
+      ]
+    : horizontal
+      ? [
+          { text: `Sold ${sold}, repaid ${replay.amount}`, size: "s", weight: 800 },
+          { text: replay.healthAfter.toFixed(2), size: "xxl", weight: 800, lh: 1 },
+          { text: `health factor · LeveeUnwind${replay.block === null ? "" : ` · block ${integer(replay.block)}`}`, size: "xs", weight: 600 },
+        ]
+      : [
+          { text: "LeveeUnwind sold", size: "xs", weight: 700 },
+          { text: sold, size: "xs", weight: 700 },
+          { text: `Repaid ${replay.amount}`, size: "s", weight: 800 },
+          { text: replay.healthAfter.toFixed(2), size: "xxl", weight: 800, lh: 1 },
+          { text: "health factor", size: "xs", weight: 600 },
+        ];
   const firstTone = below ? "amber" : "plain";
   const jumps = {
     before: { t: 0.2, label: "Show the moment health factor was below the trigger" },
@@ -316,19 +334,25 @@ function Drawing({ replay, times, geo, t, onJump, clip }: { replay: Replay; time
           <line className="playhead" x1={0} x2={geo.lane(3) + 16} y1={head[1]} y2={head[1]} opacity={ended ? 0 : 1} />
         )}
         {[
-          { t: 0, lane: 0, big: false, fill: t >= 0 ? "f-amber" : "f-white" },
-          { t: times.near, lane: 2, big: false, fill: "f-white" },
-          { t: times.signed, lane: 3, big: false, fill: "f-white" },
-          { t: times.sent, lane: 1, big: false, fill: "f-white" },
-          { t: times.included, lane: 0, big: true, fill: t >= times.included ? "f-P" : "f-white" },
+          { t: 0, lane: 0, fill: t >= 0 ? "f-amber" : "f-white" },
+          { t: times.near, lane: 2, fill: "f-white" },
+          { t: times.signed, lane: 3, fill: "f-white" },
+          { t: times.sent, lane: 1, fill: "f-white" },
         ].map((station) => {
           const [cx, cy] = geo.at(station.t, station.lane);
-          return <circle key={`${station.t}-${station.lane}`} className={`station ${station.fill}${station.big ? " station-end" : ""}`} cx={cx} cy={cy} r={station.big ? 10 : 7.5} />;
+          return <circle key={`${station.t}-${station.lane}`} className={`station ${station.fill}`} cx={cx} cy={cy} r={7.5} />;
         })}
+        {replay.mode === "collateral" ? (
+          // The helper: an ink square on your position's lane, where the route ends.
+          <rect className={`station station-end ${t >= times.included ? "f-ink" : "f-white"}`} x={p5[0] - 11} y={p5[1] - 11} width={22} height={22} rx={4} />
+        ) : (
+          <circle className={`station station-end ${t >= times.included ? "f-P" : "f-white"}`} cx={p5[0]} cy={p5[1]} r={10} />
+        )}
       </g>
       {signs.map((sign) => (sign.from <= t || sign.from === -Infinity ? <SignBox key={sign.key} sign={sign} geo={geo} onJump={onJump} /> : null))}
       <g aria-hidden="true">
-        <circle className="train" cx={train[0]} cy={train[1]} r={10} />
+        {/* Once it arrives, the train leaves the terminus in view. */}
+        {t < times.included && <circle className="train" cx={train[0]} cy={train[1]} r={10} />}
         {horizontal && !ended && (
           <g>
             <rect className="f-ink" x={head[0] - 31} y={geo.axis - 6} width={62} height={22} rx={5} />
@@ -347,6 +371,7 @@ function liveMessage(t: number, times: Times, replay: Replay): string {
   if (t < times.near) return `Below the trigger at ${replay.healthBefore.toFixed(4)}.`;
   if (t < times.signed) return "Rescue call on NEAR, waiting for the MPC signature.";
   if (t < times.included) return "Signed and sent.";
+  if (replay.sale?.sold) return `LeveeUnwind sold ${replay.sale.sold} and repaid ${replay.amount}, health factor ${replay.healthAfter.toFixed(2)}.`;
   return `Repaid ${replay.amount}, health factor ${replay.healthAfter.toFixed(2)}.`;
 }
 
@@ -368,10 +393,21 @@ function Steps({ replay, times }: { replay: Replay; times: Times }) {
       <li>
         {secs(times.signed)}: the MPC network returns the signature, {secs(times.signed - times.near)} after the call.
       </li>
-      <li>{secs(times.sent)}: the keeper checks the signer and sends the repay.</li>
-      <li>
-        {secs(times.included)}: the repay of {replay.amount} is included{replay.block === null ? "" : ` in block ${integer(replay.block)}`}, and health factor is {replay.healthAfter.toFixed(2)}.
-      </li>
+      {replay.sale?.sold ? (
+        <>
+          <li>{secs(times.sent)}: the keeper checks the signer and sends the call to LeveeUnwind.</li>
+          <li>
+            {secs(times.included)}: the call is included{replay.block === null ? "" : ` in block ${integer(replay.block)}`}. LeveeUnwind checks the trigger, the collateral and pool, and the price against Aave’s oracle, sells {replay.sale.sold} and repays {replay.amount}. Health factor is {replay.healthAfter.toFixed(2)}.
+          </li>
+        </>
+      ) : (
+        <>
+          <li>{secs(times.sent)}: the keeper checks the signer and sends the repay.</li>
+          <li>
+            {secs(times.included)}: the repay of {replay.amount} is included{replay.block === null ? "" : ` in block ${integer(replay.block)}`}, and health factor is {replay.healthAfter.toFixed(2)}.
+          </li>
+        </>
+      )}
     </ol>
   );
 }
@@ -462,13 +498,15 @@ export function RescueMap({ replay }: { replay: Replay }) {
         { layout: "v", width: 350, viewport: 390 },
       ];
   const when = readSecond(replay.detectedAt);
+  const title = replay.mode === "collateral" ? "A real rescue from collateral, at real speed" : "A real testnet rescue, at real speed";
 
   return (
     <section className="band" aria-labelledby={`${uid}-title`} ref={wrap}>
       <div className="band-head">
-        <h2 id={`${uid}-title`}>A real testnet rescue, at real speed</h2>
+        <h2 id={`${uid}-title`}>{title}</h2>
         <p className="band-meta">
-          {replay.chain} · {when} · <span className="when-h">left to right</span>
+          {replay.chain} · {when}
+          {replay.chosen === "keyless" && " · contracts with no keys"} · <span className="when-h">left to right</span>
           <span className="when-v">top to bottom</span> is time
         </p>
         <div className="acts">

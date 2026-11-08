@@ -80,7 +80,7 @@ function Legend({ trigger }: { trigger: number | null }) {
       {trigger !== null && (
         <li>
           <i className="key-band" aria-hidden="true" />
-          Under trigger {trigger.toFixed(2)}, the testnet runs’ trigger
+          Under trigger {trigger.toFixed(2)}, the backtest’s trigger
         </li>
       )}
     </ul>

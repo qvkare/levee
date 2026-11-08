@@ -291,7 +291,7 @@ No wallet and no login. Paste an address and see:
 
 ## 9. Repay from collateral
 
-Status: v0.2, built and fork-tested on 2026-11-08, with an independent audit's findings fixed the same day. Deployed on Base Sepolia and NEAR testnet the same day, with six live rescues and one refusal, the last rescue after every key on the contract accounts was deleted (subsection Testnet). Not on mainnet. Items marked UNVERIFIED must be checked before they are relied on.
+Status: v0.2, built and fork-tested on 2026-11-08, with an independent audit's findings fixed the same day. Deployed on Base Sepolia and NEAR testnet the same day, with seven live rescues and one refusal, the last two after every key on the contract accounts was deleted (subsection Testnet). Not on mainnet. Items marked UNVERIFIED must be checked before they are relied on.
 
 ### Why
 
@@ -416,7 +416,7 @@ Both testnet contract accounts are locked as "Mainnet lock" describes: the only 
 | `levee-core-1503.testnet` (v0.1) | `ed25519:AgX6NqakXdaJD4PzFABsTLxnKmEEisozd617LNVi8Ead` | [`3u8yYEBB9eVJbRGjE27xiHru1aAA4W7Mh4C2rrsZ86fu`](https://testnet.nearblocks.io/txns/3u8yYEBB9eVJbRGjE27xiHru1aAA4W7Mh4C2rrsZ86fu) | 276,764,277 |
 | `levee-core-v2-1503.testnet` (v0.2) | `ed25519:GRz6zN114TpPrRB5Go6zANhjC2csyW7kuLwUsWJV2ZdE` | [`C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA`](https://testnet.nearblocks.io/txns/C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA) | 276,764,289 |
 
-The last run below came after both, its NEAR call at block 276,764,677. The claim `contracts-keyless-rescue-after` ties it to the key lists, which `make verify` reads.
+The last two runs below came after both, the first with its NEAR call at block 276,764,677. The claim `contracts-keyless-rescue-after` ties it to the key lists, which `make verify` reads.
 
 Runs, all on position 1 with the borrower's health factor pushed to 1.48 by a borrow:
 
@@ -429,6 +429,7 @@ Runs, all on position 1 with the borrower's health factor pushed to 1.48 by a bo
 | `2026-11-08T10-19-24Z-base-sepolia-1` | `rescue-once` | aborted, `quote_over_slippage_bound` | none | 1.48 | quote 135 bps below, bound 100 | nothing sent |
 | `2026-11-08T10-19-54Z-base-sepolia-1` | `rescue-once` | success | 9.10 | 1.48 to 1.8039 | 41 bps below | 8.7 s |
 | `2026-11-08T10-39-36Z-base-sepolia-1` | `rescue-once`, after the keys were deleted | success | 7.31 | 1.48 to 1.8035 | 50 bps below | 6.7 s |
+| `2026-11-08T12-00-18Z-base-sepolia-1` | `rescue-once` from the demo script, after the keys were deleted | success | 5.88 | 1.48 to 1.8037 | 45 bps below | 7.5 s |
 
 - The price includes the 0.30% pool fee. It is the price of a pool we seeded, not a market's.
 - Each unwind landed just above the 1.8 target, as section "Keeper" predicts: the keeper sized for 130 bps and paid 41 to 74.

@@ -13,7 +13,7 @@ function FirstPosition({ first }: { first: LineEntry | undefined }) {
   if (first.kind === "aave" && first.reach === "none") {
     return (
       <p>
-        <b>Nothing, for {first.name}.</b> Levee repays USDC debt on Aave, and this debt is {debtAssets(first.position)}. A reserve, a trigger and a keeper would change nothing here.
+        <b>Nothing, for {first.name}.</b> Levee repays USDC debt on Aave, and this debt is {debtAssets(first.position)}. A trigger and a keeper would change nothing here.
       </p>
     );
   }
@@ -26,7 +26,7 @@ function FirstPosition({ first }: { first: LineEntry | undefined }) {
   }
   return (
     <p>
-      <b>For {first.name}:</b> when health factor crosses a trigger you set, a keeper asks a NEAR contract to sign one thing, a repay of this debt from your USDC reserve, inside caps you set. The position stays in your wallet, and the keeper can’t send funds anywhere else.
+      <b>For {first.name}:</b> when health factor falls below a trigger you set, a keeper asks a NEAR contract to sign one call to LeveeUnwind, an ownerless helper on the lending chain. It sells just enough of your collateral to repay this USDC debt back to your target, within the price bound you set against Aave’s oracle. The position stays in your wallet. Levee can also repay from a USDC reserve, as a second mode.
     </p>
   );
 }
@@ -39,7 +39,7 @@ export function LeveeNote({ first, measured }: { first: LineEntry | undefined; m
       <FirstPosition first={first} />
       <p>
         <b>This page only reads.</b> Nothing is repaying these positions.
-        {measured.p50Ms !== null && ` On testnet a rescue took a median ${seconds(measured.p50Ms)} from detection to inclusion, over ${measured.samples} runs.`}{" "}
+        {measured.p50Ms !== null && ` On testnet a rescue from collateral took a median ${seconds(measured.p50Ms)} from detection to inclusion, over ${measured.samples} runs.`}{" "}
         <Link href="/how">How a rescue runs</Link>
       </p>
     </div>
