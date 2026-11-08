@@ -16,6 +16,11 @@ export const MAX_UINT256 = 2n ** 256n - 1n;
  */
 export const REPAY_ROUNDING_UNITS = 2n;
 
+/** Uniswap v3 fees are in hundredths of a basis point: 3000 is 0.3%. */
+export const FEE_UNIT = 1_000_000n;
+/** One basis point in `FEE_UNIT`s. */
+const PPM_PER_BPS = 100n;
+
 export interface Caps {
   /** The position's `max_per_rescue`, USDC base units. */
   maxPerRescue: bigint;
@@ -28,6 +33,28 @@ export interface Caps {
   /** Seconds until the contract's cooldown allows another rescue. */
   cooldownRemainingSecs: number;
   paused: boolean;
+}
+
+/**
+ * Collateral mode, spec section 9. The helper sells this collateral to repay, so the
+ * borrower's aToken balance and allowance to the helper take the place of the
+ * rescuer's USDC balance and allowance.
+ */
+export interface CollateralTerms {
+  /** Aave's oracle price for the collateral, base currency. */
+  priceBase: bigint;
+  /** The collateral's decimals. */
+  decimals: bigint;
+  /** The collateral reserve's liquidation threshold, basis points. */
+  liquidationThresholdBps: bigint;
+  /** The borrower's aToken balance, collateral base units. */
+  aTokenBalance: bigint;
+  /** The borrower's aToken allowance to the helper, collateral base units. */
+  aTokenAllowance: bigint;
+  /** Uniswap v3 fee tier of the pool, hundredths of a basis point. */
+  poolFee: bigint;
+  /** The borrower's slippage limit at the helper, basis points. */
+  maxSlippageBps: bigint;
 }
 
 export interface DecisionInput {
@@ -48,6 +75,8 @@ export interface DecisionInput {
   /** Repay up to this health factor, wad. */
   target: bigint;
   caps: Caps;
+  /** Set in collateral mode. Then the rescuer's balance and allowance do not apply. */
+  collateral?: CollateralTerms;
 }
 
 export type NoActionReason =
@@ -61,7 +90,12 @@ export type NoActionReason =
   | 'max_per_rescue_zero'
   | 'budget_exhausted'
   | 'rescuer_empty'
-  | 'no_allowance';
+  | 'no_allowance'
+  /** Collateral mode: the borrower holds none of the collateral, or approved none. */
+  | 'no_collateral'
+  | 'no_collateral_allowance'
+  /** Collateral mode: each dollar sold frees less than it repays, at the worst price. */
+  | 'target_unreachable';
 
 /** What set the final amount: the target itself, or the cap that cut it down. */
 export type AmountLimit =
@@ -70,7 +104,9 @@ export type AmountLimit =
   | 'max_per_rescue'
   | 'max_per_day'
   | 'rescuer_balance'
-  | 'allowance';
+  | 'allowance'
+  | 'collateral_balance'
+  | 'collateral_allowance';
 
 export type Decision =
   | {
@@ -118,11 +154,97 @@ export function repayToTarget(input: {
   return ceilDiv(repayBase * USDC_UNIT, usdcPriceBase) + REPAY_ROUNDING_UNITS;
 }
 
+/** The total sale cost `s` the collateral formula assumes, in `FEE_UNIT`s. */
+export const saleCostPpm = (terms: Pick<CollateralTerms, 'poolFee' | 'maxSlippageBps'>): bigint =>
+  terms.poolFee + terms.maxSlippageBps * PPM_PER_BPS;
+
+/**
+ * Spec section 9, `R = (T × D − C × L) / (T − L_c × (1 + s))`, in USDC base units, with
+ * `s` the pool fee plus the borrower's slippage limit. That is the most the helper can
+ * be charged, so the target is reached even at the worst price it accepts.
+ *
+ * Rounds as section 5 does for reserve mode: `R` rounds up in base currency, the USDC
+ * conversion rounds up, and two base units cover Aave's scaled-debt rounding. Returns
+ * zero when the position already meets the target, and null when no sale reaches it.
+ */
+export function repayFromCollateralToTarget(input: {
+  collateralBase: bigint;
+  debtBase: bigint;
+  liquidationThresholdBps: bigint;
+  usdcPriceBase: bigint;
+  target: bigint;
+  collateral: CollateralTerms;
+}): bigint | null {
+  const { collateralBase, debtBase, liquidationThresholdBps, usdcPriceBase, target } = input;
+  const sale = FEE_UNIT + saleCostPpm(input.collateral);
+  // Both sides of the formula scaled by WAD × BPS, and the denominator also by FEE_UNIT.
+  const shortfall = target * debtBase * BPS - collateralBase * liquidationThresholdBps * WAD;
+  if (shortfall <= 0n) return 0n;
+  const freedPerRepaid =
+    target * BPS * FEE_UNIT - input.collateral.liquidationThresholdBps * WAD * sale;
+  if (freedPerRepaid <= 0n) return null;
+  const repayBase = ceilDiv(shortfall * FEE_UNIT, freedPerRepaid);
+  return ceilDiv(repayBase * USDC_UNIT, usdcPriceBase) + REPAY_ROUNDING_UNITS;
+}
+
+/**
+ * The most USDC whose sale the given collateral can pay for at the worst price,
+ * `amount × (1 + s) / price(collateral)`, solved for `amount` and rounded down.
+ */
+export function usdcCoveredByCollateral(
+  collateralUnits: bigint,
+  terms: Pick<CollateralTerms, 'priceBase' | 'decimals' | 'poolFee' | 'maxSlippageBps'>,
+  usdcPriceBase: bigint,
+): bigint {
+  const sale = FEE_UNIT + saleCostPpm(terms);
+  return (
+    (collateralUnits * terms.priceBase * USDC_UNIT * FEE_UNIT) /
+    (usdcPriceBase * sale * 10n ** terms.decimals)
+  );
+}
+
+/** Collateral base units the helper may take for `amount` USDC at the worst price. */
+export function collateralForUsdc(
+  amount: bigint,
+  terms: Pick<CollateralTerms, 'priceBase' | 'decimals' | 'poolFee' | 'maxSlippageBps'>,
+  usdcPriceBase: bigint,
+): bigint {
+  const sale = FEE_UNIT + saleCostPpm(terms);
+  return ceilDiv(
+    amount * usdcPriceBase * sale * 10n ** terms.decimals,
+    USDC_UNIT * FEE_UNIT * terms.priceBase,
+  );
+}
+
 interface Limit {
   limit: AmountLimit;
   value: bigint;
   /** Why a zero here stops the rescue. */
   whenZero?: NoActionReason;
+}
+
+/** What funds the repay: the rescuer's USDC, or the borrower's collateral. */
+function fundingLimits(input: DecisionInput): Limit[] {
+  const { caps, collateral } = input;
+  if (!collateral) {
+    return [
+      { limit: 'rescuer_balance', value: caps.rescuerBalance, whenZero: 'rescuer_empty' },
+      { limit: 'allowance', value: caps.rescuerAllowance, whenZero: 'no_allowance' },
+    ];
+  }
+  const covered = (units: bigint) => usdcCoveredByCollateral(units, collateral, input.usdcPriceBase);
+  return [
+    {
+      limit: 'collateral_balance',
+      value: covered(collateral.aTokenBalance),
+      whenZero: 'no_collateral',
+    },
+    {
+      limit: 'collateral_allowance',
+      value: covered(collateral.aTokenAllowance),
+      whenZero: 'no_collateral_allowance',
+    },
+  ];
 }
 
 function applyCaps(input: DecisionInput, needed: bigint): Decision {
@@ -132,8 +254,7 @@ function applyCaps(input: DecisionInput, needed: bigint): Decision {
     { limit: 'debt', value: usdcDebt },
     { limit: 'max_per_rescue', value: caps.maxPerRescue, whenZero: 'max_per_rescue_zero' },
     { limit: 'max_per_day', value: caps.remainingToday, whenZero: 'budget_exhausted' },
-    { limit: 'rescuer_balance', value: caps.rescuerBalance, whenZero: 'rescuer_empty' },
-    { limit: 'allowance', value: caps.rescuerAllowance, whenZero: 'no_allowance' },
+    ...fundingLimits(input),
   ];
 
   for (const { value, whenZero } of limits) {
@@ -147,7 +268,9 @@ function applyCaps(input: DecisionInput, needed: bigint): Decision {
     amount: smallest.value,
     needed,
     limitedBy: smallest.limit,
-    projectedHealthFactor: projectHealthFactor(input, smallest.value),
+    projectedHealthFactor: input.collateral
+      ? projectCollateralHealthFactor({ ...input, collateral: input.collateral }, smallest.value)
+      : projectHealthFactor(input, smallest.value),
   };
 }
 
@@ -165,11 +288,34 @@ export function projectHealthFactor(
   return (input.collateralBase * input.liquidationThresholdBps * WAD) / (BPS * debtAfter);
 }
 
+/**
+ * Health factor after repaying `amount` and selling the collateral that costs at the
+ * worst price the helper accepts. The real sale costs at most that, so the real health
+ * factor is at least this.
+ */
+export function projectCollateralHealthFactor(
+  input: Pick<
+    DecisionInput,
+    'collateralBase' | 'debtBase' | 'liquidationThresholdBps' | 'usdcPriceBase'
+  > & { collateral: CollateralTerms },
+  amount: bigint,
+): bigint {
+  const repaidBase = (amount * input.usdcPriceBase) / USDC_UNIT;
+  if (repaidBase >= input.debtBase) return MAX_UINT256;
+  const sale = FEE_UNIT + saleCostPpm(input.collateral);
+  const capacity =
+    input.collateralBase * input.liquidationThresholdBps * FEE_UNIT -
+    repaidBase * sale * input.collateral.liquidationThresholdBps;
+  if (capacity <= 0n) return 0n;
+  return (capacity * WAD) / (BPS * FEE_UNIT * (input.debtBase - repaidBase));
+}
+
 /** Checks the contract applies anyway. Failing them here saves a wasted NEAR call. */
 function precheck(input: DecisionInput): Decision | null {
   if (input.caps.paused) return none('paused', true);
   if (input.caps.cooldownRemainingSecs > 0) return none('cooldown', false);
   if (input.usdcPriceBase <= 0n) return none('oracle_price_zero', true);
+  if (input.collateral && input.collateral.priceBase <= 0n) return none('oracle_price_zero', true);
   if (input.usdcDebt <= 0n) return none('no_usdc_debt', true);
   return null;
 }
@@ -184,7 +330,10 @@ export function decide(input: DecisionInput): Decision {
   const stopped = precheck(input);
   if (stopped) return stopped;
 
-  const needed = repayToTarget(input);
+  const needed = input.collateral
+    ? repayFromCollateralToTarget({ ...input, collateral: input.collateral })
+    : repayToTarget(input);
+  if (needed === null) return none('target_unreachable', true);
   if (needed <= 0n) return none('healthy', false);
   return applyCaps(input, needed);
 }
