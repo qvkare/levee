@@ -127,18 +127,20 @@ contract UnwindBaseSepoliaTest is UnwindPath {
     /// The other tiers for this pair exist on Base Sepolia, at prices others left. Picking
     /// one by mistake fails safely.
     function test_wrongFeeTier_stalePools_revert() public {
-        openRescuable(borrower, START_HF);
+        openPosition(borrower, COLLATERAL, START_HF);
         uint256 amount = keeperRepay(borrower, TARGET_HF, SLIPPAGE_BPS, SEED_FEE);
 
         // 1%: no liquidity and no USDC at all, so nothing comes out.
+        authorizeAndApprove(borrower, SLIPPAGE_BPS, TRIGGER_HF, TARGET_HF, COLLATERAL, 10000);
         vm.prank(rescuer);
         vm.expectRevert(abi.encodeWithSelector(LeveeUnwind.PartialFill.selector, 0, amount));
-        helper.unwind(borrower, address(weth), amount, 10000);
+        helper.unwind(borrower, address(weth), amount, 10000, type(uint256).max);
 
         // 0.05%: already at the lowest price, so Uniswap refuses the price limit.
+        authorizeAndApprove(borrower, SLIPPAGE_BPS, TRIGGER_HF, TARGET_HF, COLLATERAL, 500);
         vm.prank(rescuer);
         vm.expectRevert(bytes("SPL"));
-        helper.unwind(borrower, address(weth), amount, 500);
+        helper.unwind(borrower, address(weth), amount, 500, type(uint256).max);
         assertHelperClean();
     }
 }

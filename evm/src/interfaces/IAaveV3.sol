@@ -28,6 +28,15 @@ interface IAaveAddressesProvider {
     function getPool() external view returns (address);
 
     function getPriceOracle() external view returns (address);
+
+    /// Zero where the market has no sentinel. L2 markets use one to pause liquidations
+    /// while the sequencer is down and for a grace period after it comes back.
+    function getPriceOracleSentinel() external view returns (address);
+}
+
+interface IPriceOracleSentinel {
+    /// False while the sequencer is down or inside the grace period after it restarts.
+    function isLiquidationAllowed() external view returns (bool);
 }
 
 interface IAavePriceOracle {

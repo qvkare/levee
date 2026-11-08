@@ -138,11 +138,15 @@ contract ReentrantToken {
 
     function _reenter() internal {
         (bool ok, bytes memory ret) = HELPER.call(
-            abi.encodeWithSignature("unwind(address,address,uint256,uint24)", VICTIM, address(this), AMOUNT, FEE)
+            abi.encodeWithSignature(
+                "unwind(address,address,uint256,uint24,uint256)", VICTIM, address(this), AMOUNT, FEE, type(uint256).max
+            )
         );
         _store(UNWIND_RESULT_SLOT, _result(ok, ret));
 
-        bytes memory data = abi.encode(VICTIM, address(this), address(0), address(0), AMOUNT, type(uint256).max, true);
+        bytes memory data = abi.encode(
+            VICTIM, address(this), address(0), address(0), AMOUNT, type(uint256).max, type(uint256).max, true
+        );
         (ok, ret) = HELPER.call(
             abi.encodeWithSelector(
                 IUniswapV3SwapCallback.uniswapV3SwapCallback.selector, int256(1), -SafeCast.toInt256(AMOUNT), data
