@@ -48,6 +48,22 @@ library Targets {
             weth: 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1
         });
     }
+
+    /// Aave's Base Sepolia market, Pool revision 10. USDC is Aave's test token, minted by
+    /// its faucet. WETH is the chain's real WETH9, wrapped from Base Sepolia ETH.
+    function baseSepolia() internal pure returns (ForkTarget memory) {
+        return ForkTarget({
+            name: "Base Sepolia",
+            rpcEnv: "BASE_SEPOLIA_FORK_RPC_URL",
+            rpcDefault: "https://sepolia.base.org",
+            forkBlock: 56_000_000,
+            forkTimestamp: 1_794_121_868,
+            chainId: 84532,
+            pool: 0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27,
+            usdc: 0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f,
+            weth: 0x4200000000000000000000000000000000000006
+        });
+    }
 }
 
 /// Fork set-up and position helpers shared by every suite.
