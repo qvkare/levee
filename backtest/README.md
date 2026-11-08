@@ -103,6 +103,62 @@ The committed paths are thinned to keep the file small. The first and last obser
 
 Both use the same survival rule as the rescue.
 
+## Method: population, shared reserve, calm period and carry
+
+These parts ask why a borrower would not simply repay the same USDC upfront. For one position, an upfront repay of the same size is the bound for any rescue, so the possible reasons are elsewhere: a reserve that is not spent, a reserve shared across positions, or what holding it costs. This section was written and committed before any Levee result for these parts was computed. Results go to `results/portfolio.md` and `results/portfolio.json`. Nothing here changes `results/summary.json` or `results/summary.md`.
+
+**Periods.** The two crash windows above, and one calm period chosen by the rule below.
+
+**Calm-period rule.** Read the AaveOracle WETH price on Base at the first block of each UTC day from 2025-01-01 to 2026-11-01. Base makes one block every 2 seconds, so that block is `(midnight - 1686789347) / 2` exactly. A day's move is the absolute change from one midnight price to the next. Take the longest run of consecutive days whose moves are all at or below 8%, and on a tie the earliest. The calm period is the 30 days at the centre of that run: it starts `floor((run length - 30) / 2)` days after the run starts. Both chains use the same 30 days.
+
+**Population.** For each pool and period, every address with native USDC variable debt at the period's first block, plus every address that borrows native USDC during the period. Candidates come from every `Borrow` event with native USDC as the reserve since USDC was listed on that pool (block 8,242,475 on Base and 106,410,714 on Arbitrum). Each candidate's balance of USDC's variable debt token is read at the first block. The sum of those balances is checked against the token's `totalSupply` at the same block, which shows any borrower the scan missed. There is no floor on size. Results are split by size.
+
+**Path of a population member.** Liquidated positions in the headline set keep the paths they have in `results/summary.json`. Every other member gets a path from the frozen-portfolio method with re-reads:
+
+- The full portfolio, `getUserReserveData` for every reserve plus the eMode, is read at the period's first block. A newcomer's is read at the first re-read after its first USDC borrow, and it is armed there.
+- Every Pool `Supply`, `Withdraw`, `Borrow`, `Repay`, `LiquidationCall`, `ReserveUsedAsCollateralEnabled`, `ReserveUsedAsCollateralDisabled`, `UserEModeSet` and `DeficitCreated` that names the address, and every aToken `BalanceTransfer` from or to it, is an action.
+- Re-reads follow a time grid: every 60 s in the crash windows and every 300 s in the calm period. At each grid point, every member that acted since the last one has the reserves it touched and its eMode read again. The new state applies from its last action in that interval. Between its first and last action in one interval, the old state stands.
+- Balances are kept as scaled balances and grown with each reserve's liquidity and variable borrow index, read every hour and interpolated in time, so interest moves the path.
+- HF is computed at every AaveOracle price update of the member's assets and at every re-read, with thresholds and eMode categories read at the period's first block.
+- A member liquidated in the period also has its full portfolio read at the block before its first liquidation. From that liquidation on, the portfolio is frozen and marked to the oracle, as in the headline method.
+
+**Outcomes per trigger.** T runs over the existing grid, with G 1.50, R 30% of debt at arming, D 60 s and a 60 s cooldown unless stated. The keeper rule is Method step 4, except that the USDC cap uses the USDC debt on the path at that point instead of a fixed share.
+
+- Crossed T: HF below T at any point after arming. Members armed below T are counted apart, as in the headline.
+- Needed: liquidated in the period, with no Levee. False alarm: crossed T, not liquidated, and HF never below 1 on the path. HF below 1 on the path without a liquidation is a column of its own, because it is either a path error or a position too small to be worth liquidating.
+- Reserve held: R × debt at arming, for every member. Reserve drawn: repays that landed. Both are summed over the population. Reserve drawn by members that were not liquidated is shown on its own: those would have survived anyway.
+- In the calm period, the same figures per member per 30 days.
+
+**Shared reserve.**
+
+- Real pairs: addresses with native USDC debt on both Base and Arbitrum at a period's first block. Their count is reported for each period.
+- A pair's budget is B = R × the sum of both debts at arming. It is used three ways:
+  - (a) One Levee reserve B for both. The keeper rule runs over both paths in time order. Whichever position is below T takes what the rule asks for, first come, first served, until B is gone. Each position has its own repay in flight and its own cooldown, because the spec gives each position its own rescuer.
+  - (b) B repaid upfront at arming, split by debt at arming.
+  - (c) Two Levee reserves, split by debt at arming.
+- Outcomes: positions saved, addresses with both positions saved, and gross bonus avoided. Saved has the headline meaning. A position that was not liquidated in reality counts as saved under all three.
+- The spec cannot share one reserve across two chains today: each position's reserve sits with its own rescuer on its own chain. Sharing needs the off-venue reserve, whose route time is not measured. So (a) is shown at D 60 s and again at D 300 s.
+
+**Synthetic pairs.** Added for a window if fewer than 50 real pairs in that window hold a position liquidated in it. They are labelled synthetic in every table, and come after the real pairs.
+
+- Anchors: every liquidated position in the headline set in that window, in id order.
+- Partner: a member of the other chain's population in the same window whose debt at arming is from half to twice the anchor's, at a different address. One uniform draw per anchor, with replacement, in anchor order, from a Mulberry32 generator seeded with 20261108. An anchor with no candidate is skipped and counted.
+- Two versions bracket how often both positions fall together. "Independent" draws the partner from the whole population. "Both liquidated" draws it only from liquidated positions in the headline set.
+
+**Carry.** `getReserveData(USDC)` on both pools, every hour in each period and once a day from 2025-01-01 to 2026-11-01: `currentVariableBorrowRate` and `currentLiquidityRate`, which are APRs.
+
+- The spec today: the reserve sits idle as USDC with the rescuer. Holding R instead of repaying it costs R × the USDC borrow APR a year.
+- A hypothetical, not in the spec: a reserve that earns the USDC supply APR costs R × (borrow APR - supply APR).
+- Both are shown per $1,000 of reserve per year. No crash frequency is estimated from two windows. Instead, for each crash: bonus avoided per dollar of reserve held, and how many such crashes a year would pay for a year of carry.
+
+**Validation.**
+
+- The `totalSupply` check above.
+- `getUserAccountData` at a seeded sample of member and block pairs in every period, against the rebuilt path: 200 random blocks per chain and period, with 5 random members at each block and 5 members whose rebuilt HF there is between 1.0 and 1.4.
+- For liquidated positions in the headline set, the rebuilt path against the direct reads already committed.
+
+Hyperliquid stays out of these parts. Its only source here has no account states over time.
+
 ## Assumptions
 
 1. **The infrastructure works.** Keeper, RPCs, NEAR and the MPC network all work through the worst minutes of the event, with a fixed delay D.
