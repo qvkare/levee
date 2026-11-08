@@ -18,6 +18,10 @@ const STRANGER: &str = "stranger.near";
 const BORROWER: &str = "0x1234567890abcdef1234567890abcdef12345678";
 const BASE_POOL: &str = "0xa238dd80c259a72e81d7e4664a9801593f98d1c5";
 const BASE_USDC: &str = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
+const BASE_UNWIND: &str = "0x5555555555555555555555555555555555555555";
+/// WETH on Base.
+const WETH: &str = "0x4200000000000000000000000000000000000006";
+const POOL_FEE: u32 = 500;
 const GAS_LIMIT_UNWIND: u64 = 600_000;
 
 const MAX_PER_RESCUE: u128 = 100;
@@ -1600,5 +1604,899 @@ mod views {
         let (mut contract, id) = setup();
         rescue(&mut contract, id, 1, NOON);
         contract.preview_rescue(id, U128(1), fees());
+    }
+}
+
+fn collateral_config() -> CollateralConfig {
+    CollateralConfig {
+        asset: WETH.into(),
+        pool_fee: POOL_FEE,
+    }
+}
+
+fn register_with_collateral(contract: &mut Levee, collateral: CollateralConfig) -> u64 {
+    testing_env!(context(OWNER, NOON)
+        .attached_deposit(NearToken::from_near(1))
+        .build());
+    contract.register(
+        8453,
+        BORROWER.into(),
+        account(KEEPER),
+        U128(MAX_PER_RESCUE),
+        U128(MAX_PER_DAY),
+        COOLDOWN_SECS,
+        Some(collateral),
+    )
+}
+
+/// A contract with one position that can repay from its collateral.
+fn collateral_setup() -> (Levee, u64) {
+    let mut contract = new_contract();
+    let id = register_with_collateral(&mut contract, collateral_config());
+    (contract, id)
+}
+
+fn unwind(contract: &mut Levee, id: u64, amount: u128, now: u64) -> PendingSignature {
+    act_as(KEEPER, now);
+    let _ = contract.rescue_from_collateral(id, U128(amount), fees());
+    pending()
+}
+
+mod unwind_config {
+    use super::*;
+
+    #[test]
+    fn get_chain_shows_the_helper_normalised_and_its_gas_limit() {
+        act_as(CONTRACT, NOON);
+        let chain = ChainConfig {
+            unwind: "0xAbCdEf0000000000000000000000000000000001".into(),
+            ..base()
+        };
+        let contract = Levee::new(account(SIGNER), vec![chain]);
+        let stored = contract.get_chain(8453).unwrap();
+        assert_eq!(stored.unwind, "0xabcdef0000000000000000000000000000000001");
+        assert_eq!(stored.gas_limit_unwind, GAS_LIMIT_UNWIND);
+    }
+
+    #[test]
+    #[should_panic(expected = "address must be 0x followed by 40 hex characters")]
+    fn rejects_a_malformed_helper() {
+        act_as(CONTRACT, NOON);
+        let chain = ChainConfig {
+            unwind: "0x5555".into(),
+            ..base()
+        };
+        Levee::new(account(SIGNER), vec![chain]);
+    }
+
+    #[test]
+    #[should_panic(expected = "the zero address is not allowed")]
+    fn rejects_a_zero_helper() {
+        act_as(CONTRACT, NOON);
+        let chain = ChainConfig {
+            unwind: format!("0x{}", "0".repeat(40)),
+            ..base()
+        };
+        Levee::new(account(SIGNER), vec![chain]);
+    }
+
+    #[test]
+    #[should_panic(expected = "gas limits must be at least 21000")]
+    fn rejects_an_unwind_gas_limit_below_the_intrinsic_cost() {
+        act_as(CONTRACT, NOON);
+        let chain = ChainConfig {
+            gas_limit_unwind: 20_999,
+            ..base()
+        };
+        Levee::new(account(SIGNER), vec![chain]);
+    }
+}
+
+mod collateral_registration {
+    use super::*;
+
+    /// What the last registration paid for storage, read from its event.
+    fn storage_paid() -> u128 {
+        serde_json::from_value::<U128>(last_event()["data"]["storage_paid"].clone())
+            .unwrap()
+            .0
+    }
+
+    fn register_paying(contract: &mut Levee, deposit: u128) -> u64 {
+        testing_env!(context(OWNER, NOON)
+            .attached_deposit(NearToken::from_yoctonear(deposit))
+            .build());
+        contract.register(
+            8453,
+            BORROWER.into(),
+            account(KEEPER),
+            U128(MAX_PER_RESCUE),
+            U128(MAX_PER_DAY),
+            COOLDOWN_SECS,
+            Some(collateral_config()),
+        )
+    }
+
+    #[test]
+    fn the_config_is_stored_normalised_and_logged() {
+        let mut contract = new_contract();
+        let id = register_with_collateral(
+            &mut contract,
+            CollateralConfig {
+                asset: "0xAbCdEf0000000000000000000000000000000001".into(),
+                pool_fee: 3_000,
+            },
+        );
+        let stored = contract.get_position(id).unwrap().collateral.unwrap();
+        assert_eq!(stored.asset, "0xabcdef0000000000000000000000000000000001");
+        assert_eq!(stored.pool_fee, 3_000);
+
+        let event = last_event();
+        assert_eq!(event["event"], "position_registered");
+        assert_eq!(
+            event["data"]["collateral"],
+            json!({ "asset": "0xabcdef0000000000000000000000000000000001", "pool_fee": 3_000 })
+        );
+    }
+
+    #[test]
+    fn without_a_config_the_position_has_none_and_logs_null() {
+        let (contract, id) = setup();
+        assert_eq!(contract.get_position(id).unwrap().collateral, None);
+        assert_eq!(last_event()["data"]["collateral"], Value::Null);
+    }
+
+    #[test]
+    fn every_fee_tier_registers() {
+        let mut contract = new_contract();
+        for pool_fee in [100, 500, 3_000, 10_000] {
+            let id = register_with_collateral(
+                &mut contract,
+                CollateralConfig {
+                    asset: WETH.into(),
+                    pool_fee,
+                },
+            );
+            assert_eq!(
+                contract
+                    .get_position(id)
+                    .unwrap()
+                    .collateral
+                    .unwrap()
+                    .pool_fee,
+                pool_fee
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "pool_fee must be 100, 500, 3000 or 10000")]
+    fn rejects_a_fee_that_is_not_a_tier() {
+        let mut contract = new_contract();
+        register_with_collateral(
+            &mut contract,
+            CollateralConfig {
+                asset: WETH.into(),
+                pool_fee: 3_001,
+            },
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "address must be 0x followed by 40 hex characters")]
+    fn rejects_a_malformed_asset() {
+        let mut contract = new_contract();
+        register_with_collateral(
+            &mut contract,
+            CollateralConfig {
+                asset: "4200000000000000000000000000000000000006".into(),
+                pool_fee: POOL_FEE,
+            },
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "the zero address is not allowed")]
+    fn rejects_the_zero_asset() {
+        let mut contract = new_contract();
+        register_with_collateral(
+            &mut contract,
+            CollateralConfig {
+                asset: format!("0x{}", "0".repeat(40)),
+                pool_fee: POOL_FEE,
+            },
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "the collateral cannot be USDC")]
+    fn rejects_usdc_as_the_collateral() {
+        let mut contract = new_contract();
+        register_with_collateral(
+            &mut contract,
+            CollateralConfig {
+                asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913".into(),
+                pool_fee: POOL_FEE,
+            },
+        );
+    }
+
+    /// USDC differs by chain, so the check is against the chain registered on.
+    #[test]
+    fn another_chains_usdc_is_just_an_address() {
+        let mut contract = new_contract();
+        let arbitrum_usdc = "0xaf88d065e77c8cc2239327c5edb3a432268e5831";
+        let id = register_with_collateral(
+            &mut contract,
+            CollateralConfig {
+                asset: arbitrum_usdc.into(),
+                pool_fee: POOL_FEE,
+            },
+        );
+        assert_eq!(
+            contract.get_position(id).unwrap().collateral.unwrap().asset,
+            arbitrum_usdc
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "unknown chain id")]
+    fn an_unknown_chain_is_reported_before_the_collateral_is_read() {
+        let mut contract = new_contract();
+        testing_env!(context(OWNER, NOON)
+            .attached_deposit(NearToken::from_near(1))
+            .build());
+        contract.register(
+            1,
+            BORROWER.into(),
+            account(KEEPER),
+            U128(1),
+            U128(1),
+            0,
+            Some(collateral_config()),
+        );
+    }
+
+    #[test]
+    fn the_config_is_charged_at_exactly_its_stored_size() {
+        let mut contract = new_contract();
+        register(&mut contract, KEEPER);
+        let without = storage_paid();
+        register_with_collateral(&mut contract, collateral_config());
+        let with = storage_paid();
+
+        let some = near_sdk::borsh::to_vec(&Some(collateral_config()))
+            .unwrap()
+            .len();
+        let none = near_sdk::borsh::to_vec(&None::<CollateralConfig>)
+            .unwrap()
+            .len();
+        let byte_cost = env::storage_byte_cost().as_yoctonear();
+        assert_eq!(with - without, (some - none) as u128 * byte_cost);
+    }
+
+    #[test]
+    fn an_exact_deposit_with_collateral_refunds_nothing() {
+        let mut contract = new_contract();
+        register_with_collateral(&mut contract, collateral_config());
+        let cost = storage_paid();
+        register_paying(&mut contract, cost);
+        assert!(transfers().is_empty());
+    }
+
+    #[test]
+    fn a_surplus_with_collateral_goes_back_to_the_caller() {
+        let mut contract = new_contract();
+        register_with_collateral(&mut contract, collateral_config());
+        let cost = storage_paid();
+        register_paying(&mut contract, cost + 7);
+        assert_eq!(
+            transfers(),
+            vec![(account(OWNER), NearToken::from_yoctonear(7))]
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "attached deposit does not cover storage")]
+    fn the_price_without_collateral_does_not_cover_a_position_with_it() {
+        let mut contract = new_contract();
+        register(&mut contract, KEEPER);
+        let without = storage_paid();
+        register_paying(&mut contract, without);
+    }
+
+    /// As `paid_storage_is_exactly_the_largest_the_record_can_grow_to`, with the
+    /// collateral config in the record. One context, so the storage counter carries.
+    #[test]
+    fn paid_storage_is_exactly_the_largest_record_with_collateral() {
+        let mut contract = new_contract();
+        testing_env!(context(OWNER, NOON)
+            .attached_deposit(NearToken::from_near(1))
+            .build());
+        let usage_before = env::storage_usage();
+        let id = contract.register(
+            8453,
+            BORROWER.into(),
+            account("k.near"),
+            U128(MAX_PER_RESCUE),
+            U128(MAX_PER_DAY),
+            COOLDOWN_SECS,
+            Some(collateral_config()),
+        );
+        let paid_bytes = storage_paid() / env::storage_byte_cost().as_yoctonear();
+
+        let longest = format!("{}.near", "k".repeat(59));
+        contract.set_keeper(id, account(&longest));
+        contract.queue_loosen(id, U128(u128::MAX), U128(u128::MAX), 0);
+        contract.positions.flush();
+
+        let stored = u128::from(env::storage_usage() - usage_before);
+        assert_eq!(stored, paid_bytes);
+    }
+
+    #[test]
+    fn nothing_the_owner_can_call_changes_the_config() {
+        let (mut contract, id) = collateral_setup();
+        act_as(OWNER, NOON);
+        contract.set_keeper(id, account(STRANGER));
+        contract.tighten(id, U128(1), U128(1), COOLDOWN_SECS);
+        contract.queue_loosen(id, U128(2), U128(2), COOLDOWN_SECS);
+        contract.pause(id);
+        contract.resume(id);
+        assert_eq!(
+            contract.get_position(id).unwrap().collateral,
+            Some(collateral_config())
+        );
+    }
+}
+
+mod rescue_from_collateral_rules {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "caller is not the keeper")]
+    fn rule_1_a_stranger_is_rejected() {
+        let (mut contract, id) = collateral_setup();
+        act_as(STRANGER, NOON);
+        let _ = contract.rescue_from_collateral(id, U128(1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "caller is not the keeper")]
+    fn rule_1_the_owner_is_not_the_keeper() {
+        let (mut contract, id) = collateral_setup();
+        act_as(OWNER, NOON);
+        let _ = contract.rescue_from_collateral(id, U128(1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "caller is not the keeper")]
+    fn rule_1_is_checked_before_the_collateral_config() {
+        let (mut contract, id) = setup();
+        act_as(STRANGER, NOON);
+        let _ = contract.rescue_from_collateral(id, U128(1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "position has no collateral config")]
+    fn a_position_without_collateral_config_is_refused() {
+        let (mut contract, id) = setup();
+        unwind(&mut contract, id, 1, NOON);
+    }
+
+    #[test]
+    #[should_panic(expected = "position not found")]
+    fn an_unknown_position_is_refused() {
+        let mut contract = new_contract();
+        unwind(&mut contract, 99, 1, NOON);
+    }
+
+    #[test]
+    #[should_panic(expected = "position is paused")]
+    fn rule_2_paused() {
+        let (mut contract, id) = collateral_setup();
+        act_as(OWNER, NOON);
+        contract.pause(id);
+        unwind(&mut contract, id, 1, NOON);
+    }
+
+    #[test]
+    fn rule_2_resume_lifts_the_pause() {
+        let (mut contract, id) = collateral_setup();
+        act_as(OWNER, NOON);
+        contract.pause(id);
+        contract.resume(id);
+        unwind(&mut contract, id, 1, NOON);
+        assert_eq!(spent(&contract, id), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount must be above zero")]
+    fn rule_3_zero() {
+        let (mut contract, id) = collateral_setup();
+        unwind(&mut contract, id, 0, NOON);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount exceeds max_per_rescue")]
+    fn rule_3_over_the_cap() {
+        let (mut contract, id) = collateral_setup();
+        unwind(&mut contract, id, MAX_PER_RESCUE + 1, NOON);
+    }
+
+    #[test]
+    fn rule_3_at_the_cap() {
+        let (mut contract, id) = collateral_setup();
+        unwind(&mut contract, id, MAX_PER_RESCUE, NOON);
+        assert_eq!(spent(&contract, id), MAX_PER_RESCUE);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount exceeds the daily budget")]
+    fn rule_4_over_the_budget() {
+        let (mut contract, id) = collateral_setup();
+        unwind(&mut contract, id, 100, NOON);
+        unwind(&mut contract, id, 100, NOON + HOUR);
+        unwind(&mut contract, id, 51, NOON + 2 * HOUR);
+    }
+
+    #[test]
+    fn rule_4_exactly_the_budget_then_a_new_day() {
+        let (mut contract, id) = collateral_setup();
+        unwind(&mut contract, id, 100, NOON);
+        unwind(&mut contract, id, 100, NOON + HOUR);
+        unwind(&mut contract, id, 50, NOON + 2 * HOUR);
+        assert_eq!(spent(&contract, id), MAX_PER_DAY);
+        unwind(&mut contract, id, 100, NOON + NANOS_PER_DAY);
+        assert_eq!(spent(&contract, id), 100);
+    }
+
+    #[test]
+    #[should_panic(expected = "cooldown has not elapsed")]
+    fn rule_5_inside_the_cooldown() {
+        let (mut contract, id) = collateral_setup();
+        unwind(&mut contract, id, 1, NOON);
+        unwind(&mut contract, id, 1, NOON + 60 * NANOS_PER_SEC - 1);
+    }
+
+    #[test]
+    fn rule_5_at_the_end_of_the_cooldown() {
+        let (mut contract, id) = collateral_setup();
+        unwind(&mut contract, id, 1, NOON);
+        unwind(&mut contract, id, 1, NOON + 60 * NANOS_PER_SEC);
+        assert_eq!(spent(&contract, id), 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "max_fee_per_gas exceeds the chain ceiling")]
+    fn rule_6_max_fee() {
+        let (mut contract, id) = collateral_setup();
+        act_as(KEEPER, NOON);
+        let mut high = fees();
+        high.max_fee_per_gas = U128(MAX_FEE_CEILING + 1);
+        let _ = contract.rescue_from_collateral(id, U128(1), high);
+    }
+
+    #[test]
+    #[should_panic(expected = "max_priority_fee_per_gas exceeds the chain ceiling")]
+    fn rule_6_priority_fee() {
+        let (mut contract, id) = collateral_setup();
+        act_as(KEEPER, NOON);
+        let mut high = fees();
+        high.max_priority_fee_per_gas = U128(PRIORITY_CEILING + 1);
+        let _ = contract.rescue_from_collateral(id, U128(1), high);
+    }
+
+    #[test]
+    #[should_panic(expected = "max_priority_fee_per_gas exceeds max_fee_per_gas")]
+    fn rule_6_priority_above_max_fee() {
+        let (mut contract, id) = collateral_setup();
+        act_as(KEEPER, NOON);
+        let inverted = Fees {
+            nonce: 1,
+            max_fee_per_gas: U128(50),
+            max_priority_fee_per_gas: U128(51),
+        };
+        let _ = contract.rescue_from_collateral(id, U128(1), inverted);
+    }
+
+    #[test]
+    #[should_panic(expected = "caller is not the keeper")]
+    fn set_keeper_locks_the_old_keeper_out() {
+        let (mut contract, id) = collateral_setup();
+        act_as(OWNER, NOON);
+        contract.set_keeper(id, account(STRANGER));
+        unwind(&mut contract, id, 1, NOON);
+    }
+
+    #[test]
+    fn set_keeper_lets_the_new_keeper_in() {
+        let (mut contract, id) = collateral_setup();
+        act_as(OWNER, NOON);
+        contract.set_keeper(id, account(STRANGER));
+        act_as(STRANGER, NOON);
+        let _ = contract.rescue_from_collateral(id, U128(3), fees());
+        assert_eq!(spent(&contract, id), 3);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount exceeds max_per_rescue")]
+    fn a_tightened_cap_binds_at_once() {
+        let (mut contract, id) = collateral_setup();
+        act_as(OWNER, NOON);
+        contract.tighten(id, U128(10), U128(MAX_PER_DAY), COOLDOWN_SECS);
+        unwind(&mut contract, id, 11, NOON);
+    }
+
+    #[test]
+    #[should_panic(expected = "not enough gas attached to reach the signer")]
+    fn less_than_the_minimum_gas_is_rejected() {
+        let (mut contract, id) = collateral_setup();
+        let short = Gas::from_gas(MIN_SIGNING_GAS.as_gas() - 1);
+        testing_env!(context(KEEPER, NOON).prepaid_gas(short).build());
+        let _ = contract.rescue_from_collateral(id, U128(1), fees());
+    }
+}
+
+/// `rescue` and `rescue_from_collateral` draw on one budget and one cooldown, so a
+/// keeper cannot double its daily spend by switching method.
+mod one_budget_for_both_modes {
+    use super::*;
+
+    #[test]
+    fn rescue_still_works_on_a_position_with_collateral() {
+        let (mut contract, id) = collateral_setup();
+        let pending = rescue(&mut contract, id, 40, NOON);
+        assert_eq!(pending.kind, SignKind::Rescue);
+        assert_eq!(spent(&contract, id), 40);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount exceeds the daily budget")]
+    fn spending_in_one_mode_counts_against_the_other() {
+        let (mut contract, id) = collateral_setup();
+        rescue(&mut contract, id, 100, NOON);
+        unwind(&mut contract, id, 100, NOON + HOUR);
+        rescue(&mut contract, id, 51, NOON + 2 * HOUR);
+    }
+
+    #[test]
+    fn the_budget_adds_up_across_modes() {
+        let (mut contract, id) = collateral_setup();
+        rescue(&mut contract, id, 100, NOON);
+        unwind(&mut contract, id, 100, NOON + HOUR);
+        unwind(&mut contract, id, 50, NOON + 2 * HOUR);
+        assert_eq!(spent(&contract, id), MAX_PER_DAY);
+    }
+
+    #[test]
+    #[should_panic(expected = "cooldown has not elapsed")]
+    fn an_unwind_starts_the_cooldown_for_a_rescue() {
+        let (mut contract, id) = collateral_setup();
+        unwind(&mut contract, id, 1, NOON);
+        rescue(&mut contract, id, 1, NOON + 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "cooldown has not elapsed")]
+    fn a_rescue_starts_the_cooldown_for_an_unwind() {
+        let (mut contract, id) = collateral_setup();
+        rescue(&mut contract, id, 1, NOON);
+        unwind(&mut contract, id, 1, NOON + 1);
+    }
+
+    #[test]
+    fn a_failed_unwind_leaves_a_later_rescue_in_place() {
+        let (mut contract, id) = collateral_setup();
+        let pending = unwind(&mut contract, id, 40, NOON);
+        rescue(&mut contract, id, 30, NOON + HOUR);
+        deliver(&mut contract, pending, PromiseResult::Failed, NOON + HOUR);
+        assert_eq!(spent(&contract, id), 30);
+        // The cooldown belongs to the later rescue.
+        assert_eq!(
+            contract.get_position(id).unwrap().last_rescue_at,
+            NOON + HOUR
+        );
+    }
+}
+
+mod unwind_signing {
+    use super::*;
+
+    #[test]
+    fn it_asks_the_signer_for_the_contract_built_unwind() {
+        let (mut contract, id) = collateral_setup();
+        act_as(KEEPER, NOON);
+        let _ = contract.rescue_from_collateral(id, U128(2), fees());
+
+        let chain = contract.get_chain(8453).unwrap();
+        let position = contract.get_position(id).unwrap();
+        let tx = txs::unwind_tx(&chain, &position, &collateral_config(), 2, &fees());
+        let unsigned = tx.unsigned_bytes();
+        let hash = env::keccak256_array(&unsigned);
+
+        let calls = calls();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].receiver, account(SIGNER));
+        assert_eq!(calls[0].method, "sign");
+        assert_eq!(
+            calls[0].args,
+            json!({
+                "request": {
+                    "path": format!("levee/v1/{id}"),
+                    "domain_id": 0,
+                    "payload_v2": { "Ecdsa": hex::encode(hash) },
+                }
+            })
+        );
+        let pending = pending();
+        assert_eq!(pending.kind, SignKind::Unwind);
+        assert_eq!(pending.unsigned_tx, hex_of(&unsigned));
+        assert_eq!(pending.tx_hash, hex_of(&hash));
+    }
+
+    /// Read back from the signed bytes rather than from the builder: the helper, no
+    /// value, and calldata naming only the registered borrower, collateral and fee.
+    /// The calldata was written out by hand from the ABI rules.
+    #[test]
+    fn the_transaction_targets_the_helper_with_the_positions_own_terms() {
+        let (mut contract, id) = collateral_setup();
+        let pending = unwind(&mut contract, id, 100, NOON);
+        let calldata = concat!(
+            "d0cda3c2",
+            "0000000000000000000000001234567890abcdef1234567890abcdef12345678",
+            "0000000000000000000000004200000000000000000000000000000000000006",
+            "0000000000000000000000000000000000000000000000000000000000000064",
+            "00000000000000000000000000000000000000000000000000000000000001f4",
+        );
+        // 94 = a 20-byte string, the helper. 80 = value 0. b884 = 132 bytes of data.
+        // c0 = the empty access list.
+        let tail = format!("94{}80b884{}c0", &BASE_UNWIND[2..], calldata);
+        assert!(
+            pending.unsigned_tx.ends_with(&tail),
+            "{}",
+            pending.unsigned_tx
+        );
+        // gas_limit_unwind, 600000, is 0x0927c0, right before the target.
+        assert!(
+            pending.unsigned_tx.contains(&format!("830927c0{tail}")),
+            "{}",
+            pending.unsigned_tx
+        );
+    }
+
+    #[test]
+    fn the_reservation_travels_to_the_callback() {
+        let (mut contract, id) = collateral_setup();
+        let pending = unwind(&mut contract, id, 40, NOON);
+        assert_eq!(
+            pending.reservation,
+            Some(Reservation {
+                amount: U128(40),
+                day: policy::utc_day(NOON),
+                at: NOON,
+                previous_at: 0,
+            })
+        );
+        let position = contract.get_position(id).unwrap();
+        assert_eq!(position.spent_today, U128(40));
+        assert_eq!(position.last_rescue_at, NOON);
+    }
+
+    #[test]
+    fn it_logs_rescue_requested_with_its_kind() {
+        let (mut contract, id) = collateral_setup();
+        let pending = unwind(&mut contract, id, 40, NOON);
+        let event = last_event();
+        assert_eq!(event["event"], "rescue_requested");
+        assert_eq!(event["data"]["kind"], "unwind");
+        assert_eq!(event["data"]["id"], id);
+        assert_eq!(event["data"]["amount"], "40");
+        assert_eq!(event["data"]["nonce"], 7);
+        assert_eq!(event["data"]["tx_hash"], json!(pending.tx_hash));
+    }
+
+    #[test]
+    fn rescue_logs_its_kind_too() {
+        let (mut contract, id) = setup();
+        rescue(&mut contract, id, 40, NOON);
+        assert_eq!(last_event()["data"]["kind"], "rescue");
+    }
+
+    #[test]
+    fn it_signs_from_the_same_path_with_the_same_gas_and_deposit_as_rescue() {
+        let (mut contract, id) = collateral_setup();
+        unwind(&mut contract, id, 1, NOON);
+        let calls = calls();
+        assert_eq!(calls[0].args["request"]["path"], format!("levee/v1/{id}"));
+        assert_eq!(calls[0].deposit, NearToken::from_yoctonear(1));
+        assert_eq!(calls[0].gas, SIGN_GAS);
+        assert_eq!(calls[0].weight, 1);
+        assert_eq!(calls[1].method, "on_signed");
+        assert_eq!(calls[1].receiver, account(CONTRACT));
+        assert_eq!(calls[1].gas, ON_SIGNED_GAS);
+        assert_eq!(calls[1].weight, 0);
+        assert_eq!(calls[1].deposit, NearToken::from_yoctonear(0));
+    }
+
+    #[test]
+    fn each_fee_tier_reaches_the_calldata() {
+        let mut contract = new_contract();
+        for pool_fee in [100u32, 500, 3_000, 10_000] {
+            let id = register_with_collateral(
+                &mut contract,
+                CollateralConfig {
+                    asset: WETH.into(),
+                    pool_fee,
+                },
+            );
+            let pending = unwind(&mut contract, id, 1, NOON);
+            let fee_word = format!("{pool_fee:064x}c0");
+            assert!(
+                pending.unsigned_tx.ends_with(&fee_word),
+                "{pool_fee}: {}",
+                pending.unsigned_tx
+            );
+        }
+    }
+}
+
+mod unwind_callback {
+    use super::*;
+
+    #[test]
+    fn a_signature_comes_back_as_rescue_signed_with_kind_unwind() {
+        let (mut contract, id) = collateral_setup();
+        let pending = unwind(&mut contract, id, 40, NOON);
+        let expected = pending.clone();
+        let signed = deliver(
+            &mut contract,
+            pending,
+            PromiseResult::Successful(real_signature()),
+            NOON,
+        )
+        .unwrap();
+
+        assert_eq!(signed.kind, SignKind::Unwind);
+        assert_eq!(signed.id, id);
+        assert_eq!(signed.unsigned_tx, expected.unsigned_tx);
+        assert_eq!(signed.tx_hash, expected.tx_hash);
+        let event = last_event();
+        assert_eq!(event["event"], "rescue_signed");
+        assert_eq!(event["data"], serde_json::to_value(&signed).unwrap());
+        assert_eq!(event["data"]["kind"], "unwind");
+        assert_eq!(spent(&contract, id), 40);
+    }
+
+    #[test]
+    fn a_failed_call_releases_the_budget_and_logs_rescue_failed() {
+        let (mut contract, id) = collateral_setup();
+        let pending = unwind(&mut contract, id, 40, NOON);
+        let tx_hash = pending.tx_hash.clone();
+        let result = deliver(&mut contract, pending, PromiseResult::Failed, NOON + 1);
+        assert_eq!(result, None);
+        assert_eq!(spent(&contract, id), 0);
+        assert_eq!(contract.get_position(id).unwrap().last_rescue_at, 0);
+
+        let event = last_event();
+        assert_eq!(event["event"], "rescue_failed");
+        assert_eq!(event["data"]["kind"], "unwind");
+        assert_eq!(event["data"]["reason"], "mpc_failed");
+        assert_eq!(event["data"]["released"], "40");
+        assert_eq!(event["data"]["tx_hash"], json!(tx_hash));
+    }
+
+    #[test]
+    fn after_a_failure_the_keeper_can_retry_at_once() {
+        let (mut contract, id) = collateral_setup();
+        let pending = unwind(&mut contract, id, 40, NOON);
+        deliver(&mut contract, pending, PromiseResult::Failed, NOON + 1);
+        unwind(&mut contract, id, 40, NOON + 2);
+        assert_eq!(spent(&contract, id), 40);
+    }
+
+    #[test]
+    fn a_failure_after_midnight_does_not_refund_the_new_day() {
+        let (mut contract, id) = collateral_setup();
+        let late = (policy::utc_day(NOON) + 1) * NANOS_PER_DAY - 1;
+        let pending = unwind(&mut contract, id, 40, late);
+        let later = late + 120 * NANOS_PER_SEC;
+        unwind(&mut contract, id, 30, later);
+        deliver(&mut contract, pending, PromiseResult::Failed, later);
+        assert_eq!(spent(&contract, id), 30);
+        assert_eq!(last_event()["data"]["released"], "0");
+    }
+
+    #[test]
+    fn a_malformed_response_keeps_the_budget_charged() {
+        let (mut contract, id) = collateral_setup();
+        let pending = unwind(&mut contract, id, 40, NOON);
+        let result = deliver(
+            &mut contract,
+            pending,
+            PromiseResult::Successful(b"not a signature".to_vec()),
+            NOON,
+        );
+        assert_eq!(result, None);
+        assert_eq!(spent(&contract, id), 40);
+        let event = last_event();
+        assert_eq!(event["event"], "rescue_failed");
+        assert_eq!(event["data"]["reason"], "malformed_response");
+        assert_eq!(event["data"]["released"], "0");
+    }
+}
+
+mod unwind_preview {
+    use super::*;
+
+    #[test]
+    fn the_preview_is_exactly_what_is_signed() {
+        let (mut contract, id) = collateral_setup();
+        act_as(STRANGER, NOON);
+        let preview = contract.preview_rescue_from_collateral(id, U128(40), fees());
+        let pending = unwind(&mut contract, id, 40, NOON);
+        assert_eq!(preview.unsigned_tx, pending.unsigned_tx);
+        assert_eq!(preview.tx_hash, pending.tx_hash);
+    }
+
+    #[test]
+    fn the_two_previews_differ_for_the_same_amount() {
+        let (contract, id) = collateral_setup();
+        act_as(STRANGER, NOON);
+        let reserve = contract.preview_rescue(id, U128(40), fees());
+        let collateral = contract.preview_rescue_from_collateral(id, U128(40), fees());
+        assert_ne!(reserve.tx_hash, collateral.tx_hash);
+    }
+
+    #[test]
+    fn the_preview_changes_no_state() {
+        let (contract, id) = collateral_setup();
+        act_as(STRANGER, NOON);
+        let before = contract.get_position(id);
+        contract.preview_rescue_from_collateral(id, U128(40), fees());
+        assert_eq!(contract.get_position(id), before);
+    }
+
+    #[test]
+    #[should_panic(expected = "position has no collateral config")]
+    fn it_fails_for_a_position_without_collateral() {
+        let (contract, id) = setup();
+        act_as(STRANGER, NOON);
+        contract.preview_rescue_from_collateral(id, U128(1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "position is paused")]
+    fn it_fails_when_paused() {
+        let (mut contract, id) = collateral_setup();
+        act_as(OWNER, NOON);
+        contract.pause(id);
+        contract.preview_rescue_from_collateral(id, U128(1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "amount exceeds max_per_rescue")]
+    fn it_fails_over_the_cap() {
+        let (contract, id) = collateral_setup();
+        act_as(STRANGER, NOON);
+        contract.preview_rescue_from_collateral(id, U128(MAX_PER_RESCUE + 1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "cooldown has not elapsed")]
+    fn it_fails_during_the_cooldown() {
+        let (mut contract, id) = collateral_setup();
+        unwind(&mut contract, id, 1, NOON);
+        contract.preview_rescue_from_collateral(id, U128(1), fees());
+    }
+
+    #[test]
+    #[should_panic(expected = "max_fee_per_gas exceeds the chain ceiling")]
+    fn it_fails_over_the_fee_ceiling() {
+        let (contract, id) = collateral_setup();
+        act_as(STRANGER, NOON);
+        let mut high = fees();
+        high.max_fee_per_gas = U128(MAX_FEE_CEILING + 1);
+        contract.preview_rescue_from_collateral(id, U128(1), high);
     }
 }
