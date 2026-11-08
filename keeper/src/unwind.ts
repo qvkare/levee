@@ -18,11 +18,11 @@ import {
   toFunctionSelector,
 } from 'viem';
 
-/** `unwind(address,address,uint256,uint24)`. Fixed by spec section 9. */
-export const UNWIND_SELECTOR = '0xd0cda3c2';
+/** `unwind(address,address,uint256,uint24,uint256)`. Fixed by spec section 9. */
+export const UNWIND_SELECTOR = '0x65afae08';
 
 const UNWIND_ABI = parseAbi([
-  'function unwind(address borrower, address collateral, uint256 amount, uint24 poolFee) returns (uint256 repaid, uint256 sold)',
+  'function unwind(address borrower, address collateral, uint256 amount, uint24 poolFee, uint256 maxSold) returns (uint256 repaid, uint256 sold)',
 ]);
 
 /** The topic does not depend on which parameters are indexed. */
@@ -34,7 +34,7 @@ export const UNWOUND_TOPIC: Hex = keccak256(
 export const HELPER_CONFIG_VIEW = {
   functionName: 'authorizationOf',
   abi: parseAbi([
-    'function authorizationOf(address borrower) view returns (address rescuer, uint16 maxSlippageBps, uint64 triggerHf, uint64 targetHf)',
+    'function authorizationOf(address borrower) view returns (address rescuer, uint16 maxSlippageBps, uint64 triggerHf, uint64 targetHf, address collateral, uint24 poolFee)',
   ]),
 } as const;
 
@@ -55,14 +55,25 @@ export interface HelperConfig {
   triggerHf: bigint;
   /** Wad. */
   targetHf: bigint;
+  /** The only collateral `unwind` may sell for this borrower. */
+  collateral: Address;
+  /** The fee tier of the only Uniswap v3 pool `unwind` may sell it in. */
+  poolFee: bigint;
 }
 
-type HelperConfigResult = readonly [Address, number, bigint, bigint];
+type HelperConfigResult = readonly [Address, number, bigint, bigint, Address, number];
 
 /** Adapts the view's return value. Changes with `HELPER_CONFIG_VIEW`. */
 export function helperConfigFrom(result: HelperConfigResult): HelperConfig {
-  const [rescuer, maxSlippageBps, triggerHf, targetHf] = result;
-  return { rescuer: getAddress(rescuer), maxSlippageBps: BigInt(maxSlippageBps), triggerHf, targetHf };
+  const [rescuer, maxSlippageBps, triggerHf, targetHf, collateral, poolFee] = result;
+  return {
+    rescuer: getAddress(rescuer),
+    maxSlippageBps: BigInt(maxSlippageBps),
+    triggerHf,
+    targetHf,
+    collateral: getAddress(collateral),
+    poolFee: BigInt(poolFee),
+  };
 }
 
 export interface DecodedUnwind {
@@ -70,13 +81,15 @@ export interface DecodedUnwind {
   collateral: Address;
   amount: bigint;
   poolFee: bigint;
+  /** The keeper's cap on the collateral sold, in its base units. */
+  maxSold: bigint;
 }
 
 export function unwindCalldata(call: DecodedUnwind): Hex {
   return encodeFunctionData({
     abi: UNWIND_ABI,
     functionName: 'unwind',
-    args: [call.borrower, call.collateral, call.amount, Number(call.poolFee)],
+    args: [call.borrower, call.collateral, call.amount, Number(call.poolFee), call.maxSold],
   });
 }
 
@@ -85,12 +98,13 @@ export function decodeUnwind(data: Hex): DecodedUnwind | null {
   if (!data.toLowerCase().startsWith(UNWIND_SELECTOR)) return null;
   try {
     const { args } = decodeFunctionData({ abi: UNWIND_ABI, data });
-    const [borrower, collateral, amount, poolFee] = args;
+    const [borrower, collateral, amount, poolFee, maxSold] = args;
     return {
       borrower: getAddress(borrower),
       collateral: getAddress(collateral),
       amount,
       poolFee: BigInt(poolFee),
+      maxSold,
     };
   } catch {
     return null;
@@ -155,17 +169,25 @@ export function unwoundEvents(logs: readonly EvmLog[], helper: Address): Unwound
 export const isAboveTrigger = (revertData: string | null | undefined): boolean =>
   !!revertData && revertData.slice(0, 10).toLowerCase() === ABOVE_TRIGGER_SELECTOR;
 
-/** What the keeper was configured with, in the units the helper uses. */
+/**
+ * What the keeper was configured with, in the units the helper uses. The trigger, target
+ * and slippage come from the positions file, the collateral and pool fee from the
+ * contract's `get_position`, which is what `rescue_from_collateral` signs for.
+ */
 export interface ExpectedHelperConfig {
   triggerWad: bigint;
   targetWad: bigint;
   maxSlippageBps?: bigint;
+  collateral: Address;
+  poolFee: bigint;
 }
 
 /**
  * Why the borrower's setting at the helper does not match the keeper's, or null if it
  * does. The helper's values are the ones `unwind` enforces, so the keeper acts only
- * when its own agree with them, and refuses to start when they do not.
+ * when its own agree with them, and refuses to start when they do not. A collateral or
+ * pool fee that differs from the position's would make every `unwind` revert with
+ * `TermsMismatch`.
  */
 export function helperConfigMismatch(
   expected: ExpectedHelperConfig,
@@ -175,6 +197,14 @@ export function helperConfigMismatch(
   const problems: string[] = [];
   if (actual.rescuer.toLowerCase() !== rescuer.toLowerCase()) {
     problems.push(`authorized rescuer ${actual.rescuer}, derived rescuer is ${rescuer}`);
+  }
+  if (actual.collateral.toLowerCase() !== expected.collateral.toLowerCase()) {
+    problems.push(
+      `collateral ${actual.collateral} at the helper, ${expected.collateral} registered on NEAR`,
+    );
+  }
+  if (actual.poolFee !== expected.poolFee) {
+    problems.push(`pool fee ${actual.poolFee} at the helper, ${expected.poolFee} registered on NEAR`);
   }
   if (actual.triggerHf !== expected.triggerWad) {
     problems.push(`trigger ${actual.triggerHf} at the helper, ${expected.triggerWad} configured`);
@@ -220,4 +250,101 @@ export function swapPrice(
       ? 0n
       : ((collateralPriceBase - effectivePriceBase) * BPS) / collateralPriceBase;
   return { ...unwound, collateralPriceBase, usdcPriceBase, effectivePriceBase, discountBps };
+}
+
+/** Uniswap v3-periphery QuoterV2, spec section 9. Not view on chain: it reverts inside
+ *  to return its answer, so it is read with `eth_call` and declared view here. */
+export const QUOTER_V2_ABI = parseAbi([
+  'struct QuoteExactOutputSingleParams { address tokenIn; address tokenOut; uint256 amount; uint24 fee; uint160 sqrtPriceLimitX96; }',
+  'function quoteExactOutputSingle(QuoteExactOutputSingleParams params) view returns (uint256 amountIn, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)',
+]);
+
+/** The keeper's default headroom over a fresh quote when it sets `max_sold`. */
+export const DEFAULT_QUOTE_TOLERANCE_BPS = 50n;
+
+/** One endpoint's QuoterV2 answer for the sale, or why it gave none. */
+export interface QuoteAnswer {
+  rpc: string;
+  /** Collateral base units the pool would take for exactly the USDC amount. */
+  amountIn: bigint | null;
+  error: string | null;
+}
+
+export interface QuoteTerms {
+  /** USDC base units the unwind asks for. */
+  amount: bigint;
+  toleranceBps: bigint;
+  /** Answers needed before the keeper trusts a quote. */
+  minAnswers: number;
+  /** Largest gap allowed between the lowest and highest answer, bps of the highest. */
+  maxDeviationBps: bigint;
+  /** The helper's own oracle bound, for the same amount: `maxIn` in `LeveeUnwind`. */
+  oracleMaxIn: bigint;
+}
+
+export type MaxSoldChoice =
+  | { ok: true; amountIn: bigint; maxSold: bigint }
+  | {
+      ok: false;
+      reason: 'quote_unavailable' | 'quote_disagreement' | 'quote_over_slippage_bound';
+      detail: string;
+      amountIn: bigint | null;
+    };
+
+/**
+ * `max_sold` from QuoterV2 answers, spec section 9. Pure, so `replay` can repeat it.
+ *
+ * Each endpoint quotes at its own latest block. The keeper needs at least `minAnswers`
+ * that agree within `maxDeviationBps`, and takes the highest: one endpoint can stop an
+ * unwind, as with the quorum, but cannot loosen the cap past what the others report.
+ * A quote above the helper's oracle bound would revert on chain with SlippageExceeded,
+ * so it is refused here instead.
+ */
+export function chooseMaxSold(answers: readonly QuoteAnswer[], terms: QuoteTerms): MaxSoldChoice {
+  const quotes = answers.flatMap((answer) => (answer.amountIn === null ? [] : [answer.amountIn]));
+  if (quotes.length < terms.minAnswers) {
+    const errors = answers.map((answer) => `${answer.rpc}: ${answer.error ?? answer.amountIn}`);
+    return {
+      ok: false,
+      reason: 'quote_unavailable',
+      detail: `${quotes.length} of ${terms.minAnswers} quotes: ${errors.join('; ')}`,
+      amountIn: null,
+    };
+  }
+  const low = quotes.reduce((a, b) => (b < a ? b : a));
+  const high = quotes.reduce((a, b) => (b > a ? b : a));
+  if ((high - low) * BPS > high * terms.maxDeviationBps) {
+    const seen = answers.map((answer) => `${answer.rpc}=${answer.amountIn}`).join(' ');
+    return {
+      ok: false,
+      reason: 'quote_disagreement',
+      detail: `quotes differ by more than ${terms.maxDeviationBps} bps: ${seen}`,
+      amountIn: high,
+    };
+  }
+  if (high > terms.oracleMaxIn) {
+    return {
+      ok: false,
+      reason: 'quote_over_slippage_bound',
+      detail: `the pool asks ${high} for ${terms.amount} USDC units, the helper allows ${terms.oracleMaxIn}`,
+      amountIn: high,
+    };
+  }
+  return { ok: true, amountIn: high, maxSold: (high * (BPS + terms.toleranceBps)) / BPS };
+}
+
+/**
+ * `LeveeUnwind`'s `maxIn`: the most collateral the oracle bound lets the pool take for
+ * `amount` USDC, rounded down as the helper rounds it.
+ */
+export function oracleMaxIn(
+  amount: bigint,
+  terms: { priceBase: bigint; decimals: bigint; maxSlippageBps: bigint },
+  usdcPriceBase: bigint,
+): bigint {
+  if (terms.priceBase === 0n) return 0n;
+  return (
+    (amount * usdcPriceBase * 10n ** terms.decimals * (BPS + terms.maxSlippageBps)) /
+    (terms.priceBase * USDC_UNIT * BPS)
+  );
 }

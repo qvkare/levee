@@ -11,7 +11,13 @@ import {
 } from 'viem';
 import type { FeeQuote } from './fees.js';
 import type { CollateralSample, Sample } from './quorum.js';
-import { type EvmLog, HELPER_CONFIG_VIEW, type HelperConfig, helperConfigFrom } from './unwind.js';
+import {
+  type EvmLog,
+  HELPER_CONFIG_VIEW,
+  type HelperConfig,
+  QUOTER_V2_ABI,
+  helperConfigFrom,
+} from './unwind.js';
 
 /** Deterministic deployment, present on all four chains in spec section 3. */
 const MULTICALL3: Address = '0xcA11bde05977b3631167028862bE2a173976CA11';
@@ -40,6 +46,16 @@ export interface PositionQuery {
   rescuer: Address;
   /** Collateral mode: what the helper may sell, and the helper itself. */
   collateral?: { asset: Address; helper: Address };
+}
+
+/** A QuoterV2 `quoteExactOutputSingle` for selling `tokenIn` to receive `amount`. */
+export interface SaleQuote {
+  tokenIn: Address;
+  tokenOut: Address;
+  /** Exactly this much `tokenOut`, in its base units. */
+  amount: bigint;
+  /** Uniswap v3 fee tier, hundredths of a basis point. */
+  fee: bigint;
 }
 
 export interface EvmReceipt {
@@ -87,6 +103,8 @@ export interface EvmClient {
   readAssetPrices(pool: Address, assets: Address[], blockNumber: bigint): Promise<bigint[]>;
   /** What `borrower` set at the helper with `authorize`. */
   readHelperConfig(helper: Address, borrower: Address): Promise<HelperConfig>;
+  /** QuoterV2's `amountIn` for the sale, at the latest block. */
+  quoteExactOutput(quoter: Address, sale: SaleQuote): Promise<bigint>;
   /** Runs `call` against the state at `blockNumber`, and returns any revert data. */
   simulate(call: SimulatedCall, blockNumber: bigint): Promise<SimulationResult>;
   readNonce(address: Address): Promise<number>;
@@ -189,6 +207,8 @@ async function readCollateral(
     maxSlippageBps: helperConfig.maxSlippageBps,
     triggerHf: helperConfig.triggerHf,
     targetHf: helperConfig.targetHf,
+    authorizedCollateral: helperConfig.collateral,
+    authorizedPoolFee: helperConfig.poolFee,
   };
 }
 
@@ -309,6 +329,25 @@ export function createEvmClient(
         args: [borrower],
       });
       return helperConfigFrom(result);
+    },
+
+    async quoteExactOutput(quoter, sale) {
+      const [amountIn] = await client.readContract({
+        address: quoter,
+        abi: QUOTER_V2_ABI,
+        functionName: 'quoteExactOutputSingle',
+        args: [
+          {
+            tokenIn: sale.tokenIn,
+            tokenOut: sale.tokenOut,
+            amount: sale.amount,
+            fee: Number(sale.fee),
+            sqrtPriceLimitX96: 0n,
+          },
+        ],
+        blockTag: 'latest',
+      });
+      return amountIn;
     },
 
     async simulate(call, blockNumber) {

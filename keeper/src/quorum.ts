@@ -26,6 +26,10 @@ export interface CollateralSample {
   triggerHf: bigint;
   /** Wad. */
   targetHf: bigint;
+  /** The collateral the borrower authorized at the helper. Zero once revoked. */
+  authorizedCollateral: Address;
+  /** The Uniswap v3 fee tier the borrower authorized at the helper. */
+  authorizedPoolFee: bigint;
 }
 
 /** One endpoint's view of a position, all read at one block. */
@@ -110,6 +114,8 @@ const EXACT_COLLATERAL_FIELDS = [
   'maxSlippageBps',
   'triggerHf',
   'targetHf',
+  'authorizedCollateral',
+  'authorizedPoolFee',
 ] as const satisfies readonly (keyof CollateralSample)[];
 
 function withinDeviation(a: bigint, b: bigint, maxDeviationBps: bigint): boolean {

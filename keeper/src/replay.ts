@@ -14,6 +14,7 @@ import {
   capsFromTrace,
   decisionToTrace,
   modeOf,
+  quoteAnswersFromTrace,
   sampleFromTrace,
   swapToRecord,
 } from './evidence.js';
@@ -27,7 +28,14 @@ import {
   assertMatchesUnwindIntent,
   decodeRepay,
 } from './signature.js';
-import { decodeUnwind, decodeUnwound, isAboveTrigger, swapPrice } from './unwind.js';
+import {
+  chooseMaxSold,
+  decodeUnwind,
+  decodeUnwound,
+  isAboveTrigger,
+  oracleMaxIn,
+  swapPrice,
+} from './unwind.js';
 
 export interface ReplayStep {
   title: string;
@@ -115,6 +123,45 @@ function decisionStep(run: RunRecord, trace: Trace, sample: Sample): ReplayStep 
   return { title: 'Decision', ok: isDeepStrictEqual(replayed, trace.decision), lines };
 }
 
+/**
+ * Collateral mode: `max_sold` chosen again from the recorded QuoterV2 answers, and the
+ * helper's oracle bound computed again from the sample the decision used.
+ */
+function quoteStep(run: RunRecord, trace: Trace, sample: Sample | null): ReplayStep | null {
+  const { quote } = trace;
+  if (!quote) return null;
+  const lines = quote.answers.map(
+    (answer) => `${answer.rpc}: ${answer.amount_in ?? answer.error}`,
+  );
+  let ok = true;
+  if (sample?.collateral) {
+    const bound = oracleMaxIn(BigInt(quote.amount), sample.collateral, sample.usdcPriceBase);
+    lines.push(`oracle bound ${bound} for ${quote.amount} USDC units`);
+    ok = bound.toString() === quote.oracle_max_in;
+  }
+  const choice = chooseMaxSold(quoteAnswersFromTrace(quote.answers), {
+    amount: BigInt(quote.amount),
+    toleranceBps: BigInt(quote.tolerance_bps),
+    minAnswers: DEFAULT_QUORUM.minEndpoints,
+    maxDeviationBps: DEFAULT_QUORUM.maxDeviationBps,
+    oracleMaxIn: BigInt(quote.oracle_max_in),
+  });
+  const amountIn = choice.amountIn === null ? null : choice.amountIn.toString();
+  const maxSold = choice.ok ? choice.maxSold.toString() : null;
+  lines.push(
+    choice.ok
+      ? `max_sold ${maxSold}: quote ${amountIn} plus ${quote.tolerance_bps} bps`
+      : `refused: ${choice.reason}`,
+  );
+  ok =
+    ok &&
+    amountIn === quote.amount_in &&
+    maxSold === quote.max_sold &&
+    maxSold === (run.max_sold ?? null) &&
+    (choice.ok || run.failure_reason?.startsWith(choice.reason) === true);
+  return { title: 'Quote', ok, lines };
+}
+
 function feesStep(trace: Trace): ReplayStep | null {
   if (!trace.fees) return null;
   const { nonce, max_fee_per_gas: maxFee, max_priority_fee_per_gas: priority } = trace.fees;
@@ -160,11 +207,15 @@ async function signatureStep(run: RunRecord, trace: Trace): Promise<ReplayStep |
         if (!trace.collateral) {
           throw new SignatureRefused('intent_mismatch', 'a collateral run with no collateral terms');
         }
+        if (!run.max_sold) {
+          throw new SignatureRefused('intent_mismatch', 'a collateral run with no max_sold');
+        }
         assertMatchesUnwindIntent(assembled, {
           ...common,
           helper: trace.collateral.helper as Address,
           collateral: trace.collateral.asset as Address,
           poolFee: BigInt(trace.collateral.pool_fee),
+          maxSold: BigInt(run.max_sold),
         });
       } else {
         assertMatchesIntent(assembled, { ...common, pool: chain.pool, usdc: chain.usdc });
@@ -188,7 +239,7 @@ function describeCall(assembled: AssembledTransaction): string {
   const data = assembled.tx.data ?? '0x';
   const unwind = decodeUnwind(data);
   if (unwind) {
-    return `unwind ${unwind.amount} for ${unwind.borrower}, selling ${unwind.collateral} at fee ${unwind.poolFee}`;
+    return `unwind ${unwind.amount} for ${unwind.borrower}, selling at most ${unwind.maxSold} of ${unwind.collateral} at fee ${unwind.poolFee}`;
   }
   const repay = decodeRepay(data);
   return `repay ${repay?.amount} of ${repay?.asset} on behalf of ${repay?.onBehalfOf}`;
@@ -283,10 +334,12 @@ export async function replayRun(run: RunRecord): Promise<ReplayResult> {
       lines: ['this record has no trace, so no step can be recomputed'],
     });
   } else {
+    let sample: Sample | null = null;
     if (trace.quorum) {
       const { step, result } = quorumStep(run, trace.quorum);
       steps.push(step);
       if (result.ok) {
+        sample = result.sample;
         const decision = decisionStep(run, trace, result.sample);
         if (decision) steps.push(decision);
       }
@@ -294,6 +347,7 @@ export async function replayRun(run: RunRecord): Promise<ReplayResult> {
     const signature = await signatureStep(run, trace);
     const remaining = [
       feesStep(trace),
+      quoteStep(run, trace, sample),
       nearStep(run),
       signature,
       broadcastStep(run, trace),

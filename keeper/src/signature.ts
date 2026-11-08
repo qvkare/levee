@@ -185,6 +185,8 @@ export interface UnwindIntent {
   collateral: Address;
   poolFee: bigint;
   amount: bigint;
+  /** The cap the keeper quoted and passed to `rescue_from_collateral`. */
+  maxSold: bigint;
   rescuer: Address;
 }
 
@@ -300,5 +302,8 @@ export function assertMatchesUnwindIntent(
   }
   if (unwind.poolFee !== intent.poolFee) {
     refuse('intent_mismatch', `pool fee ${unwind.poolFee}, expected ${intent.poolFee}`);
+  }
+  if (unwind.maxSold !== intent.maxSold) {
+    refuse('intent_mismatch', `max sold ${unwind.maxSold}, expected ${intent.maxSold}`);
   }
 }

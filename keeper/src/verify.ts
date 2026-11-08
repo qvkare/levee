@@ -173,9 +173,12 @@ async function checkNear(
   checks.equal('near_contract', status.receiverId, run.near_contract);
   checks.equal('near_method', status.methodName, RESCUE_METHODS[modeOf(run)]);
 
-  const args = status.args as { id?: unknown; amount?: unknown } | null;
+  const args = status.args as { id?: unknown; amount?: unknown; max_sold?: unknown } | null;
   checks.equal('near_position', args?.id, run.position_id);
   checks.equal('near_amount', args?.amount, run.amount);
+  if (modeOf(run) === 'collateral') {
+    checks.equal('near_max_sold', args?.max_sold, run.max_sold ?? null);
+  }
 
   let position: Position | null = null;
   try {
@@ -242,6 +245,9 @@ function checkUnwindCall(
   checks.address('borrower', unwind.borrower, run.borrower);
   checks.address('collateral', unwind.collateral, run.collateral ?? '');
   checks.equal('amount', unwind.amount.toString(), run.amount);
+  // The keeper's cap, quoted before the NEAR call. The helper also held the sale to the
+  // borrower's own slippage bound, which no record can loosen.
+  checks.equal('max_sold', unwind.maxSold.toString(), run.max_sold ?? null);
 
   if (!position) {
     checks.add('amount_within_caps', false, 'no position to read the caps from');
@@ -287,6 +293,11 @@ function checkUnwound(
     `${event.repaid}, at most ${run.amount}`,
   );
   checks.equal('unwound_sold', event.sold.toString(), run.sold ?? null);
+  checks.add(
+    'unwound_within_max_sold',
+    run.max_sold !== null && run.max_sold !== undefined && event.sold <= BigInt(run.max_sold),
+    `${event.sold}, at most ${run.max_sold}`,
+  );
   if (run.swap) {
     checks.equal('swap_repaid', event.repaid.toString(), run.swap.repaid);
     checks.equal('swap_sold', event.sold.toString(), run.swap.sold);

@@ -48,7 +48,7 @@ describe('the positions file', () => {
       fee_ceilings: {},
     });
 
-  it('reads a collateral position with its slippage limit', () => {
+  it('reads a collateral position with its slippage limit and the default quote tolerance', () => {
     const { positions } = parsePositionsFile(file({ mode: 'collateral', max_slippage_bps: 100 }));
     expect(positions[0]).toEqual({
       id: 1,
@@ -58,7 +58,22 @@ describe('the positions file', () => {
       targetWad: parseWad('1.6'),
       mode: 'collateral',
       maxSlippageBps: 100n,
+      quoteToleranceBps: 50n,
     });
+  });
+
+  it.each([0, 1, 300])('reads a quote tolerance of %s bps', (bps) => {
+    const entry = { mode: 'collateral', max_slippage_bps: 100, quote_tolerance_bps: bps };
+    expect(parsePositionsFile(file(entry)).positions[0]?.quoteToleranceBps).toBe(BigInt(bps));
+  });
+
+  it.each([-1, 301])('refuses a quote tolerance of %s bps', (bps) => {
+    const entry = { mode: 'collateral', max_slippage_bps: 100, quote_tolerance_bps: bps };
+    expect(() => parsePositionsFile(file(entry))).toThrow(/quote_tolerance_bps must be from 0 to 300/);
+  });
+
+  it('refuses a quote tolerance on a reserve position', () => {
+    expect(() => parsePositionsFile(file({ quote_tolerance_bps: 50 }))).toThrow(/only to mode/);
   });
 
   it('keeps a position with no mode in reserve mode, as before', () => {
@@ -125,6 +140,8 @@ describe('the quorum in collateral mode', () => {
     ['slippage', { maxSlippageBps: 101n }],
     ['rescuer', { authorizedRescuer: stranger }],
     ['decimals', { decimals: 8n }],
+    ['authorized collateral', { authorizedCollateral: stranger }],
+    ['authorized pool fee', { authorizedPoolFee: 3_000n }],
   ])('refuses any difference in the %s setting', (_name, over) => {
     const result = evaluateQuorum([withCollateral('a'), withCollateral('b', over)], [], options);
     expect(result).toMatchObject({ ok: false, reason: 'disagreement' });
@@ -161,6 +178,17 @@ describe('the record format', () => {
     expect(sampleFromTrace(sampleToTrace(sample))).toEqual(sample);
   });
 
+  it('reads a collateral sample from before authorize named the collateral', () => {
+    const trace = sampleToTrace(sickSample('a', { collateral: collateralOf(rescuer) }));
+    const { authorized_collateral, authorized_pool_fee, ...older } =
+      trace.collateral as NonNullable<typeof trace.collateral>;
+    const sample = sampleFromTrace({ ...trace, collateral: older });
+    expect(sample.collateral).toMatchObject({
+      authorizedCollateral: `0x${'00'.repeat(20)}`,
+      authorizedPoolFee: 0n,
+    });
+  });
+
   it('leaves the collateral out of a reserve sample', () => {
     expect(sampleToTrace(sickSample('a'))).not.toHaveProperty('collateral');
   });
@@ -185,6 +213,7 @@ describe('the record format', () => {
     near_sender: 'keeper.testnet',
     mode: 'collateral',
     collateral: weth,
+    max_sold: '2520037500000000000',
     sold: '2507500000000000000',
     swap: {
       repaid: '5000000000',
@@ -203,6 +232,7 @@ describe('the record format', () => {
   it('refuses a mode it does not know, and a sold amount that is not a number', () => {
     expect(() => parseRun(JSON.stringify({ ...collateralRun, mode: 'flash' }))).toThrow();
     expect(() => parseRun(JSON.stringify({ ...collateralRun, sold: '1.5' }))).toThrow();
+    expect(() => parseRun(JSON.stringify({ ...collateralRun, max_sold: '-1' }))).toThrow();
   });
 });
 
@@ -219,9 +249,10 @@ describe('assertMatchesUnwindIntent', () => {
     collateral: weth,
     poolFee: 500n,
     amount,
+    maxSold: 2_520_037_500_000_000_000n,
     rescuer: mpc.address,
   };
-  const call = { borrower, collateral: weth, amount, poolFee: 500n };
+  const call = { borrower, collateral: weth, amount, poolFee: 500n, maxSold: intent.maxSold };
   const fields = (over: Partial<Parameters<typeof unsignedTransaction>[0]> = {}) => ({
     chainId: intent.chainId,
     nonce: intent.nonce,
@@ -263,7 +294,13 @@ describe('assertMatchesUnwindIntent', () => {
     ['another collateral', { data: unwindCalldata({ ...call, collateral: stranger }) }],
     ['a larger amount', { data: unwindCalldata({ ...call, amount: amount + 1n }) }],
     ['another fee tier', { data: unwindCalldata({ ...call, poolFee: 3_000n }) }],
-    ['calldata that does not decode', { data: '0xd0cda3c2' }],
+    ['a looser max_sold', { data: unwindCalldata({ ...call, maxSold: call.maxSold + 1n }) }],
+    ['a tighter max_sold', { data: unwindCalldata({ ...call, maxSold: call.maxSold - 1n }) }],
+    ['calldata that does not decode', { data: '0x65afae08' }],
+    [
+      'the old four-argument unwind',
+      { data: `0xd0cda3c2${unwindCalldata(call).slice(10, 10 + 4 * 64)}` as const },
+    ],
   ])('refuses %s', async (_name, over) => {
     expect(await reason(over)).toBe('intent_mismatch');
   });

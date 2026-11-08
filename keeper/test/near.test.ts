@@ -127,6 +127,21 @@ describe('rescueArgs', () => {
       fees: { nonce: 3, max_fee_per_gas: '1000000', max_priority_fee_per_gas: '1000' },
     });
   });
+
+  it('adds max_sold for rescue_from_collateral, spec section 9', () => {
+    expect(rescueArgs({ ...request, mode: 'collateral', maxSold: 2n ** 128n - 1n })).toEqual({
+      id: 7,
+      amount: '2500000',
+      max_sold: '340282366920938463463374607431768211455',
+      fees: { nonce: 3, max_fee_per_gas: '1000000', max_priority_fee_per_gas: '1000' },
+    });
+  });
+
+  it('refuses collateral mode without max_sold, and max_sold in reserve mode', () => {
+    expect(() => rescueArgs({ ...request, mode: 'collateral' })).toThrow(/needs max_sold/);
+    expect(() => rescueArgs({ ...request, maxSold: 1n })).toThrow(/only to rescue_from_collateral/);
+    expect(() => rescueArgs({ ...request, mode: 'reserve', maxSold: 1n })).toThrow(/only to/);
+  });
 });
 
 describe('NearRescuer.rescue', () => {
@@ -461,19 +476,20 @@ describe('collateral mode on NEAR', () => {
     block_height: 1,
   });
 
-  it('calls rescue_from_collateral with the same arguments and no deposit', async () => {
+  it('calls rescue_from_collateral with the same arguments plus max_sold, and no deposit', async () => {
     const calls = fakeRpc({
       ...baseHandlers,
       tx: () => outcomeWith({ SuccessValue: encodeValue({ ...rescueResult, kind: 'unwind' }) }),
     });
 
-    const outcome = await rescuer().rescue({ ...request, mode: 'collateral' });
+    const collateral = { ...request, mode: 'collateral' as const, maxSold: 1_256_250_000_000_000n };
+    const outcome = await rescuer().rescue(collateral);
 
     const call = sentTransaction(calls).actions[0]?.functionCall;
     expect(call?.methodName).toBe('rescue_from_collateral');
     expect(call?.deposit).toBe(0n);
     const sentArgs = new TextDecoder().decode(new Uint8Array(call?.args ?? []));
-    expect(JSON.parse(sentArgs)).toEqual(rescueArgs(request));
+    expect(JSON.parse(sentArgs)).toEqual({ ...rescueArgs(request), max_sold: '1256250000000000' });
     expect(outcome.result.kind).toBe('unwind');
   });
 
