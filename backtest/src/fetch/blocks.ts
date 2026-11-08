@@ -20,14 +20,14 @@ interface RawBlock {
   timestamp: string;
 }
 
-async function timestampOf(rpc: Rpc, block: number): Promise<number> {
+export async function timestampOf(rpc: Rpc, block: number): Promise<number> {
   const raw = await rpc.call<RawBlock | null>('eth_getBlockByNumber', ['0x' + block.toString(16), false]);
   if (!raw) throw new Error(`block ${block} missing`);
   return parseInt(raw.timestamp, 16);
 }
 
 /** First block with timestamp >= target. */
-async function firstBlockAtOrAfter(rpc: Rpc, target: number, head: number): Promise<number> {
+export async function firstBlockAtOrAfter(rpc: Rpc, target: number, head: number): Promise<number> {
   let low = 0;
   let high = head;
   while (low < high) {

@@ -1,0 +1,34 @@
+{
+  "rule": {
+    "fromIso": "2025-01-01T00:00:00Z",
+    "toIso": "2026-11-01T00:00:00Z",
+    "maxDailyMove": 0.08,
+    "days": 30
+  },
+  "choice": {
+    "runStartTime": 1762300800,
+    "runDays": 87,
+    "startTime": 1764720000,
+    "endTime": 1767312000,
+    "largestMove": 0.06497853273854948,
+    "largestMoveAnywhere": 0.2165401646613736
+  },
+  "ranges": [
+    {
+      "chain": "base",
+      "window": "calm",
+      "fromBlock": 38965327,
+      "toBlock": 40261326,
+      "fromTimestamp": 1764720001,
+      "toTimestamp": 1767311999
+    },
+    {
+      "chain": "arbitrum",
+      "window": "calm",
+      "fromBlock": 406557036,
+      "toBlock": 416939525,
+      "fromTimestamp": 1764720000,
+      "toTimestamp": 1767311999
+    }
+  ]
+}
