@@ -4,7 +4,7 @@
 
 The Levee site and public risk tool. Levee repays Aave debt from the borrower's own collateral when health factor falls below their trigger, and the site shows how, with every testnet run and the backtest. Paste any address and read how close it is to liquidation on Aave (Base and Arbitrum) and Hyperliquid. No wallet and no login.
 
-It runs on Cloudflare Workers at `levee.qvkare.com`. It reads public data and holds no funds.
+It runs on Cloudflare Workers at `leveefi.xyz`. It reads public data and holds no funds.
 
 Spec: `../docs/SPEC.md`. Design direction: `DESIGN.md`. Read it before changing the interface.
 
@@ -122,7 +122,7 @@ All optional. Copy `.env.example` to `.dev.vars` for local Worker runs. In produ
 
 ## Hosting
 
-`wrangler.jsonc` targets `levee.qvkare.com` as a custom domain, with `workers_dev` off. OpenNext builds the Worker. Prerendered pages come from the read-only static assets cache, so no KV or R2 binding is needed, and there is no revalidation: `/`, `/how` and `/proof` change on deploy. The home page takes a fresh reading in the browser. If that fails it keeps the reading from the build and marks it as an example.
+`wrangler.jsonc` targets `leveefi.xyz` as a custom domain, keeps `levee.qvkare.com` so earlier links still work, and has `workers_dev` off. OpenNext builds the Worker. Prerendered pages come from the read-only static assets cache, so no KV or R2 binding is needed, and there is no revalidation: `/`, `/how` and `/proof` change on deploy. The home page takes a fresh reading in the browser. If that fails it keeps the reading from the build and marks it as an example.
 
 Run records, the claims ledger and the backtests are read at build time only. A Worker has none of those folders, so deploy after adding runs. Every figure the site states about Levee is worked out once, in `lib/proof-model.ts`, and `next.config.ts` inlines the result as `LEVEE_PROOF`, so prerendered pages and pages rendered on the Worker print the same numbers. Pages read it as `PROOF` from `lib/proof.ts`. Contract addresses and the key deletions are data in `lib/contracts.ts`. Tests hold the hop table, the backtest table, the caveats' figures and every contract link to the root README and the claims ledger, so the two cannot drift apart without a failing test.
 

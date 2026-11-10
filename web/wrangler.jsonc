@@ -1,4 +1,4 @@
-// The public site at levee.qvkare.com: the Next.js app and /api/risk on Cloudflare Workers, built by OpenNext.
+// The public site at leveefi.xyz: the Next.js app and /api/risk on Cloudflare Workers, built by OpenNext.
 // Deploy with `pnpm --filter web run deploy` (needs `wrangler login`). `pnpm deploy` alone is a pnpm command.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -17,5 +17,9 @@
   // Reads per address per minute. Free on every plan. Counted per Cloudflare location, so it slows a burst and is not an exact quota.
   "ratelimits": [{ "name": "RISK_LIMIT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }],
   "workers_dev": false,
-  "routes": [{ "pattern": "levee.qvkare.com", "custom_domain": true }]
+  // leveefi.xyz is the address. levee.qvkare.com stays so earlier links keep working.
+  "routes": [
+    { "pattern": "leveefi.xyz", "custom_domain": true },
+    { "pattern": "levee.qvkare.com", "custom_domain": true }
+  ]
 }

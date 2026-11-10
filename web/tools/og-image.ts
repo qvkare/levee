@@ -114,7 +114,7 @@ svg text{font-family:Overpass,sans-serif}.b{font-weight:800}.m{font-family:"Over
   <rect x="${X(t.included) - 258}" y="276" width="284" height="52" rx="8" fill="${replay.mode === "collateral" ? C.ink : C.P}"/>
   <text x="${X(t.included) - 244}" y="297" font-size="14" font-weight="700" fill="#fff">${arrival}</text>
   <text x="${X(t.included) - 244}" y="318" class="b" font-size="19" fill="#fff">Repaid ${replay.amount}, HF ${replay.healthAfter.toFixed(2)}</text>
-  <text x="40" y="600" font-size="17" font-weight="600" fill="${C.ink2}">A real ${replay.chain} rescue at ${total} s${after} · signed by NEAR Chain Signatures · levee.qvkare.com</text>
+  <text x="40" y="600" font-size="17" font-weight="600" fill="${C.ink2}">A real ${replay.chain} rescue at ${total} s${after} · signed by NEAR Chain Signatures · leveefi.xyz</text>
 </svg></body></html>`;
 
 const file = `${tmpdir()}/levee-og-image.html`;
