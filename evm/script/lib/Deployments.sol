@@ -13,7 +13,8 @@ struct UnwindArgs {
 /// pinned in evm/README.md, and the fork tests check them again.
 ///
 /// Aave PoolAddressesProvider and USDC: bgd-labs/aave-address-book, src/AaveV3Base.sol,
-/// AaveV3Arbitrum.sol and AaveV3BaseSepolia.sol at commit d4c2848e. Uniswap v3: the
+/// AaveV3Arbitrum.sol, AaveV3BaseSepolia.sol and AaveV3ArbitrumSepolia.sol at commit
+/// d4c2848e; the Arbitrum Sepolia ones were read back on chain on 2026-11-11. Uniswap v3: the
 /// official deployment tables at developers.uniswap.org/docs/protocols/v3/deployments,
 /// and for QuoterV2 the feed at developers.uniswap.org/deployments.json, generated on
 /// 2026-11-04 from Uniswap/contracts at commit 036160f7.
@@ -21,6 +22,7 @@ library Deployments {
     uint256 internal constant BASE = 8453;
     uint256 internal constant ARBITRUM = 42161;
     uint256 internal constant BASE_SEPOLIA = 84532;
+    uint256 internal constant ARBITRUM_SEPOLIA = 421614;
 
     address internal constant BASE_ADDRESSES_PROVIDER = 0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D;
     address internal constant BASE_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
@@ -43,6 +45,19 @@ library Deployments {
     address internal constant BASE_SEPOLIA_POSITION_MANAGER = 0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2;
     /// `owner()` of the test USDC. Not in the address book.
     address internal constant BASE_SEPOLIA_AAVE_FAUCET = 0xD9145b5F45Ad4519c7ACcD6E0A4A82e83bB8A6Dc;
+
+    /// Aave's Arbitrum Sepolia market, Pool revision 3. `getPool()` returns
+    /// 0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff.
+    address internal constant ARBITRUM_SEPOLIA_ADDRESSES_PROVIDER = 0xB25a5D144626a0D488e52AE717A051a2E9997076;
+    /// Circle's testnet USDC (FiatToken), which the market lists. Nobody but Circle can
+    /// mint it, so there is no faucet to call from a script.
+    address internal constant ARBITRUM_SEPOLIA_USDC = 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d;
+    /// The market's WETH. It is not Uniswap's WETH9 on this chain (0x980B62Da...), but it
+    /// wraps ETH the same way, with `deposit()`.
+    address internal constant ARBITRUM_SEPOLIA_WETH = 0x1dF462e2712496373A347f8ad10802a5E95f053D;
+    address internal constant ARBITRUM_SEPOLIA_UNISWAP_V3_FACTORY = 0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e;
+    address internal constant ARBITRUM_SEPOLIA_QUOTER_V2 = 0x2779a0CC1c3e0E44D2542EC3e79e3864Ae93Ef0B;
+    address internal constant ARBITRUM_SEPOLIA_POSITION_MANAGER = 0x6b2937Bde17889EDCf8fbD8dE31C3C2a70Bc4d65;
 
     function unwindArgs(uint256 chainId) internal pure returns (UnwindArgs memory) {
         if (chainId == BASE) {
@@ -69,6 +84,14 @@ library Deployments {
                 uniswapV3Factory: BASE_SEPOLIA_UNISWAP_V3_FACTORY
             });
         }
+        if (chainId == ARBITRUM_SEPOLIA) {
+            return UnwindArgs({
+                name: "Arbitrum Sepolia",
+                addressesProvider: ARBITRUM_SEPOLIA_ADDRESSES_PROVIDER,
+                usdc: ARBITRUM_SEPOLIA_USDC,
+                uniswapV3Factory: ARBITRUM_SEPOLIA_UNISWAP_V3_FACTORY
+            });
+        }
         revert("LeveeUnwind has no verified addresses for this chain");
     }
 
@@ -77,6 +100,7 @@ library Deployments {
         if (chainId == BASE) return BASE_QUOTER_V2;
         if (chainId == ARBITRUM) return ARBITRUM_QUOTER_V2;
         if (chainId == BASE_SEPOLIA) return BASE_SEPOLIA_QUOTER_V2;
+        if (chainId == ARBITRUM_SEPOLIA) return ARBITRUM_SEPOLIA_QUOTER_V2;
         revert("no verified QuoterV2 for this chain");
     }
 }

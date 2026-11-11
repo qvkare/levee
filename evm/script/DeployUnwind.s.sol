@@ -7,7 +7,7 @@ import {LeveeUnwind} from "../src/LeveeUnwind.sol";
 import {Deployments, UnwindArgs} from "./lib/Deployments.sol";
 
 /// Deploys LeveeUnwind with the verified constructor arguments for the chain the RPC
-/// serves: Base, Arbitrum One or Base Sepolia. Any other chain reverts.
+/// serves: Base, Arbitrum One, Base Sepolia or Arbitrum Sepolia. Any other chain reverts.
 ///
 /// The signer comes from DEPLOYER_PRIVATE_KEY if it is set, otherwise from Foundry's own
 /// wallet flags, such as `--account` with a keystore or `--ledger`. Use those on mainnet.
