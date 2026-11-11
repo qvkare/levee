@@ -130,6 +130,18 @@ Repay from a reserve works the same way with `rescue(id, amount, fees)`, which s
 
 The full design is in `docs/SPEC.md`.
 
+## Limits on an automated agent
+
+The keeper is an automated agent that holds a key, and Levee assumes that key will leak one day. Three things limit what it can do, and the keeper controls none of them:
+
+| Where | The limit | How to check it |
+|---|---|---|
+| NEAR protocol | The keeper's key is a function-call key. It can call only `rescue_from_collateral` on the Levee contract, or only `rescue` on v0.1. It cannot attach a deposit, and it spends NEAR only on gas | `make attack-demo`: real keys try every other method in near-sandbox and fail with `MethodNameMismatch` |
+| The Levee contract on NEAR, which has no keys | A cap per rescue, a cap per UTC day, a cooldown, and fee ceilings per chain. Only the position's owner can loosen them, and only after 24 hours. The keeper passes an amount, `max_sold` and fees, never a target, calldata or payload | The unit, property and near-sandbox tests in `contracts/levee` |
+| `LeveeUnwind` on the lending chain | It sells only while the borrower's health factor is below their trigger, only their collateral in their pool, within their bound against Aave's oracle and the keeper's `max_sold`, and not much past their target | The fork tests in `evm/`, and the `unwind-*` claims in `evidence/claims.json` |
+
+The keeper is deterministic TypeScript, with no model in the money path. An AI agent in its place would be held by the same three limits: it could choose when to ask and how much within the caps, but not what gets signed, for whom, or where the value goes. "What each key can do" below gives the worst case for a stolen key.
+
 ## What each key can do
 
 | Actor | Can | Cannot |
