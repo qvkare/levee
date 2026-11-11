@@ -14,6 +14,12 @@ Borrowers get liquidated in fast moves and pay the liquidator a bonus. Repaying 
 - `LeveeUnwind` has no owner and cannot be upgraded. It sells only while the health factor is below the borrower's trigger, only within their bound against Aave's oracle, and only to repay their own USDC debt. `revoke()` stops it at once.
 - When to act and how much is decided by a NEAR contract with no keys. It signs for the rescuer address on every chain through Chain Signatures.
 
+## Who it is for
+
+Borrowers with more than about $10k of USDC debt against volatile collateral. In the 2025-10 crash, at the 1% bound, the backtest made $34.5k net on positions with $10k to $100k of debt and $452.9k on larger ones, and lost $313k on smaller ones, mostly to gas. In the calm month it lost $122k in all: it avoided $22k of bonus and paid $134k for swaps. Wallets and lending front-ends that want to offer a rescue without holding their users' funds are the other audience.
+
+**Proposal, not built:** a fee of 0.1% of the USDC repaid, charged only on an unwind that lands, to an address fixed when the helper is deployed, with nothing to set up. In the 2025-10 replay at trigger 1.20 and the 1% bound, unwinds repaid $58.2M on both chains, so the fee would have been about $58k, 7% of the $781k of bonus they avoided, and the net would have fallen from +$175k to about +$116k. DeFi Saver charges 0.05% per automation plus its swap fee, so this is not a claim to be cheaper.
+
 ## Try it with no keys
 
 Open https://leveefi.xyz, paste any address, and read its Aave and Hyperliquid positions in order of distance to liquidation. No wallet, no login.
