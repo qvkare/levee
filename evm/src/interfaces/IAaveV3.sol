@@ -48,6 +48,9 @@ interface IAavePriceOracle {
 interface IAavePool {
     function getReserveData(address asset) external view returns (AaveReserveData memory);
 
+    /// The reserve's income index now, in ray: what one scaled aToken unit is worth.
+    function getReserveNormalizedIncome(address asset) external view returns (uint256);
+
     function getUserAccountData(address user)
         external
         view

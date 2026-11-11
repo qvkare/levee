@@ -93,6 +93,8 @@ contract LeveeUnwind is IUniswapV3SwapCallback {
 
     uint256 private constant BPS = 10_000;
     uint256 private constant WAD = 1e18;
+    /// Aave's index unit.
+    uint256 private constant RAY = 1e27;
     uint256 private constant VARIABLE_RATE = 2;
     /// Uniswap v3 TickMath.MIN_SQRT_RATIO + 1 and MAX_SQRT_RATIO - 1. The swap is bounded
     /// by `maxIn` in the callback, not by a price limit.
@@ -310,8 +312,18 @@ contract LeveeUnwind is IUniswapV3SwapCallback {
         if (repaid != d.amount) revert RepayMismatch(repaid, d.amount);
 
         // Withdrawing the whole balance burns every scaled unit, so no aToken dust stays here.
-        // Aave rounds the transfer in the receiver's favour, so the balance covers `owed`.
+        // Recent Aave rounds the transfer in the receiver's favour, so the balance covers
+        // `owed`. Aave v3.0 (Pool revision 3) rounds the scaled amount half up instead, which
+        // can leave this contract short by up to one scaled unit, worth the reserve's income
+        // index in base units. The shortfall is pulled too, at least one unit's worth so that
+        // it does not round to nothing, and goes to the pool with the rest. On later
+        // revisions the second transfer never runs.
         IERC20(d.aToken).safeTransferFrom(d.borrower, address(this), owed);
+        uint256 held = IERC20(d.aToken).balanceOf(address(this));
+        if (held < owed) {
+            uint256 unit = Math.ceilDiv(IAavePool(d.aavePool).getReserveNormalizedIncome(d.collateral), RAY);
+            IERC20(d.aToken).safeTransferFrom(d.borrower, address(this), Math.max(owed - held, unit));
+        }
         uint256 withdrawn = IAavePool(d.aavePool).withdraw(d.collateral, type(uint256).max, msg.sender);
         if (withdrawn < owed) revert ShortWithdraw(withdrawn, owed);
     }

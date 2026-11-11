@@ -11,18 +11,32 @@ import {IUniswapV3Factory, IUniswapV3Pool} from "../src/interfaces/IUniswapV3.so
 import {Deployments} from "./lib/Deployments.sol";
 import {IAaveFaucet, INonfungiblePositionManager, IWETH9, PoolPriceMover, TestnetPoolMath} from "./lib/TestnetPool.sol";
 
-/// Puts a Uniswap v3 pool for Aave's Base Sepolia WETH and test USDC at Aave's oracle
-/// price and adds liquidity around it, so LeveeUnwind can be run live on testnet.
+/// Puts a Uniswap v3 pool for an Aave testnet market's WETH and USDC at Aave's oracle
+/// price and adds liquidity around it, so LeveeUnwind can be run live on testnet. It runs
+/// on Base Sepolia and Arbitrum Sepolia.
 ///
-/// Every fee tier for this pair already exists on Base Sepolia, left by others at
+/// Every fee tier for this pair already exists on both chains, left by others at
 /// arbitrary prices, so "create" usually means "move": the script swaps the pool to the
 /// oracle price with PoolPriceMover, then mints a position with the official
 /// NonfungiblePositionManager. The oracle tracks the real ETH price and nobody
 /// arbitrages this pool, so run it again shortly before each live unwind.
 ///
-/// It funds itself if it can: test USDC from Aave's faucet, WETH by wrapping the
-/// deployer's Base Sepolia ETH.
+/// It funds itself where it can. WETH comes from wrapping the deployer's ETH on both
+/// chains. On Base Sepolia, test USDC comes from Aave's faucet. Arbitrum Sepolia's market
+/// lists Circle's testnet USDC, which has no faucet a script can call, so the deployer must
+/// already hold it, for example by borrowing it on Aave against WETH.
 contract SeedTestnetPool is Script {
+    /// The addresses the script needs on one chain, from Deployments.
+    struct SeedChain {
+        address weth;
+        address usdc;
+        address addressesProvider;
+        address factory;
+        address positionManager;
+        /// Aave's test-token faucet. Zero where the market's USDC has none.
+        address faucet;
+    }
+
     struct Params {
         uint24 fee;
         uint256 wethAmount;
@@ -50,7 +64,8 @@ contract SeedTestnetPool is Script {
         uint256 usdcAdded;
     }
 
-    /// Test USDC minted on top of the liquidity, to pay for moving the price up.
+    /// Test USDC minted on top of the liquidity, to pay for moving the price up, where a
+    /// faucet can mint it.
     uint256 internal constant RECENTER_USDC_BUDGET = 10_000e6;
 
     /// How long the mint stays valid after the block the script ran on. `forge script`
@@ -60,8 +75,33 @@ contract SeedTestnetPool is Script {
     /// the script relies on.
     uint256 public constant MINT_DEADLINE = 30 minutes;
 
-    address internal constant WETH = Deployments.BASE_SEPOLIA_WETH;
-    address internal constant USDC = Deployments.BASE_SEPOLIA_USDC;
+    /// The chain the script is seeding, set at the start of each run.
+    SeedChain internal c;
+
+    /// Base Sepolia or Arbitrum Sepolia. Anything else reverts.
+    function chainConfig(uint256 chainId) public pure returns (SeedChain memory) {
+        if (chainId == Deployments.BASE_SEPOLIA) {
+            return SeedChain({
+                weth: Deployments.BASE_SEPOLIA_WETH,
+                usdc: Deployments.BASE_SEPOLIA_USDC,
+                addressesProvider: Deployments.BASE_SEPOLIA_ADDRESSES_PROVIDER,
+                factory: Deployments.BASE_SEPOLIA_UNISWAP_V3_FACTORY,
+                positionManager: Deployments.BASE_SEPOLIA_POSITION_MANAGER,
+                faucet: Deployments.BASE_SEPOLIA_AAVE_FAUCET
+            });
+        }
+        if (chainId == Deployments.ARBITRUM_SEPOLIA) {
+            return SeedChain({
+                weth: Deployments.ARBITRUM_SEPOLIA_WETH,
+                usdc: Deployments.ARBITRUM_SEPOLIA_USDC,
+                addressesProvider: Deployments.ARBITRUM_SEPOLIA_ADDRESSES_PROVIDER,
+                factory: Deployments.ARBITRUM_SEPOLIA_UNISWAP_V3_FACTORY,
+                positionManager: Deployments.ARBITRUM_SEPOLIA_POSITION_MANAGER,
+                faucet: address(0)
+            });
+        }
+        revert("SeedTestnetPool runs on Base Sepolia or Arbitrum Sepolia only");
+    }
 
     function run() external returns (Result memory r) {
         Params memory p = Params({
@@ -91,15 +131,15 @@ contract SeedTestnetPool is Script {
     }
 
     function _seed(address deployer, Params memory p) internal returns (Result memory r) {
-        require(block.chainid == Deployments.BASE_SEPOLIA, "SeedTestnetPool runs on Base Sepolia only");
+        c = chainConfig(block.chainid);
         require(p.rangeTicks > 0, "SEED_RANGE_TICKS must be above zero");
 
-        IUniswapV3Factory factory = IUniswapV3Factory(Deployments.BASE_SEPOLIA_UNISWAP_V3_FACTORY);
-        INonfungiblePositionManager manager = INonfungiblePositionManager(Deployments.BASE_SEPOLIA_POSITION_MANAGER);
+        IUniswapV3Factory factory = IUniswapV3Factory(c.factory);
+        INonfungiblePositionManager manager = INonfungiblePositionManager(c.positionManager);
         require(manager.factory() == address(factory), "position manager is on another factory");
         require(factory.feeAmountTickSpacing(p.fee) != 0, "fee tier is not enabled");
 
-        (address token0, address token1) = WETH < USDC ? (WETH, USDC) : (USDC, WETH);
+        (address token0, address token1) = c.weth < c.usdc ? (c.weth, c.usdc) : (c.usdc, c.weth);
         r.targetSqrtPriceX96 = _oracleSqrtPrice(token0, token1);
         if (p.usdcAmount == 0) p.usdcAmount = _oracleValueInUsdc(p.wethAmount);
 
@@ -119,10 +159,10 @@ contract SeedTestnetPool is Script {
         r.tickLower = TestnetPoolMath.floorToSpacing(r.tick - p.rangeTicks, spacing);
         r.tickUpper = TestnetPoolMath.floorToSpacing(r.tick + p.rangeTicks, spacing) + spacing;
 
-        uint256 wethIn = Math.min(p.wethAmount, IERC20(WETH).balanceOf(deployer));
-        uint256 usdcIn = Math.min(p.usdcAmount, IERC20(USDC).balanceOf(deployer));
-        IERC20(WETH).approve(address(manager), wethIn);
-        IERC20(USDC).approve(address(manager), usdcIn);
+        uint256 wethIn = Math.min(p.wethAmount, IERC20(c.weth).balanceOf(deployer));
+        uint256 usdcIn = Math.min(p.usdcAmount, IERC20(c.usdc).balanceOf(deployer));
+        IERC20(c.weth).approve(address(manager), wethIn);
+        IERC20(c.usdc).approve(address(manager), usdcIn);
         uint256 amount0;
         uint256 amount1;
         (r.tokenId, r.liquidity, amount0, amount1) = manager.mint(
@@ -132,44 +172,54 @@ contract SeedTestnetPool is Script {
                 fee: p.fee,
                 tickLower: r.tickLower,
                 tickUpper: r.tickUpper,
-                amount0Desired: token0 == WETH ? wethIn : usdcIn,
-                amount1Desired: token0 == WETH ? usdcIn : wethIn,
+                amount0Desired: token0 == c.weth ? wethIn : usdcIn,
+                amount1Desired: token0 == c.weth ? usdcIn : wethIn,
                 amount0Min: 0,
                 amount1Min: 0,
                 recipient: deployer,
                 deadline: block.timestamp + MINT_DEADLINE
             })
         );
-        IERC20(WETH).approve(address(manager), 0);
-        IERC20(USDC).approve(address(manager), 0);
-        (r.wethAdded, r.usdcAdded) = token0 == WETH ? (amount0, amount1) : (amount1, amount0);
+        IERC20(c.weth).approve(address(manager), 0);
+        IERC20(c.usdc).approve(address(manager), 0);
+        (r.wethAdded, r.usdcAdded) = token0 == c.weth ? (amount0, amount1) : (amount1, amount0);
     }
 
     function _fund(address deployer, Params memory p) internal {
+        address weth = c.weth;
+        address usdc = c.usdc;
+        uint256 usdcHeld = IERC20(usdc).balanceOf(deployer);
+        if (c.faucet == address(0)) {
+            // Moving the price up spends USDC only across ranges others hold liquidity in,
+            // and needs at least one base unit, because Uniswap refuses a zero-size swap.
+            require(
+                usdcHeld >= p.usdcAmount && usdcHeld > 0,
+                "no USDC faucet on this chain: hold SEED_USDC_UNITS of USDC first, e.g. borrowed on Aave"
+            );
+        }
         uint256 usdcWanted = p.usdcAmount + RECENTER_USDC_BUDGET;
-        uint256 usdcHeld = IERC20(USDC).balanceOf(deployer);
-        if (usdcHeld < usdcWanted) {
-            IAaveFaucet faucet = IAaveFaucet(Deployments.BASE_SEPOLIA_AAVE_FAUCET);
-            (uint256 timelock, uint256 maxMintWhole) = faucet.getTokenConfig(USDC);
-            uint256 lastMint = faucet.getUserLastUpdated(USDC, deployer);
+        if (c.faucet != address(0) && usdcHeld < usdcWanted) {
+            IAaveFaucet faucet = IAaveFaucet(c.faucet);
+            (uint256 timelock, uint256 maxMintWhole) = faucet.getTokenConfig(usdc);
+            uint256 lastMint = faucet.getUserLastUpdated(usdc, deployer);
             if (lastMint == 0 || block.timestamp >= lastMint + timelock) {
                 uint256 shortfall = usdcWanted - usdcHeld;
                 require(shortfall <= maxMintWhole * 1e6, "SEED_USDC_UNITS is above the faucet's per-call limit");
-                faucet.mint(USDC, deployer, shortfall);
+                faucet.mint(usdc, deployer, shortfall);
             } else {
                 // The faucet is on its timelock. Go ahead only if the liquidity itself is covered.
                 require(usdcHeld >= p.usdcAmount, "faucet timelock: wait an hour or lower SEED_USDC_UNITS");
             }
         }
 
-        uint256 wethHeld = IERC20(WETH).balanceOf(deployer);
+        uint256 wethHeld = IERC20(weth).balanceOf(deployer);
         if (wethHeld < p.wethAmount) {
             uint256 shortfall = p.wethAmount - wethHeld;
             require(
                 deployer.balance >= shortfall + p.gasReserveWei,
-                "not enough Base Sepolia ETH to wrap SEED_WETH_WEI and keep the gas reserve"
+                "not enough ETH to wrap SEED_WETH_WEI and keep the gas reserve"
             );
-            IWETH9(WETH).deposit{value: shortfall}();
+            IWETH9(weth).deposit{value: shortfall}();
         }
     }
 
@@ -202,11 +252,11 @@ contract SeedTestnetPool is Script {
     }
 
     function _oracle() internal view returns (IAavePriceOracle) {
-        return IAavePriceOracle(IAaveAddressesProvider(Deployments.BASE_SEPOLIA_ADDRESSES_PROVIDER).getPriceOracle());
+        return IAavePriceOracle(IAaveAddressesProvider(c.addressesProvider).getPriceOracle());
     }
 
     function _unit(address asset) internal view returns (uint256) {
-        IAavePool pool = IAavePool(IAaveAddressesProvider(Deployments.BASE_SEPOLIA_ADDRESSES_PROVIDER).getPool());
+        IAavePool pool = IAavePool(IAaveAddressesProvider(c.addressesProvider).getPool());
         AaveReserveData memory data = pool.getReserveData(asset);
         return 10 ** ((data.configuration >> 48) & 0xff);
     }
@@ -220,8 +270,9 @@ contract SeedTestnetPool is Script {
 
     function _oracleValueInUsdc(uint256 wethAmount) internal view returns (uint256) {
         IAavePriceOracle oracle = _oracle();
-        return
-            Math.mulDiv(wethAmount, oracle.getAssetPrice(WETH) * _unit(USDC), oracle.getAssetPrice(USDC) * _unit(WETH));
+        return Math.mulDiv(
+            wethAmount, oracle.getAssetPrice(c.weth) * _unit(c.usdc), oracle.getAssetPrice(c.usdc) * _unit(c.weth)
+        );
     }
 
     function _log(address deployer, Result memory r) internal pure {

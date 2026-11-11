@@ -64,6 +64,7 @@ export const CHAINS: Record<number, ChainInfo> = {
       'https://sepolia-rollup.arbitrum.io/rpc',
       'https://arbitrum-sepolia-rpc.publicnode.com',
     ],
+    quoterV2: '0x2779a0CC1c3e0E44D2542EC3e79e3864Ae93Ef0B',
   },
 };
 

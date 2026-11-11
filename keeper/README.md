@@ -93,7 +93,7 @@ In collateral mode only:
 - The position was registered with a collateral config: the asset and the Uniswap fee tier.
 - The contract's `get_chain` names a `LeveeUnwind` helper for the chain.
 - The borrower called `authorize(rescuer, maxSlippageBps, triggerHf, targetHf, collateral, poolFee)` on the helper for the derived rescuer, with the keeper's own `trigger`, `target` and `max_slippage_bps`, and the collateral and fee tier the position registered on NEAR, and approved the collateral's aToken to the helper.
-- The chain has a known Uniswap v3 QuoterV2 in `src/chains.ts`: Base, Arbitrum One and Base Sepolia.
+- The chain has a known Uniswap v3 QuoterV2 in `src/chains.ts`: Base, Arbitrum One, Base Sepolia and Arbitrum Sepolia.
 
 ## Collateral mode
 

@@ -97,6 +97,20 @@ library UnwindTargets {
             secondCollateral: 0xD171b9694f7A2597Ed006D41f7509aaD4B485c4B // Aave test cbETH
         });
     }
+
+    /// The 0.30% pool is the one the seed script moves to the oracle price and fills, as
+    /// on Base Sepolia. At the pinned block it was empty and priced near zero. The market
+    /// lists only WETH and USDC, so there is no second collateral.
+    function arbitrumSepolia() internal pure returns (UnwindTarget memory) {
+        return UnwindTarget({
+            uniswapV3Factory: Deployments.ARBITRUM_SEPOLIA_UNISWAP_V3_FACTORY,
+            deepFee: 3000,
+            deepPool: 0x99A927D8127b7215FC11Ce1F1009e77ff8B1d1b0,
+            otherFee: 0,
+            otherPool: address(0),
+            secondCollateral: address(0)
+        });
+    }
 }
 
 /// Deploys LeveeUnwind on the fork and gives the suites independent reads to check it by.
@@ -111,6 +125,16 @@ abstract contract UnwindFork is AaveFork {
 
     /// Aave can round an aToken transfer by a base unit either way.
     uint256 internal constant ATOKEN_ROUNDING = 2;
+
+    /// What an unwind may take from the borrower and pay the pool beyond `sold`. On Aave
+    /// v3.0 (Pool revision 3) the helper tops up a shortfall by at least one scaled unit,
+    /// worth the income index in base units: about 5 wei of WETH on Arbitrum Sepolia, whose
+    /// index is near 4.67. Elsewhere it is ATOKEN_ROUNDING.
+    function aTokenRounding() internal view returns (uint256) {
+        if (pool.POOL_REVISION() > 3) return ATOKEN_ROUNDING;
+        uint256 index = IAavePool(address(pool)).getReserveNormalizedIncome(address(weth));
+        return ATOKEN_ROUNDING + 2 * ((index + 1e27 - 1) / 1e27);
+    }
 
     UnwindTarget internal ut;
     LeveeUnwind internal helper;
@@ -332,13 +356,13 @@ abstract contract UnwindFork is AaveFork {
     function checkBalances(Outcome memory o, uint16 slippage) internal view {
         assertEq(o.repaid, o.amount, "repaid is the amount asked for");
         assertApproxEqAbs(o.before.debt - o.afterwards.debt, o.repaid, DEBT_ROUNDING, "debt fell by the repay");
-        assertApproxEqAbs(o.before.aWeth - o.afterwards.aWeth, o.sold, ATOKEN_ROUNDING, "aWETH fell by the sale");
+        assertApproxEqAbs(o.before.aWeth - o.afterwards.aWeth, o.sold, aTokenRounding(), "aWETH fell by the sale");
         uint256 allowanceSpent = o.before.aWethAllowance - o.afterwards.aWethAllowance;
         assertGe(allowanceSpent, o.sold, "allowance spent at least the sale");
-        assertLe(allowanceSpent, o.sold + ATOKEN_ROUNDING, "allowance overspent");
+        assertLe(allowanceSpent, o.sold + aTokenRounding(), "allowance overspent");
         assertEq(o.before.poolUsdc - o.afterwards.poolUsdc, o.repaid, "pool paid out exactly the repay");
         assertGe(o.afterwards.poolWeth - o.before.poolWeth, o.sold, "pool was paid at least what it asked");
-        assertLe(o.afterwards.poolWeth - o.before.poolWeth, o.sold + ATOKEN_ROUNDING, "pool was overpaid");
+        assertLe(o.afterwards.poolWeth - o.before.poolWeth, o.sold + aTokenRounding(), "pool was overpaid");
         assertLe(o.sold, maxCollateralIn(o.amount, slippage), "sold more than the oracle bound");
         assertEq(o.afterwards.walletWeth, o.before.walletWeth, "borrower wallet WETH moved");
         assertEq(o.afterwards.walletUsdc, o.before.walletUsdc, "borrower wallet USDC moved");
