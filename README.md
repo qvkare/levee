@@ -1,6 +1,10 @@
 # Levee
 
-Levee repays your Aave debt when your health factor falls below a trigger you set. It sells just enough of your own collateral to bring the health factor back to your target. Your position stays in your wallet, and every sale is checked on chain against the trigger and price bound you set.
+- **What.** Levee repays your Aave v3 USDC debt from your own collateral when your health factor falls below a trigger you set. It sells just enough to bring the health factor back to your target.
+- **Why.** Repaying early costs a swap. Being liquidated costs a liquidation bonus, 5% of the debt closed on Aave's WETH on Base. Your position stays in your wallet, and every sale is checked on chain against your trigger and your price bound.
+- **NEAR.** A NEAR contract with no keys decides when and how much, and signs for the rescuer address through Chain Signatures. The keeper's key can call one method on it and nothing else.
+- **Proof.** 20 testnet rescues on Base Sepolia through NEAR testnet, 7 of them from collateral, the last two after both contract accounts had lost their last key. `make verify` reads them back from public chains. A backtest replays every USDC borrower on Aave v3 Base and Arbitrum through two crashes and a calm month, misses included.
+- **Try it.** https://leveefi.xyz reads any address, with no wallet. From a clone, `pnpm install && make judge` needs no keys or funds and takes about 6 minutes.
 
 ## The problem
 
@@ -23,7 +27,7 @@ make judge
 
 | Do | See |
 |---|---|
-| `make verify` | Every recorded run read back from public chains: the NEAR receipt, the rescuer derived from the MPC root key, the EVM sender, target, calldata and outcome, and that both contract accounts have no keys |
+| `make verify` | Every recorded run read back from public chains: the NEAR receipt, the rescuer derived from the MPC root key, the EVM sender, target, calldata and outcome, and that both contract accounts have no keys. Each claim in `evidence/claims.json` ends as PASS, proven here from public chains, or RECORDED, on file but not proven by this command: claims backed by a test, which `make test` runs, and runs that were aborted or failed, kept for the record |
 | `make replay` | The collateral rescue made after the contract lost its keys, walked step by step offline |
 | `make backtest` | Both backtests recomputed from cached data, including misses. About 5 minutes |
 | `make quote-dry` | Live NEAR Intents dry quotes for the reserve routes: Arbitrum to Base, Base to Arbitrum, Base to Hyperliquid. Nothing moves |
