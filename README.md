@@ -12,7 +12,7 @@ Borrowers get liquidated in fast moves and pay the liquidator a bonus. Repaying 
 
 ## Try it with no keys
 
-Open https://levee.qvkare.com, paste any address, and read its Aave and Hyperliquid positions in order of distance to liquidation. No wallet, no login.
+Open https://leveefi.xyz, paste any address, and read its Aave and Hyperliquid positions in order of distance to liquidation. No wallet, no login.
 
 Then, from a clone (Node 22.22 or newer, pnpm 10):
 
@@ -29,8 +29,8 @@ make judge
 | `make quote-dry` | Live NEAR Intents dry quotes for the reserve routes: Arbitrum to Base, Base to Arbitrum, Base to Hyperliquid. Nothing moves |
 | `make attack-demo` | Real function-call keys try every other method in near-sandbox and are refused. Needs Rust and `cargo-near` |
 | `make test` | All suites. Needs Rust, `cargo-near` and Foundry |
-| `curl 'https://levee.qvkare.com/api/risk?address=0x...'` | The same reading as JSON |
-| `curl 'https://levee.qvkare.com/api/route?from=arbitrum&to=base&amount=20'` | A live confidential dry quote for moving a reserve to a rescuer |
+| `curl 'https://leveefi.xyz/api/risk?address=0x...'` | The same reading as JSON |
+| `curl 'https://leveefi.xyz/api/route?from=arbitrum&to=base&amount=20'` | A live confidential dry quote for moving a reserve to a rescuer |
 
 ## Live evidence
 

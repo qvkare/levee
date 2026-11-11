@@ -22,7 +22,7 @@ const mono = localFont({
 const DESCRIPTION = "When your Aave health factor falls below the trigger you set, Levee sells just enough of your own collateral to repay USDC debt back to your target. A NEAR contract with no keys signs it, and an ownerless helper checks the trigger and the price on chain. Live on testnet. Check any address, no wallet and no login.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://levee.qvkare.com"),
+  metadataBase: new URL("https://leveefi.xyz"),
   title: { default: "Levee", template: "%s | Levee" },
   description: DESCRIPTION,
   openGraph: { siteName: "Levee", title: "Levee", description: DESCRIPTION, type: "website" },
