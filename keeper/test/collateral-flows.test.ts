@@ -95,14 +95,23 @@ describe('wiring a position in collateral mode', () => {
     expect(CHAINS[8453]?.quoterV2).toBe('0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a');
     expect(CHAINS[42161]?.quoterV2).toBe('0x61fFE014bA17989E743c5F6cB21bF9697530B21e');
     expect(CHAINS[84532]?.quoterV2).toBe('0xC5290058841028F1614F3A6F0F5816cAd0df5E27');
+    expect(CHAINS[421614]?.quoterV2).toBe('0x2779a0CC1c3e0E44D2542EC3e79e3864Ae93Ef0B');
   });
 
   it('refuses a chain with no known QuoterV2', async () => {
-    const arbitrumSepolia = views({
-      getPosition: async () =>
-        openPosition({ chain_id: 421614, collateral: { asset: weth, pool_fee: 500 } }),
-    });
-    await expect(wire(arbitrumSepolia)).rejects.toThrow(/no Uniswap v3 QuoterV2/);
+    // Every chain in spec section 3 has one now, so take Arbitrum Sepolia's away for this test.
+    const chain = CHAINS[421614] as NonNullable<(typeof CHAINS)[421614]>;
+    const quoter = chain.quoterV2;
+    delete chain.quoterV2;
+    try {
+      const arbitrumSepolia = views({
+        getPosition: async () =>
+          openPosition({ chain_id: 421614, collateral: { asset: weth, pool_fee: 500 } }),
+      });
+      await expect(wire(arbitrumSepolia)).rejects.toThrow(/no Uniswap v3 QuoterV2/);
+    } finally {
+      chain.quoterV2 = quoter;
+    }
   });
 
   it('hands the collateral terms to the rescue context', async () => {
