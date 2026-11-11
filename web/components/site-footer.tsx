@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CONTRACT_URL, GITHUB_URL, UNWIND_URL } from "@/lib/links.ts";
+import { CONTRACT_URL, GITHUB_URL, UNWIND_ARBITRUM_URL, UNWIND_URL } from "@/lib/links.ts";
 import { Brand } from "./site-header.tsx";
 
 export function SiteFooter() {
@@ -17,6 +17,11 @@ export function SiteFooter() {
           <li>
             <a href={UNWIND_URL} rel="noreferrer">
               LeveeUnwind on Basescan
+            </a>
+          </li>
+          <li>
+            <a href={UNWIND_ARBITRUM_URL} rel="noreferrer">
+              LeveeUnwind on Arbiscan
             </a>
           </li>
           {GITHUB_URL && (

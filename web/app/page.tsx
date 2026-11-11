@@ -46,7 +46,7 @@ export default async function Home() {
           </p>
           <h1>Below your trigger, Levee repays your Aave debt from your own collateral</h1>
           <p className="lede">
-            When your health factor falls below the trigger you set, <b>a NEAR contract with no keys signs one call</b> that sells just enough of your collateral to repay USDC debt back to your target. <b>The position stays in your wallet.</b> On Base, an ownerless helper checks the trigger and the price against Aave’s oracle before anything moves.
+            When your health factor falls below the trigger you set, <b>a NEAR contract with no keys signs one call</b> that sells just enough of your collateral to repay USDC debt back to your target. <b>The position stays in your wallet.</b> On Base and Arbitrum, an ownerless helper checks the trigger and the price against Aave’s oracle before anything moves.
           </p>
           {proofLine && (
             <p className="hero-proof">
@@ -78,7 +78,7 @@ export default async function Home() {
           <h2 className="big" id="rules-h">
             Who can do what
           </h2>
-          <p>Each actor has one job. The helper on Base and the contract on NEAR enforce the limits, so a stolen keeper key stays inside them.</p>
+          <p>Each actor has one job. The helper on the lending chain and the contract on NEAR enforce the limits, so a stolen keeper key stays inside them.</p>
         </div>
         <Boards />
         <WorstCase />

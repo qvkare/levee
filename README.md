@@ -3,7 +3,7 @@
 - **What.** Levee repays your Aave v3 USDC debt from your own collateral when your health factor falls below a trigger you set. It sells just enough to bring the health factor back to your target.
 - **Why.** Repaying early costs a swap. Being liquidated costs a liquidation bonus, 5% of the debt closed on Aave's WETH on Base. Your position stays in your wallet, and every sale is checked on chain against your trigger and your price bound.
 - **NEAR.** A NEAR contract with no keys decides when and how much, and signs for the rescuer address through Chain Signatures. The keeper's key can call one method on it and nothing else.
-- **Proof.** 20 testnet rescues on Base Sepolia through NEAR testnet, 7 of them from collateral, the last two after both contract accounts had lost their last key. `make verify` reads them back from public chains. A backtest replays every USDC borrower on Aave v3 Base and Arbitrum through two crashes and a calm month, misses included.
+- **Proof.** 24 testnet rescues through NEAR testnet, 11 of them from collateral, on Base Sepolia and Arbitrum Sepolia. One keeper loop rescued a position on each chain through one NEAR contract, then did it again after that contract lost its last key. `make verify` reads every run back from public chains. A backtest replays every USDC borrower on Aave v3 Base and Arbitrum through two crashes and a calm month, misses included.
 - **Try it.** https://leveefi.xyz reads any address, with no wallet. From a clone, `pnpm install && make judge` needs no keys or funds and takes about 6 minutes.
 
 ## The problem
@@ -25,7 +25,7 @@ DeFi Saver already automates Aave v3 repayment on Ethereum, Arbitrum, Optimism a
 | What the borrower grants | Its help pages do not say for automation. Its view contract reads an asset approval, an aToken approval and credit delegation from the wallet to a smart wallet ([`AaveV3View`](https://github.com/defisaver/defisaver-v3-contracts/blob/main/contracts/views/AaveV3View.sol)) | A capped aToken allowance to `LeveeUnwind`, and the trigger, target, price bound, collateral and pool in `authorize`. No Safe, module or credit delegation |
 | Fees | 0.05% of each triggered automation, gas, and 0.25% on swaps between uncorrelated assets such as ETH and USDC ([fees](https://help.defisaver.com/features/automation/fees)) | None today. A proposal is in "Who it is for" |
 | Minimum debt | $30,000 on Ethereum, $500 on Arbitrum, Optimism and Base ([requirements](https://help.defisaver.com/features/automation/requirements-for-using-automation)) | None enforced. The backtest says positions under about $10k lose money |
-| Chains | Ethereum, Arbitrum, Optimism, Base, on mainnet | Base Sepolia, live on testnet. Arbitrum in fork tests |
+| Chains | Ethereum, Arbitrum, Optimism, Base, on mainnet | Base Sepolia and Arbitrum Sepolia, live on testnet through one NEAR contract |
 
 Two others:
 
@@ -53,8 +53,8 @@ make judge
 
 | Do | See |
 |---|---|
-| `make verify` | Every recorded run read back from public chains: the NEAR receipt, the rescuer derived from the MPC root key, the EVM sender, target, calldata and outcome, and that both contract accounts have no keys. Each claim in `evidence/claims.json` ends as PASS, proven here from public chains, or RECORDED, on file but not proven by this command: claims backed by a test, which `make test` runs, and runs that were aborted or failed, kept for the record |
-| `make replay` | The collateral rescue made after the contract lost its keys, walked step by step offline |
+| `make verify` | Every recorded run read back from public chains: the NEAR receipt, the rescuer derived from the MPC root key, the EVM sender, target, calldata and outcome, and that all three contract accounts have no keys. Each claim in `evidence/claims.json` ends as PASS, proven here from public chains, or RECORDED, on file but not proven by this command: claims backed by a test, which `make test` runs, and runs that were aborted or failed, kept for the record |
+| `make replay` | The two rescues, one on Arbitrum Sepolia and one on Base Sepolia, made after the two-chain contract lost its last key, walked step by step offline |
 | `make backtest` | Both backtests recomputed from cached data, including misses. About 5 minutes |
 | `make quote-dry` | Live NEAR Intents dry quotes for the reserve routes: Arbitrum to Base, Base to Arbitrum, Base to Hyperliquid. Nothing moves |
 | `make attack-demo` | Real function-call keys try every other method in near-sandbox and are refused. Needs Rust and `cargo-near` |
@@ -64,21 +64,24 @@ make judge
 
 ## Live evidence
 
-On Base Sepolia and NEAR testnet. Records are in `evidence/runs/`, and failures stay there.
+On Base Sepolia, Arbitrum Sepolia and NEAR testnet. Records are in `evidence/runs/`, and failures stay there.
 
+- **One contract, two chains**, 2026-11-11: `levee-v2-multi-1503.testnet` runs the same code as v0.2, with Base Sepolia and Arbitrum Sepolia in its chain list. One keeper loop, holding one key limited to `rescue_from_collateral`, rescued a WETH position on each chain, from health factor 1.45 to 1.60; both NEAR calls landed in the same block. The contract's last key was then deleted, and the same loop rescued both again. Four rescues, no failures.
 - **Repay from collateral**, 2026-11-08: seven rescues and one aborted run on one WETH position, each from health factor 1.48 to 1.80. The last two ran after both contract accounts had lost their last key. In the aborted run the keeper's quote put the sale past the borrower's 1% bound, so it sent nothing.
 - **Repay from a reserve**, 2026-11-07: thirteen rescues and one aborted read.
 
 | Hop | Collateral, median | p95 | Reserve, median | p95 |
 |---|---|---|---|---|
-| Detection to NEAR inclusion | 1.6 s | 1.9 s | 1.7 s | 3.5 s |
+| Detection to NEAR inclusion | 1.8 s | 2.2 s | 1.7 s | 3.5 s |
 | NEAR inclusion to MPC signature | 5.2 s | 6.7 s | 5.3 s | 6.9 s |
-| Broadcast to Base inclusion | 0.5 s | 1.6 s | 1.5 s | 1.5 s |
-| Total from detection | 7.9 s | 9.2 s | 8.4 s | 10.2 s |
+| Broadcast to lending-chain inclusion | 0.6 s | 1.6 s | 1.5 s | 1.5 s |
+| Total from detection | 8.0 s | 9.2 s | 8.4 s | 10.2 s |
 
-The samples are small and the testnet was calm. The keeper also reads every 5 seconds, which this table does not include. The team added the liquidity in the testnet pool at Aave's oracle price, so sale prices there are no measure of slippage. Separately, 15 of 15 signature requests through the contract completed, with a median of 6.6 s (`evidence/mpc-latency-testnet.json`).
+The samples are small and the testnets were calm. The keeper also reads every 5 seconds, which this table does not include. The team added the liquidity in both testnet pools at Aave's oracle price, so sale prices there are no measure of slippage. Separately, 15 of 15 signature requests through the contract completed, with a median of 6.6 s (`evidence/mpc-latency-testnet.json`).
 
-Collateral rescue after the keys were deleted, health factor 1.48 to 1.80: [NEAR](https://testnet.nearblocks.io/txns/EXWuscQyobKfnFwUFvs7higAinm6RmRpCJ7ThLioan3j), [Base Sepolia](https://sepolia.basescan.org/tx/0xa852c9db6842bb23b92ac90db056a4d989bd872c375fb61c4004baad8901c897).
+Two-chain rescues after the contract's key was deleted, health factor 1.45 to 1.60: Arbitrum Sepolia [NEAR](https://testnet.nearblocks.io/txns/GhxNUauFF5TKcXChGY9Yk7Bof8Day3ghz2foLWvzKJaq), [Arbiscan](https://sepolia.arbiscan.io/tx/0xeb87cb52df93435dae08f12e3a21a3cdbdcbbd2b7ce2bd63ea69ab063be9ba41); Base Sepolia [NEAR](https://testnet.nearblocks.io/txns/73UnCm6VD47vkfX6sMUG8SpgoCBreDJMUAp7UcFQLanr), [Basescan](https://sepolia.basescan.org/tx/0x765243ceade8849aa802ef3498b5f866e1488cd6003b2825aabeb08ae7fb6bb2).
+
+Collateral rescue on v0.2 after its keys were deleted, health factor 1.48 to 1.80: [NEAR](https://testnet.nearblocks.io/txns/EXWuscQyobKfnFwUFvs7higAinm6RmRpCJ7ThLioan3j), [Base Sepolia](https://sepolia.basescan.org/tx/0xa852c9db6842bb23b92ac90db056a4d989bd872c375fb61c4004baad8901c897).
 
 Reserve rescue, health factor 1.06 to 1.50: [NEAR](https://testnet.nearblocks.io/txns/Cxd3vfhi49p3DRBSFMTvT3qPpvqTj6Bwq1zC6UmRFvMn), [Base Sepolia](https://sepolia.basescan.org/tx/0x501ee4e448e7d14594c59e64981aeafa5234913b93f07db0bfbc5bbf880c3b92).
 
@@ -90,15 +93,20 @@ Everything below is on testnet. Nothing is deployed on any mainnet.
 
 | Contract | Network | Address | Source |
 |---|---|---|---|
-| Levee v0.2, repay from collateral or from a reserve | NEAR testnet | [levee-core-v2-1503.testnet](https://testnet.nearblocks.io/address/levee-core-v2-1503.testnet) | `contracts/levee` |
-| LeveeUnwind, sells collateral to repay. No owner, no upgrade | Base Sepolia | [0x308a7b2872F6006522280026a750fCD1c5Bd63D2](https://sepolia.basescan.org/address/0x308a7b2872F6006522280026a750fCD1c5Bd63D2) | `evm/src/LeveeUnwind.sol`, verified on [Sourcify](https://repo.sourcify.dev/84532/0x308a7b2872F6006522280026a750fCD1c5Bd63D2) |
+| Levee v0.2 on two chains, the same code with Base Sepolia and Arbitrum Sepolia | NEAR testnet | [levee-v2-multi-1503.testnet](https://testnet.nearblocks.io/address/levee-v2-multi-1503.testnet) | `contracts/levee`, code hash `BJhnFqoK1e6JJQqKiciUtfQxmouGi81hhfJ3qPVRUASE`, the same as v0.2 |
+| LeveeUnwind with the Aave v3.0 fix. No owner, no upgrade | Base Sepolia | [0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8](https://sepolia.basescan.org/address/0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8) | `evm/src/LeveeUnwind.sol`, verified on [Sourcify](https://repo.sourcify.dev/84532/0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8) |
+| LeveeUnwind with the Aave v3.0 fix, at the same address | Arbitrum Sepolia | [0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8](https://sepolia.arbiscan.io/address/0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8) | `evm/src/LeveeUnwind.sol`, verified on [Sourcify](https://repo.sourcify.dev/421614/0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8) |
+| Levee v0.2, Base Sepolia only, repay from collateral or from a reserve | NEAR testnet | [levee-core-v2-1503.testnet](https://testnet.nearblocks.io/address/levee-core-v2-1503.testnet) | `contracts/levee` |
+| LeveeUnwind, before the Aave v3.0 fix. No owner, no upgrade | Base Sepolia | [0x308a7b2872F6006522280026a750fCD1c5Bd63D2](https://sepolia.basescan.org/address/0x308a7b2872F6006522280026a750fCD1c5Bd63D2) | `evm/src/LeveeUnwind.sol`, verified on [Sourcify](https://repo.sourcify.dev/84532/0x308a7b2872F6006522280026a750fCD1c5Bd63D2) |
 | Levee v0.1, reserve mode only | NEAR testnet | [levee-core-1503.testnet](https://testnet.nearblocks.io/address/levee-core-1503.testnet) | `contracts/levee`, before collateral mode was added |
 
 ### Accounts Levee acts through
 
 | Account | Network | Address |
 |---|---|---|
-| Keeper. One key limited to `rescue_from_collateral` on v0.2, one limited to `rescue` on v0.1 | NEAR testnet | [levee-keeper-1503.testnet](https://testnet.nearblocks.io/address/levee-keeper-1503.testnet) |
+| Keeper. One key limited to `rescue_from_collateral` on each v0.2 contract, one limited to `rescue` on v0.1 | NEAR testnet | [levee-keeper-1503.testnet](https://testnet.nearblocks.io/address/levee-keeper-1503.testnet) |
+| Rescuer for two-chain position 1, derived from the contract by Chain Signatures | Arbitrum Sepolia | [0x008418a72481867d027E2b9cA179AC089de69403](https://sepolia.arbiscan.io/address/0x008418a72481867d027E2b9cA179AC089de69403) |
+| Rescuer for two-chain position 2, derived from the contract by Chain Signatures | Base Sepolia | [0x6d65fC5Cb4536abae4cD6526856bB10526e80295](https://sepolia.basescan.org/address/0x6d65fC5Cb4536abae4cD6526856bB10526e80295) |
 | Rescuer for v0.2 position 1, derived from the contract by Chain Signatures | Base Sepolia | [0x95ad19E5382ebEfF2C190ed1711515263efDc462](https://sepolia.basescan.org/address/0x95ad19E5382ebEfF2C190ed1711515263efDc462) |
 | Rescuer for v0.1 position 1 | Base Sepolia | [0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971](https://sepolia.basescan.org/address/0xEA3ce7f3AeC39CE95D0fA32F867BA65EFF3b8971) |
 
@@ -114,6 +122,13 @@ Everything below is on testnet. Nothing is deployed on any mainnet.
 | Uniswap v3 Factory | Base Sepolia | [0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24](https://sepolia.basescan.org/address/0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24) |
 | Uniswap v3 QuoterV2 | Base Sepolia | [0xC5290058841028F1614F3A6F0F5816cAd0df5E27](https://sepolia.basescan.org/address/0xC5290058841028F1614F3A6F0F5816cAd0df5E27) |
 | Uniswap v3 WETH/USDC 0.30% pool. Liquidity added by the team at Aave's oracle price, so its prices are not a market measure | Base Sepolia | [0x92266210FacF124f190fbad79AA230dfB85926Ce](https://sepolia.basescan.org/address/0x92266210FacF124f190fbad79AA230dfB85926Ce) |
+| Aave v3 Pool, revision 3 | Arbitrum Sepolia | [0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff](https://sepolia.arbiscan.io/address/0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff) |
+| Aave v3 PoolAddressesProvider | Arbitrum Sepolia | [0xB25a5D144626a0D488e52AE717A051a2E9997076](https://sepolia.arbiscan.io/address/0xB25a5D144626a0D488e52AE717A051a2E9997076) |
+| USDC, Circle's testnet token | Arbitrum Sepolia | [0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d](https://sepolia.arbiscan.io/address/0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d) |
+| WETH, Aave's test wrapper | Arbitrum Sepolia | [0x1dF462e2712496373A347f8ad10802a5E95f053D](https://sepolia.arbiscan.io/address/0x1dF462e2712496373A347f8ad10802a5E95f053D) |
+| Uniswap v3 Factory | Arbitrum Sepolia | [0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e](https://sepolia.arbiscan.io/address/0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e) |
+| Uniswap v3 QuoterV2 | Arbitrum Sepolia | [0x2779a0CC1c3e0E44D2542EC3e79e3864Ae93Ef0B](https://sepolia.arbiscan.io/address/0x2779a0CC1c3e0E44D2542EC3e79e3864Ae93Ef0B) |
+| Uniswap v3 WETH/USDC 0.30% pool. Liquidity added by the team at Aave's oracle price, so its prices are not a market measure | Arbitrum Sepolia | [0x99A927D8127b7215FC11Ce1F1009e77ff8B1d1b0](https://sepolia.arbiscan.io/address/0x99A927D8127b7215FC11Ce1F1009e77ff8B1d1b0) |
 
 ## How a rescue runs
 
@@ -123,7 +138,7 @@ Everything below is on testnet. Nothing is deployed on any mainnet.
 4. It calls `rescue_from_collateral(id, amount, max_sold, fees)` on NEAR, where `max_sold` is the quote plus 0.5%. It supplies no calldata, no target and no payload.
 5. The contract checks caps, budget, cooldown and fee ceilings, builds the EIP-1559 transaction itself, and asks the MPC network to sign `LeveeUnwind.unwind(borrower, collateral, amount, poolFee, maxSold)`.
 6. The keeper verifies the recovered signer and broadcasts. Anyone could: the signature is public.
-7. On Base, the helper checks that the health factor is below the trigger and that the collateral and pool are the authorized ones. The pool sends the USDC first; the helper repays the debt, takes the aTokens the pool is owed, and withdraws them to the pool. The sale must be within the oracle bound and `maxSold`, and the health factor must rise without passing far beyond the target.
+7. On the lending chain, the helper checks that the health factor is below the trigger and that the collateral and pool are the authorized ones. The pool sends the USDC first; the helper repays the debt, takes the aTokens the pool is owed, and withdraws them to the pool. The sale must be within the oracle bound and `maxSold`, and the health factor must rise without passing far beyond the target.
 8. The run is written to `evidence/runs/`.
 
 Repay from a reserve works the same way with `rescue(id, amount, fees)`, which signs `Pool.repay(USDC, amount, 2, borrower)` from USDC held at the rescuer.
@@ -157,9 +172,9 @@ A stolen keeper key can act only while the borrower's health factor is below the
 
 ## NEAR pieces
 
-- **Chain Signatures.** The rescuer address on Base belongs to the contract. Without it, this design would need a hot key or a contract on every chain.
+- **Chain Signatures.** Each rescuer address belongs to the contract, on Base Sepolia and Arbitrum Sepolia alike. Without it, this design would need a hot key or a contract on every chain.
 - **Function-call keys.** The keeper's keys are limited to `rescue_from_collateral` or `rescue` by the protocol. `make attack-demo` shows both.
-- **NEAR contract as the policy layer.** One policy controls rescuers on several chains, and it has no admin or upgrade path. Both testnet contract accounts have no keys: the last full-access key was deleted on `levee-core-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/3u8yYEBB9eVJbRGjE27xiHru1aAA4W7Mh4C2rrsZ86fu)) and on `levee-core-v2-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA)). `make verify` checks it.
+- **NEAR contract as the policy layer.** One policy controls rescuers on several chains, and it has no admin or upgrade path. `levee-v2-multi-1503.testnet` does it live for Base Sepolia and Arbitrum Sepolia. No testnet contract account has a key: the last full-access key was deleted on `levee-core-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/3u8yYEBB9eVJbRGjE27xiHru1aAA4W7Mh4C2rrsZ86fu)), on `levee-core-v2-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA)) and on `levee-v2-multi-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/6SAwnLxi8QTR4UKqCSfpAASkzZzENDrjXudakVJyti62)). `make verify` checks all three.
 - **NEAR Intents.** Quotes only, today. The site and `make quote-dry` take live confidential 1Click dry quotes for the reserve routes, with a partner key. Nothing has moved through Intents: the reserve layer below is not built.
 
 ## Backtest
@@ -202,15 +217,15 @@ Method, validation and every table: `backtest/README.md` and `backtest/results/c
 
 - **Reserve layer, through NEAR Intents.** The next step: one reserve, held in a NEAR Intents Agent API wallet, that moves USDC to whichever rescuer needs it, on whichever chain. For one position the backtest found a reserve no better than repaying the same USDC upfront, so its case is one reserve serving positions on several chains. It needs partner access. Today the reserve is USDC held at the rescuer address, and the routes exist only as dry quotes.
 - **Hyperliquid top-ups.** The site reads Hyperliquid, but Levee does not act on it.
-- **Arbitrum.** The contracts support it and fork tests cover both modes there. There are no live runs.
-- **Mainnet, an external audit and a reproducible build.**
+- **Reserve mode on Arbitrum.** Repaying from collateral runs live on Arbitrum Sepolia; repaying from a reserve has fork tests there, and live runs on Base Sepolia only.
+- **Mainnet, an external audit and a reproducible build.** The `LeveeUnwind` fix for Aave v3.0 rounding, found on the Arbitrum Sepolia fork, came after the security review.
 
 ## NEAR Hackathon
 
 Levee is an entry in the NEAR Hackathon "Build Beyond Boundaries", for tracks 01 Unstoppable DeFi, 06 AI Security & Defense and 13 Open Innovation. Every commit in this repository is from 7 November 2026 or later. In that window:
 
-- The specification, and the NEAR contract in two immutable versions, each deployed on testnet and then locked by deleting its last key.
-- `LeveeUnwind`, its fork tests on Base, Arbitrum and Base Sepolia, the fixes from a security review, and its Base Sepolia deployment.
+- The specification, and the NEAR contract in two immutable versions, deployed three times on testnet, the last with two chains, each locked by deleting its last key.
+- `LeveeUnwind`, its fork tests on Base, Arbitrum, Base Sepolia and Arbitrum Sepolia, the fixes from a security review and the Aave v3.0 fix, and its deployments on Base Sepolia and Arbitrum Sepolia.
 - The keeper, `verify` and `replay`.
 - Both backtests, on cached Aave and Uniswap data.
 - The site and risk API at https://leveefi.xyz.

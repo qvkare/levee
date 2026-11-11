@@ -12,9 +12,9 @@ export function TimeBar({ replay, median }: { replay: Replay; median: { p50Ms: n
     { lane: "N", label: "Detection to the rescue call on NEAR", ms: near },
     { lane: "M", label: "MPC signature", ms: signed - near },
     { lane: "K", label: "Signer checked and sent", ms: sent - signed },
-    { lane: "P", label: replay.mode === "collateral" ? "Unwind included on Base" : "Repay included", ms: included - sent },
+    { lane: "P", label: replay.mode === "collateral" ? `Unwind included on ${replay.chain}` : "Repay included", ms: included - sent },
   ];
-  const which = replay.chosen === "keyless" ? "The run the home page replays, made after the contracts lost their last keys," : "The run the home page replays";
+  const which = replay.chosen === "keyless" ? "The run the home page replays, made after the contract lost its last key," : "The run the home page replays";
   const versus = median.p50Ms === null ? "" : ` The median of the ${median.samples} rescues from collateral is ${seconds(median.p50Ms)}.`;
   return (
     <aside className="time-card" aria-labelledby="time-card-h">

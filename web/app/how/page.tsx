@@ -85,7 +85,7 @@ function phases(): Phase[] {
   const reserve = PROOF.modes.reserve.counts;
   const tally = (landed: number, aborted: number) => `${landed} rescues${aborted ? ` and ${aborted} ${aborted === 1 ? "run" : "runs"} the keeper stopped` : ""}`;
   return [
-    { phase: "Repay from collateral", state: "Built, live on testnet", scope: `The main mode. LeveeUnwind on Base Sepolia and Levee v0.2 on NEAR testnet: ${tally(collateral.success, collateral.aborted)}.` },
+    { phase: "Repay from collateral", state: "Built, live on testnet", scope: `The main mode. LeveeUnwind on Base Sepolia and Arbitrum Sepolia, and Levee v0.2 on NEAR testnet: ${tally(collateral.success, collateral.aborted)}.` },
     { phase: "Repay from a reserve", state: "Built, live on testnet", scope: `The second mode, from USDC held at the rescuer. Levee v0.1 on NEAR testnet: ${tally(reserve.success, reserve.aborted)}.` },
     { phase: "Arbitrum", state: "Built, no live runs", scope: "The contracts support it, and fork tests cover both modes there." },
     { phase: "Reserve layer", state: "Not built", scope: "An off-venue reserve in a NEAR Intents Agent API wallet with pinned destinations. It needs partner access. The dry quote above is the route it would use." },
@@ -205,7 +205,7 @@ export default function HowPage() {
           <h2 className="big" id="who-h">
             Who can do what
           </h2>
-          <p>Each actor has one job. The helper on Base and the contract on NEAR enforce the limits, so a stolen keeper key stays inside them.</p>
+          <p>Each actor has one job. The helper on the lending chain and the contract on NEAR enforce the limits, so a stolen keeper key stays inside them.</p>
         </div>
         <Boards />
         <WorstCase />
@@ -219,7 +219,7 @@ export default function HowPage() {
           <h2 className="big" id="different-h">
             What is different
           </h2>
-          <p>Levee is one of several ways to protect a position in place. DeFi Saver protects Aave v3 positions held in an EOA on Base and Arbitrum, through a Safe operator and an aToken approval.</p>
+          <p>Levee is one of several ways to protect a position in place. DeFi Saver already automates Aave v3 for positions held in an ordinary wallet on Ethereum, Arbitrum, Optimism and Base, with its own bots and upgradeable contracts. The README compares the two, with sources.</p>
         </div>
         <ul className="prose-list">
           <li>The helper, LeveeUnwind, has no owner and cannot be upgraded. The borrower gives it a capped aToken allowance and nothing else: no Safe, no module, no credit delegation.</li>

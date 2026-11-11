@@ -34,8 +34,8 @@ function collateralStops(): Stop[] {
     {
       lane: "P",
       title: "You set the terms",
-      short: "Once, on Base: authorize LeveeUnwind with your trigger, target, price bound, collateral and pool, and approve a capped amount of its aToken.",
-      long: "Once, from your own wallet on Base: authorize(rescuer, maxSlippageBps, triggerHf, targetHf, collateral, poolFee) on LeveeUnwind, and a capped approval of the collateral’s aToken to it. There is no Safe, module or credit delegation. revoke() or a zero allowance stops it at once, without NEAR.",
+      short: "Once, on the lending chain: authorize LeveeUnwind with your trigger, target, price bound, collateral and pool, and approve a capped amount of its aToken.",
+      long: "Once, from your own wallet on the lending chain: authorize(rescuer, maxSlippageBps, triggerHf, targetHf, collateral, poolFee) on LeveeUnwind, and a capped approval of the collateral’s aToken to it. There is no Safe, module or credit delegation. revoke() or a zero allowance stops it at once, without NEAR.",
       where: "Base, once",
     },
     {
@@ -71,8 +71,8 @@ function collateralStops(): Stop[] {
     {
       lane: "P",
       title: "The helper checks and sells",
-      short: "On Base, LeveeUnwind checks your trigger, collateral, pool and bound, repays the USDC and sells just enough collateral.",
-      long: "The keeper checks the signer and broadcasts. Anyone could: the signature is public. On Base, LeveeUnwind requires health factor below your trigger, and the collateral and pool you authorized. The pool sends the USDC first; the helper repays your debt, takes the aTokens the pool is owed and withdraws them to the pool. The sale must be within your bound against Aave’s oracle and within max_sold, and health factor must rise without passing far beyond your target.",
+      short: "On the lending chain, LeveeUnwind checks your trigger, collateral, pool and bound, repays the USDC and sells just enough collateral.",
+      long: "The keeper checks the signer and broadcasts. Anyone could: the signature is public. On the lending chain, LeveeUnwind requires health factor below your trigger, and the collateral and pool you authorized. The pool sends the USDC first; the helper repays your debt, takes the aTokens the pool is owed and withdraws them to the pool. The sale must be within your bound against Aave’s oracle and within max_sold, and health factor must rise without passing far beyond your target.",
       where: "Base or Arbitrum",
       hop: { id: "evm", label: "to inclusion" },
       helper: true,
@@ -215,7 +215,7 @@ export function Terminus() {
       <p className="lab">One terminus</p>
       <Call name="LeveeUnwind.unwind" args={["borrower", "collateral", "amount", "poolFee", "maxSold"]} />
       <div className="terminus-body">
-        <p>The only call a rescue from collateral can make. The keeper sends a position id, an amount, max_sold and fees, and the borrower, collateral and pool are fixed at registration. On Base, before anything moves, the helper checks:</p>
+        <p>The only call a rescue from collateral can make. The keeper sends a position id, an amount, max_sold and fees, and the borrower, collateral and pool are fixed at registration. On the lending chain, before anything moves, the helper checks:</p>
         <ul>
           <li>health factor is below your trigger</li>
           <li>the collateral and pool are the ones you authorized</li>

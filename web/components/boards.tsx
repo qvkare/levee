@@ -24,7 +24,7 @@ const BOARDS: Board[] = [
   {
     key: "U",
     name: "LeveeUnwind",
-    role: "The helper on Base. No owner",
+    role: "The helper on each lending chain. No owner",
     can: ["Sell your authorized collateral, in your authorized pool, to repay your USDC debt, below your trigger"],
     limit: "Can’t",
     limits: ["Act for anyone else", "Change its terms", "Be upgraded"],

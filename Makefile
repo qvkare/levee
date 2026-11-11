@@ -1,6 +1,6 @@
 .PHONY: judge verify replay backtest quote-dry attack-demo test test-contracts test-keeper test-evm test-web
 
-RUN := evidence/runs/2026-11-08T10-39-36Z-base-sepolia-1.json
+RUNS := evidence/runs/2026-11-11T20-37-17Z-arbitrum-sepolia-1.json evidence/runs/2026-11-11T20-37-17Z-base-sepolia-2.json
 
 # No keys and no funds. Run `pnpm install` first.
 judge: verify replay backtest quote-dry
@@ -9,9 +9,9 @@ judge: verify replay backtest quote-dry
 verify:
 	pnpm --silent --filter keeper keeper verify
 
-# Walks one real recorded rescue, offline.
+# Walks the two keyless two-chain rescues, Arbitrum Sepolia then Base Sepolia, offline.
 replay:
-	pnpm --silent --filter keeper keeper replay ../$(RUN)
+	@for run in $(RUNS); do pnpm --silent --filter keeper keeper replay ../$$run || exit 1; done
 
 # Recomputes the backtest from cached data.
 backtest:
