@@ -21,6 +21,7 @@ forge test -vv --match-contract BaseCrashTest
 forge test -vv --match-contract UnwindBaseTest
 forge test -vv --match-contract UnwindArbitrumTest
 forge test -vv --match-contract UnwindBaseSepoliaTest
+forge test -vv --match-contract UnwindArbitrumSepoliaTest
 forge test -vv --match-contract UnwindPoolChoiceBaseTest
 ```
 
@@ -45,6 +46,7 @@ The unwind suites read far more state: about a minute per suite on a cold cache.
 | `BASE_FORK_RPC_URL` | `https://mainnet.base.org` | `BaseRepayTest`, `BaseCrashTest`, `UnwindBaseTest`, `UnwindPoolChoiceBaseTest` |
 | `ARBITRUM_FORK_RPC_URL` | `https://arbitrum-one.public.blastapi.io` | `ArbitrumRepayTest`, `UnwindArbitrumTest` |
 | `BASE_SEPOLIA_FORK_RPC_URL` | `https://sepolia.base.org` | `UnwindBaseSepoliaTest` |
+| `ARBITRUM_SEPOLIA_FORK_RPC_URL` | `https://arbitrum-sepolia.gateway.tenderly.co` | `UnwindArbitrumSepoliaTest` |
 
 No API key is needed. Set a variable to use your own archive endpoint. A fork that lands on the wrong chain or block fails in `setUp` rather than passing quietly.
 
@@ -55,6 +57,7 @@ No API key is needed. Set a variable to use your own archive endpoint. A fork th
 | Base | 54,260,000 | 1794042375 | 11 |
 | Arbitrum One | 522,040,000 | 1794041907 | 11 |
 | Base Sepolia | 56,000,000 | 1794121868 | 10 |
+| Arbitrum Sepolia | 328,000,000 | 1794349405 | 3 |
 
 Blocks are set in `Targets` in `test/lib/AaveFork.sol`, and `FORK_BLOCK` in `keeper/test/support/anvil.ts` must match the Base one.
 
@@ -75,6 +78,9 @@ Measured on 2026-11-07 with `eth_call` at increasing depth.
 | `arbitrum-one-rpc.publicnode.com`, `arbitrum.drpc.org` | No archive state without a token |
 | `sepolia.base.org` | Served state 5,000,000 blocks back, measured on 2026-11-08 |
 | `base-sepolia-rpc.publicnode.com` | Served 1,000,000 blocks back, measured on 2026-11-08 |
+| `arbitrum-sepolia.gateway.tenderly.co` | Served state at block 300,000,000, about 28,000,000 blocks back, measured on 2026-11-11 |
+| `sepolia-rollup.arbitrum.io/rpc` | Prunes. Refused state at block 328,000,000, a few hours old, measured on 2026-11-11 |
+| `arbitrum-sepolia-rpc.publicnode.com`, `arbitrum-sepolia.public.blastapi.io` | No archive state without a token, measured on 2026-11-11 |
 
 A public endpoint can change this at any time. If a fork read fails with a missing-state error, set the variable to another archive endpoint.
 
@@ -185,7 +191,7 @@ event Unwound(address indexed borrower, address indexed rescuer, address indexed
 5. Refuses collateral that is not an Aave reserve, or is inactive or paused. Frozen collateral is sold. Caps `amount` at the USDC variable debt.
 6. Computes `maxIn = amount * price(USDC) / price(collateral) * (1 + maxSlippageBps)` in collateral base units from Aave's oracle, with one `mulDiv` that rounds down. Both prices are in the oracle's base currency, so its unit cancels. The decimals come from Aave's reserve configuration.
 7. Looks the pool up with `factory.getPool(collateral, USDC, poolFee)` and starts an exact-output swap for `amount` USDC to itself, with the price limit at the end of the range.
-8. In the callback, accepts only the pool it is swapping on, once: the pool address sits in transient storage and the callback clears it on entry. It requires exactly `amount` USDC received, collateral owed of at most `maxIn` (`SlippageExceeded`) and at most `maxSold` (`MaxSoldExceeded`). It repays `amount` with `Pool.repay(USDC, amount, 2, borrower)`, pulls the owed aTokens from the borrower with `transferFrom`, and withdraws its whole aToken balance from Aave to the pool.
+8. In the callback, accepts only the pool it is swapping on, once: the pool address sits in transient storage and the callback clears it on entry. It requires exactly `amount` USDC received, collateral owed of at most `maxIn` (`SlippageExceeded`) and at most `maxSold` (`MaxSoldExceeded`). It repays `amount` with `Pool.repay(USDC, amount, 2, borrower)`, pulls the owed aTokens from the borrower with `transferFrom`, and withdraws its whole aToken balance from Aave to the pool. If the transfer left it short of what it owes, which happens only on Aave v3.0 (below), it first pulls the shortfall, at least one scaled unit's worth.
 9. Reads the health factor again. It must have risen, and must not exceed the bound below.
 
 `maxSlippageBps` is all in: the pool fee counts against it. A 0.30% pool leaves 70 bps of a 100 bps bound for price impact and for the pool's distance from the oracle.
@@ -243,7 +249,7 @@ The largest sale the post-check allows, in multiples of the keeper's own amount,
 
 ### Tests
 
-`test/lib/UnwindPath.sol` runs unchanged on all three forks, through `UnwindBase.t.sol`, `UnwindArbitrum.t.sol` and `UnwindBaseSepolia.t.sol`. Every test that reaches the helper ends by asserting that it holds no USDC, WETH, aWETH, scaled aWETH, debt, USDC allowance or ETH. Every keeper-sized unwind sets `maxSold` as the keeper does, from QuoterV2 plus 50 bps, and asserts the quote equals the sale exactly.
+`test/lib/UnwindPath.sol` runs on all four forks, through `UnwindBase.t.sol`, `UnwindArbitrum.t.sol`, `UnwindBaseSepolia.t.sol` and `UnwindArbitrumSepolia.t.sol`. Every test that reaches the helper ends by asserting that it holds no USDC, WETH, aWETH, scaled aWETH, debt, USDC allowance or ETH. Every keeper-sized unwind sets `maxSold` as the keeper does, from QuoterV2 plus 50 bps, and asserts the quote equals the sale exactly.
 
 | Test | Shows |
 |---|---|
@@ -275,9 +281,17 @@ The largest sale the post-check allows, in multiples of the keeper's own amount,
 
 Base Sepolia adds `test_baseSepolia_isPoolRevision10`, `test_seed_putsThePoolAtTheOraclePrice`, `test_seed_rerun_followsTheOracle`, `test_seed_rerunInsideFaucetTimelock_saysWhy`, `test_seed_mintDeadline_leavesTimeToBroadcast` and `test_wrongFeeTier_stalePools_revert`.
 
+Arbitrum Sepolia adds `test_arbitrumSepolia_isPoolRevision3`, the same seed tests without the faucet's, `test_seed_withoutUsdc_saysWhy` and `test_seed_liveFunding_borrowsUsdcOnAave`. The last rehearses the live set-up at its size: a deployer with only ETH wraps it, supplies WETH to Aave, borrows USDC, seeds the pool with it, and a 0.05 WETH borrower is unwound by 34 USDC to the target. Its market lists only WETH and USDC, so the two tests that need a second collateral skip, and so do the three eMode tests: Pool revision 3 configures eMode through an older interface. The large sandwich skips as on Base Sepolia. `test_chainFacts` checks that QuoterV2's WETH9 is not the market's WETH there: Aave lists its own wrapper, and the keeper's ERC-20 quotes do not touch WETH9. `test_unwind_overSaleHeadroom_isSmall` allows 1.25% there instead of 1%: WETH's liquidation threshold is 78%, lower than on the other markets, so the keeper's amount is smaller and the same slack is a larger share of it, 1.0104 times when measured.
+
 `UnwindPoolChoiceBase.t.sol` is the auditor's F2 on Base: an accomplice primes the near-empty 0.04% WETH/USDC pool 0.9% under the oracle, inside the borrower's bound, and the rescuer routes the sale through it. Before the fix it went through and the accomplice kept the bound; now it reverts with `TermsMismatch` and the authorized 0.05% pool still works.
 
 Each regression test fails with its fix undone in the source and passes with it.
+
+### Aave v3.0 rounding, found on Arbitrum Sepolia and fixed
+
+Aave's Arbitrum Sepolia market runs Pool revision 3, Aave v3.0. There, an aToken transfer converts the amount to scaled units rounding half up, and one scaled unit of WETH was worth 4.67 wei, the reserve's income index. Pulling `owed` from the borrower could leave the helper one wei short, `withdraw` then returned `owed - 1`, and every unwind reverted with `ShortWithdraw`. Nothing moved, but nothing could be sold either: 21 of 52 tests failed on the first run of the Arbitrum Sepolia fork on 2026-11-11. Later revisions round the transfer in the receiver's favour, so Base, Arbitrum One and Base Sepolia were never affected.
+
+The helper now reads its aToken balance after the transfer and, if it is below `owed`, pulls the difference too, at least one scaled unit's worth, `ceil(index / 1e27)` base units, because a smaller transfer rounds to nothing. That goes to the pool with the rest. The borrower pays at most about one scaled unit more than `sold`, about 5 wei of WETH on Arbitrum Sepolia, where the tests allow 2 wei plus twice that. On the other revisions the second transfer never runs, and the balance read adds about 3,800 gas. The change came after the security review, and the Base Sepolia deployment at `0x308a7b28…63D2` predates it.
 
 ### Known behaviour, left as is
 
@@ -296,10 +310,11 @@ Each regression test fails with its fix undone in the source and passes with it.
 | Arbitrum, 0.05% (deepest) | 12,423.54 | 5.532317 | 7.0 bps | 1.5184 |
 | Arbitrum, 0.30% | 12,463.73 | 5.578282 | 57.6 bps | 1.5137 |
 | Base Sepolia, seeded 0.30% | 12,727.00 | 5.721938 | 36.2 bps | 1.5190 |
+| Arbitrum Sepolia, seeded 0.30% | 9,666.54 | 4.725716 | 35.1 bps | 1.5128 |
 
 On Base the 0.30% pool holds the most in-range liquidity, 3.25e19 against 7.81e17, but for this size the 0.05% pool costs an eighth as much. The fee, not the depth, decides `pool_fee` at this size.
 
-The health factor lands above the target because the keeper sized for a 130 or 105 bps cost and paid less. The Base Sepolia cost is the 0.30% fee plus impact on liquidity seeded at the oracle price, so it is not a measure of slippage.
+The health factor lands above the target because the keeper sized for a 130 or 105 bps cost and paid less. The Base Sepolia and Arbitrum Sepolia costs are the 0.30% fee plus impact on liquidity seeded at the oracle price, so they are not a measure of slippage. Arbitrum Sepolia repays less for the same 10 WETH because its WETH is priced lower and its liquidation threshold is 78%.
 
 ### Gas
 
@@ -307,13 +322,16 @@ Cold storage, `forge test --isolate`:
 
 | Fork, pool | `unwind` gas |
 |---|---|
-| Base, 0.30% | 564,995 |
-| Base, 0.05% | 594,867 |
-| Arbitrum, 0.05% | 579,674 |
-| Arbitrum, 0.30% | 579,510 |
-| Base Sepolia, seeded 0.30% | 529,151 |
+| Base, 0.30% | 568,836 |
+| Base, 0.05% | 598,708 |
+| Arbitrum, 0.05% | 583,409 |
+| Arbitrum, 0.30% | 583,245 |
+| Base Sepolia, seeded 0.30% | 532,978 |
+| Arbitrum Sepolia, seeded 0.30%, with the v3.0 top-up | 665,938 |
 
-`forge test --isolate --gas-report` gives 521,847 to 587,563 over the same calls, about 4,800 more than before the audit fixes: the sentinel read, the second storage slot of the authorization and `maxSold`. `authorize` costs 112,047 to 114,286, with its reserve and pool checks. A `gas_limit_unwind` of 1,000,000 leaves about 70% headroom for the 63/64 rule in the nested Aave and Uniswap calls and for swaps that cross more ticks. A market with a sentinel adds its Chainlink read. On Arbitrum a transaction's gas also pays for its L1 data, which a fork does not model, so confirm that limit on testnet. Deployment costs 2,198,239 gas; Foundry's simulation, with its margin, estimates 2.85M to 2.89M on the three chains.
+Measured on 2026-11-11, after the Aave v3.0 fix. Its balance read added 3,735 to 3,841 gas on each of the first five, and on Arbitrum Sepolia the second aToken transfer runs too.
+
+Before the Aave v3.0 fix, `forge test --isolate --gas-report` gave 521,847 to 587,563 over the same calls, about 4,800 more than before the audit fixes: the sentinel read, the second storage slot of the authorization and `maxSold`. `authorize` costs 112,047 to 114,286, with its reserve and pool checks. A `gas_limit_unwind` of 1,000,000 leaves about 70% headroom for the 63/64 rule in the nested Aave and Uniswap calls and for swaps that cross more ticks, and 50% on Arbitrum Sepolia with its top-up. A market with a sentinel adds its Chainlink read. On Arbitrum a transaction's gas also pays for its L1 data, which a fork does not model. Read from Arbitrum's NodeInterface (`0x…C8`, `gasEstimateL1Component`) on 2026-11-11 for an `unwind` call: 938 gas on Arbitrum One at a 0.02 gwei base fee, and 0 on Arbitrum Sepolia, whose L1 base fee estimate read zero. Both fit the limit. Deployment costs 2,198,239 gas; Foundry's simulation, with its margin, estimates 2.85M to 2.89M on the first three chains.
 
 ```sh
 forge test --isolate --match-test 'test_unwind_(deepest|other)Pool' -vv
@@ -331,7 +349,8 @@ forge test --isolate --match-test 'test_unwind_(deepest|other)Pool' -vv
 | Isolation mode | Removed in Aave v3.7, Pool revision 11. On revision 10, Aave lets an isolated borrower be unwound and the repay releases the debt ceiling |
 | An exact-output swap through an empty range | Fills what it can and stops at the price limit: `PartialFill` |
 | A pool already at the bottom of its range | Uniswap reverts `SPL` |
-| QuoterV2 `quoteExactOutputSingle` just before the swap | Equals the collateral the swap takes, to the wei, on all three forks |
+| QuoterV2 `quoteExactOutputSingle` just before the swap | Equals the collateral the swap takes, to the wei, on all four forks |
+| aToken `transferFrom` on Pool revision 3 | Converts to scaled units rounding half up, so the receiver can get one base unit less than the amount. A transfer smaller than one scaled unit, 4.67 wei of WETH on Arbitrum Sepolia, can move nothing. The helper allows for both |
 
 ## Verified addresses
 
@@ -342,6 +361,7 @@ Read on chain at the pinned blocks. `script/lib/Deployments.sol` holds them, and
 | Base | `0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D` | `0x33128a8fC17869897dcE68Ed026d694621f6FDfD` | 0.30% `0x6c561B446416E1A00E8E93E221854d6eA4171372`, 0.05% `0xd0b53D9277642d899DF5C87A3966A349A798F224` |
 | Arbitrum One | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | `0x1F98431c8aD98523631AE4a59f267346ea31F984` | 0.05% `0xC6962004f452bE9203591991D15f6b388e09E8D0`, 0.30% `0xc473e2aEE3441BF9240Be85eb122aBB059A3B57c` |
 | Base Sepolia | `0xE4C23309117Aa30342BFaae6c95c6478e0A4Ad00` | `0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24` | 0.30% `0x92266210FacF124f190fbad79AA230dfB85926Ce`, seeded by the script |
+| Arbitrum Sepolia | `0xB25a5D144626a0D488e52AE717A051a2E9997076` | `0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e` | 0.30% `0x99A927D8127b7215FC11Ce1F1009e77ff8B1d1b0`, seeded by the script |
 
 The keeper quotes `maxSold` from Uniswap v3 QuoterV2. The helper never calls it.
 
@@ -350,6 +370,7 @@ The keeper quotes `maxSold` from Uniswap v3 QuoterV2. The helper never calls it.
 | Base | `0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a` |
 | Arbitrum One | `0x61fFE014bA17989E743c5F6cB21bF9697530B21e` |
 | Base Sepolia | `0xC5290058841028F1614F3A6F0F5816cAd0df5E27` |
+| Arbitrum Sepolia | `0x2779a0CC1c3e0E44D2542EC3e79e3864Ae93Ef0B` |
 
 - PoolAddressesProvider: `bgd-labs/aave-address-book` at commit `d4c2848e`, files `src/AaveV3Base.sol`, `AaveV3Arbitrum.sol` and `AaveV3BaseSepolia.sol`. On each fork `provider.getPool()` returns the section 3 Pool, and `Pool.ADDRESSES_PROVIDER()` returns the provider.
 - Uniswap v3 factory: the official tables at `developers.uniswap.org/docs/protocols/v3/deployments`, v3-core 1.0.0. On chain each has 24,535 bytes of code and tick spacings 1, 10, 60 and 200 for fees 100, 500, 3000 and 10000.
@@ -357,6 +378,7 @@ The keeper quotes `maxSold` from Uniswap v3 QuoterV2. The helper never calls it.
 - QuoterV2: Uniswap's deployments feed, `developers.uniswap.org/deployments.json`, generated on 2026-11-04 from `Uniswap/contracts` at commit `036160f7`, which the deployments page links to. Read on 2026-11-08 with `cast` at the pinned blocks: each has 8,273 bytes of code, `factory()` returns the factory above and `WETH9()` the chain's WETH. On Base and Arbitrum it quoted 10,000 USDC out of the 0.05% pool at 4.453 WETH; on Base Sepolia, where the 0.30% pool is unseeded at that block, it reverted, and on the fork it quotes the seeded pool. `test_chainFacts` checks code, factory and WETH on every fork, and every keeper-sized unwind checks a quote against the sale. `Deployments.quoterV2` holds them.
 - Base Sepolia market: WETH is the chain's WETH9 predeploy `0x4200000000000000000000000000000000000006`, and USDC is Aave's test token `0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f`. The test token's `owner()` is Aave's faucet `0xD9145b5F45Ad4519c7ACcD6E0A4A82e83bB8A6Dc`, whose `getTokenConfig(USDC)` read 3,600 seconds and 1,000,000 tokens: one mint an hour per address, up to a million test USDC.
 - At the pinned Base Sepolia block every fee tier for this pair already had a pool, at prices others had left: 0.01% at 0.98 of the oracle price, 0.05% at the bottom of its range, 0.30% at 0.60 and 1% at 1.34.
+- Arbitrum Sepolia market, read on 2026-11-11: Pool `0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff`, revision 3, with two reserves. USDC is Circle's testnet token `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d`, a FiatToken that only Circle can mint, so there is no faucet a script can call. WETH is Aave's own wrapper `0x1dF462e2712496373A347f8ad10802a5E95f053D`, with `deposit()`, at LTV 75% and a 78% liquidation threshold; Uniswap's WETH9 there is a different contract, `0x980B62Da83eFf3D4576C647993b0c1D7faf17c73`. The provider and pool are not in the address book at the commit above; `provider.getPool()` returns the Pool and `Pool.ADDRESSES_PROVIDER()` the provider. NonfungiblePositionManager `0x6b2937Bde17889EDCf8fbD8dE31C3C2a70Bc4d65`, whose `factory()` is the factory above. QuoterV2 has 8,273 bytes of code and `factory()` returns the factory above. Every fee tier for WETH/USDC had a pool: the 0.30% one was empty and priced near zero, the 0.05% and 1% ones held under 1 USDC and 158 USDC of others' liquidity.
 
 ## Scripts
 
@@ -364,7 +386,7 @@ Neither script sends anything unless run with `--broadcast`. Run it without firs
 
 ### DeployUnwind
 
-Deploys `LeveeUnwind` with the constructor arguments for the chain the RPC serves, which must be Base, Arbitrum One or Base Sepolia. It signs with `DEPLOYER_PRIVATE_KEY` if that is set, and otherwise with Foundry's wallet flags.
+Deploys `LeveeUnwind` with the constructor arguments for the chain the RPC serves, which must be Base, Arbitrum One, Base Sepolia or Arbitrum Sepolia. It signs with `DEPLOYER_PRIVATE_KEY` if that is set, and otherwise with Foundry's wallet flags.
 
 Base Sepolia, from the test EOA in the repo root's gitignored `.env.testnet-evm`:
 
@@ -385,7 +407,7 @@ Funds: ETH for about 2.2M gas. Nothing else.
 
 ### SeedTestnetPool
 
-Moves the Base Sepolia Uniswap v3 pool for Aave's WETH and test USDC to Aave's oracle price and adds a position around it, so `unwind` can run live. Every tier for the pair already exists, so the script swaps the pool to the oracle price with a small `PoolPriceMover` contract it deploys. SwapRouter02 cannot do this, because it refuses a swap across an empty range. The script then mints a position with the official NonfungiblePositionManager, owned by the deployer. It reads the key from `TEST_EOA_PRIVATE_KEY` and does not print it.
+Moves the Uniswap v3 pool for an Aave testnet market's WETH and USDC to Aave's oracle price and adds a position around it, so `unwind` can run live. It runs on Base Sepolia and Arbitrum Sepolia. Every tier for the pair already exists, so the script swaps the pool to the oracle price with a small `PoolPriceMover` contract it deploys. SwapRouter02 cannot do this, because it refuses a swap across an empty range. The script then mints a position with the official NonfungiblePositionManager, owned by the deployer. It reads the key from `TEST_EOA_PRIVATE_KEY` and does not print it.
 
 ```sh
 cd evm
@@ -407,10 +429,28 @@ forge script script/SeedTestnetPool.s.sol --rpc-url https://sepolia.base.org --b
 Funds and test tokens:
 
 - Base Sepolia ETH for `SEED_WETH_WEI` plus gas. A first run on the fork used 1.46M execution gas over about a dozen transactions, so budget 2M. The first live run sent 11 transactions for 1,466,132 gas. The script wraps any WETH it lacks from the deployer's ETH and keeps the gas reserve.
-- Test USDC comes from Aave's faucet. The script asks it for any shortfall plus 10,000, which pays for moving the price up. The faucet allows one mint an hour per address, so a second run inside the hour needs the USDC already in the wallet. Otherwise it stops with `faucet timelock: wait an hour or lower SEED_USDC_UNITS`.
+- On Base Sepolia, test USDC comes from Aave's faucet. The script asks it for any shortfall plus 10,000, which pays for moving the price up. The faucet allows one mint an hour per address, so a second run inside the hour needs the USDC already in the wallet. Otherwise it stops with `faucet timelock: wait an hour or lower SEED_USDC_UNITS`.
+- On Arbitrum Sepolia, the market's USDC is Circle's and has no faucet a script can call, so the deployer must hold `SEED_USDC_UNITS` first, and at least one base unit, which moving the empty pool's price needs. Otherwise the script stops with `no USDC faucet on this chain: hold SEED_USDC_UNITS of USDC first, e.g. borrowed on Aave`. Borrow it on Aave against WETH, as `test_seed_liveFunding_borrowsUsdcOnAave` rehearses:
+
+  ```sh
+  # Once: cast wallet import levee-test --interactive   (the test EOA, into a Foundry keystore)
+  RPC=https://sepolia-rollup.arbitrum.io/rpc
+  POOL=0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff
+  WETH=0x1dF462e2712496373A347f8ad10802a5E95f053D
+  USDC=0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d
+  ME=$(cast wallet address --account levee-test)
+  cast send $WETH "deposit()" --value 0.15ether --account levee-test --rpc-url $RPC
+  cast send $WETH "approve(address,uint256)" $POOL 0.1ether --account levee-test --rpc-url $RPC
+  cast send $POOL "supply(address,uint256,address,uint16)" $WETH 0.1ether $ME 0 --account levee-test --rpc-url $RPC
+  cast send $POOL "borrow(address,uint256,uint256,uint16,address)" $USDC 60000000 2 0 $ME --account levee-test --rpc-url $RPC
+  set -a; . ../.env.testnet-evm; set +a   # the seed script itself reads TEST_EOA_PRIVATE_KEY
+  SEED_WETH_WEI=20000000000000000 SEED_USDC_UNITS=40000000 forge script script/SeedTestnetPool.s.sol --rpc-url $RPC
+  ```
+
+  Then run it again with `--broadcast`.
 - At the pinned block the 0.30% pool held 0.42 WETH and 497 test USDC of other people's liquidity. Moving its price up to the oracle buys at most that WETH, for test USDC.
 
-The defaults put 0.2 WETH and about 450 test USDC in a 6% range. By that position's virtual reserves, not measured, a 50 USDC unwind would cost about 0.65% with the fee, so keep live unwinds to tens of USDC under a 100 bps bound, or seed more. The oracle tracks the real ETH price and nobody arbitrages this pool back to it, so run the script again shortly before each live unwind. A rerun moves the price through the existing position and adds to it. `UnwindBaseSepoliaTest` runs the same script before every test, from an address that holds only ETH.
+The defaults put 0.2 WETH and about 450 test USDC in a 6% range. By that position's virtual reserves, not measured, a 50 USDC unwind would cost about 0.65% with the fee, so keep live unwinds to tens of USDC under a 100 bps bound, or seed more. The oracle tracks the real ETH price and nobody arbitrages this pool back to it, so run the script again shortly before each live unwind. A rerun moves the price through the existing position and adds to it. `UnwindBaseSepoliaTest` runs the same script before every test, from an address that holds only ETH, and `UnwindArbitrumSepoliaTest` from one given USDC with `deal`.
 
 Once the pool sits at the oracle price, other people's small swaps of test ETH for USDC go through it too, and each unwind is itself a sale. Live, it read 40 to 90 bps under the oracle within minutes of a recentring, so rerun the script with a small `SEED_WETH_WEI`, such as 0.001 WETH, right before each unwind.
 

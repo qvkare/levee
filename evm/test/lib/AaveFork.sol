@@ -2,6 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {Test} from "forge-std/Test.sol";
+import {IAavePool} from "../../src/interfaces/IAaveV3.sol";
 import {IAaveOracle, IERC20Like, IPool, IPoolAddressesProvider, IScaledBalance} from "./AaveInterfaces.sol";
 
 /// One chain's fork target. Values match docs/SPEC.md section 3.
@@ -64,6 +65,24 @@ library Targets {
             weth: 0x4200000000000000000000000000000000000006
         });
     }
+
+    /// Aave's Arbitrum Sepolia market, Pool revision 3. USDC is Circle's testnet token,
+    /// which nobody but Circle can mint. WETH is the market's own wrapper, not Uniswap's
+    /// WETH9. sepolia-rollup.arbitrum.io prunes state and publicnode wants a token for
+    /// archive reads; the Tenderly gateway served this block when measured. See evm/README.md.
+    function arbitrumSepolia() internal pure returns (ForkTarget memory) {
+        return ForkTarget({
+            name: "Arbitrum Sepolia",
+            rpcEnv: "ARBITRUM_SEPOLIA_FORK_RPC_URL",
+            rpcDefault: "https://arbitrum-sepolia.gateway.tenderly.co",
+            forkBlock: 328_000_000,
+            forkTimestamp: 1_794_349_405,
+            chainId: 421614,
+            pool: 0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff,
+            usdc: 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d,
+            weth: 0x1dF462e2712496373A347f8ad10802a5E95f053D
+        });
+    }
 }
 
 /// Fork set-up and position helpers shared by every suite.
@@ -106,8 +125,9 @@ abstract contract AaveFork is Test {
         oracle = IAaveOracle(IPoolAddressesProvider(pool.ADDRESSES_PROVIDER()).getPriceOracle());
         usdc = IERC20Like(target.usdc);
         weth = IERC20Like(target.weth);
-        aWeth = IERC20Like(pool.getReserveAToken(target.weth));
-        vDebtUsdc = IERC20Like(pool.getReserveVariableDebtToken(target.usdc));
+        // getReserveData works on every revision; getReserveAToken does not exist before 3.2.
+        aWeth = IERC20Like(IAavePool(address(pool)).getReserveData(target.weth).aTokenAddress);
+        vDebtUsdc = IERC20Like(IAavePool(address(pool)).getReserveData(target.usdc).variableDebtTokenAddress);
     }
 
     /// Supplies WETH and borrows USDC at a variable rate, sized to a health factor.
