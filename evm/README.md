@@ -490,3 +490,53 @@ The pool is ours and seeded at the oracle price, so what an unwind paid in it is
 | Approve 0.04 aWETH (`0x73a5bB60b0B0fc35710DDc0ea9c407031E31Bdbb`) to the helper | [`0x769eb78d…3d42`](https://sepolia.basescan.org/tx/0x769eb78d01af8e5b16c4a663ed27f1b8781d3a0b81a49b0e942efc9929383d42) |
 | 0.0015 ETH to the rescuer for gas | [`0xdadbf319…1655`](https://sepolia.basescan.org/tx/0xdadbf31957e0d46bf47bfa28f97ecad34194f3f03a655166ad5689b03f941655) |
 | Borrows that took the health factor to 1.48 before each attempt | [`0x97bddc04…2e99`](https://sepolia.basescan.org/tx/0x97bddc04632626cfeb3b539b62e8be06c18500e3057327b338d6570ccb272e99), [`0xd991e429…1802`](https://sepolia.basescan.org/tx/0xd991e429bad8e0dbfe7d02d26e3e05bd9eb4519c2fb3a9602491850ea25e1802), [`0x7a232145…a02f`](https://sepolia.basescan.org/tx/0x7a232145eff0a912e1d556e8e51e50d62cb5b3fec3b90ac730841b342931a02f), [`0xaf8bda8c…f733`](https://sepolia.basescan.org/tx/0xaf8bda8c79f1d53d3e9c46c13ec154caf77e9ae75ec0e20ac4bc5a2cf236f733), [`0x2b49a1ae…8bd2`](https://sepolia.basescan.org/tx/0x2b49a1ae9a91123b0d1e7c9e0bb66cc5b05c362748acfa80ec2b270b03d28bd2) |
+
+
+## Two-chain deployment
+
+On 2026-11-11, from `develop` at `7b23c77`, for the NEAR contract `levee-v2-multi-1503.testnet`, which lists both chains (`contracts/README.md`, "v0.2 on two chains"). The work was signed by a new test EOA, `0xDb6A55bf949E488cb42BAD27C4714220100F3793`, whose key is only in the gitignored `.env.testnet-evm`. It also borrows on both chains. Hashes were read back from the chains.
+
+Funding came as Ethereum Sepolia ETH, bridged through each chain's official contracts after checking them against the chains' docs and on chain:
+
+| Bridge | Transaction | Arrived |
+|---|---|---|
+| 0.045 ETH to Base Sepolia, `L1StandardBridge.depositETH` at `0xfd0Bf71F60660E2f608ed56e1659C450eB113120` | [`0xb460559b…ee8a`](https://sepolia.etherscan.io/tx/0xb460559b5722f0360aef6d6aa44d348673cc47a58f53e26b1243a7cfda1fee8a) | after about 5 minutes |
+| 0.05 ETH to Arbitrum Sepolia, `Inbox.depositEth` at `0xaAe29B0366299461418F5324a79Afc425BE5ae21` | [`0x1c0e903b…b990`](https://sepolia.etherscan.io/tx/0x1c0e903b147acebba61a83559cc3573c78c0f1f9f49992b791332a71affbb990) | after about 11.5 minutes |
+
+`LeveeUnwind` with the Aave v3.0 fix landed at the same address on both chains, the same deployer at nonce 0, and Sourcify matches it exactly to this directory's source on both:
+
+| Chain | `LeveeUnwind` | Deployment | Source |
+|---|---|---|---|
+| Base Sepolia | [`0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8`](https://sepolia.basescan.org/address/0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8) | [`0xa7ac24df…f0bb`](https://sepolia.basescan.org/tx/0xa7ac24df167585f5ec43bc5cabacfb3c19d97cce72db6a7d39af03dd91e8f0bb), block 57,531,197, 2,268,039 gas | [Sourcify](https://repo.sourcify.dev/84532/0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8) |
+| Arbitrum Sepolia | [`0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8`](https://sepolia.arbiscan.io/address/0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8) | [`0x8c1bd728…7291`](https://sepolia.arbiscan.io/tx/0x8c1bd728d8639698818b05c0dad91d14ea6387d5940850621ca2a146362a7291), block 328,292,187, 2,269,154 gas | [Sourcify](https://repo.sourcify.dev/421614/0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8) |
+
+Each constructor's three values were read back and matched `Deployments.unwindArgs`.
+
+### Pools
+
+Both are 0.30% WETH/USDC pools that `SeedTestnetPool` moved to the oracle price and then added a position to, `SEED_RANGE_TICKS` 120, about 1.2% either side.
+
+| Chain | Run | Move | Mint | Position |
+|---|---|---|---|---|
+| Base Sepolia | First. The pool had drifted to tick -230,601, about $0.10 per WETH, against an oracle of $2,081. The move bought 0.395 WETH of others' liquidity for faucet USDC. `PRICE_MOVER` `0x102515C4…E2F1` | [`0x6f3784f0…d68a`](https://sepolia.basescan.org/tx/0x6f3784f0379468a09825561d875b3d390a30ac40805a68e3bbb659bd3291d68a) | [`0xab9e6445…c21a`](https://sepolia.basescan.org/tx/0xab9e6445c5c861e8b4158d864a2e0f6cd14353062c400c391270a210b5dac21a) | 84973, 0.01 WETH and 15.66 USDC |
+| Base Sepolia | Before the second pair, 62 bps under the oracle | [`0x83b4348c…0ee4`](https://sepolia.basescan.org/tx/0x83b4348c5aa4f1e08481fa3b2974944b07de59f66e1422f81c3abc6577750ee4) | [`0x21a8260d…cb21`](https://sepolia.basescan.org/tx/0x21a8260dc952053fa2368f03fcfa841dd38b58a3b569040ed7275fe12129cb21) | 0.001 WETH |
+| Arbitrum Sepolia | First. The pool was empty, priced near zero. It deployed `PoolPriceMover` `0x531Fc7F162Efdcc43512E09DB28d429CdEe87Fe7` in [`0xa2fa40b0…9970`](https://sepolia.arbiscan.io/tx/0xa2fa40b0ddaac21fa3e6f2b0ac1b4aa169125ab09595586bbc2b62e6771a9970) | [`0x30da1971…3895`](https://sepolia.arbiscan.io/tx/0x30da1971e359f06f1c286eb7748ed976cc4b4e55838ee375b12e634ad5c33895) | [`0xc57462dc…972f`](https://sepolia.arbiscan.io/tx/0xc57462dc56efaa7615c144e8543ec922895cefece6d64839c053733a50ee972f) | 4132, 0.013 WETH and 18.25 USDC borrowed on Aave |
+| Arbitrum Sepolia | Before the second pair, 40 bps under the oracle | [`0x7a71b920…f0f9`](https://sepolia.arbiscan.io/tx/0x7a71b920cfec81fbc321748729bb7b5585f46900210c768f0e68ff93607df0f9) | [`0x903bdfb3…34e4`](https://sepolia.arbiscan.io/tx/0x903bdfb3b3518df82da3edd044c0323c8bc1a1b805e987f9f7632147456534e4) | 0.001 WETH |
+
+### Borrower
+
+The same EOA borrows on both chains. Each `authorize` names that chain's rescuer from the NEAR contract and sets trigger 1.5, target 1.6, 100 bps, WETH and fee 3000.
+
+| Step | Base Sepolia | Arbitrum Sepolia |
+|---|---|---|
+| Wrap ETH | done by the seed run | 0.045 ETH, [`0x0dfa3d0a…2aa3`](https://sepolia.arbiscan.io/tx/0x0dfa3d0ac1688f8e73f9e8c43598e1eb347fa8a9933744cf12ad397bd8d62aa3) |
+| Approve WETH to Aave | [`0x24f9449d…df0d`](https://sepolia.basescan.org/tx/0x24f9449db22c30b3d4b6a931cc385fba221f71da25738828c4a38bc0ef20df0d) | [`0x4d5d8c1c…816e`](https://sepolia.arbiscan.io/tx/0x4d5d8c1c6ead2519de5a2cb6bcfaffa434550f6b59aeb22cf4d1e6b791dd816e) |
+| Supply WETH | 0.04, [`0x572c571c…79b9`](https://sepolia.basescan.org/tx/0x572c571c30abbb7e91d004c1de29d2ba62df4f3ee39f3fed3ac6f300ecc179b9) | 0.03, [`0xb2bb2626…bfb3`](https://sepolia.arbiscan.io/tx/0xb2bb262612ff312bb440d2fedd08f0f8950634c2e9b02b4b2b4419e3c7afbfb3) |
+| Borrow USDC for the pool | none, faucet USDC | 28 USDC, [`0x67f76f4e…3a34`](https://sepolia.arbiscan.io/tx/0x67f76f4e6a526099cdeb920ed9d984c1f43aca9060c29f6f60a305f5be483a34) |
+| `authorize` | rescuer `0x6d65…0295`, [`0xcf8f24e0…6dc8`](https://sepolia.basescan.org/tx/0xcf8f24e0118982f901ec8633fd143e6f09beafc3520ca6588f4fbdc182ff6dc8) | rescuer `0x0084…9403`, [`0x2ccb3cdd…f9b1`](https://sepolia.arbiscan.io/tx/0x2ccb3cdd3ef39b73979a6f3957edba3524708ae8cf740f4a7fc2e6223694f9b1) |
+| Approve aWETH to the helper | 0.04 of `0x73a5…Bdbb`, [`0xf985b76d…67ba`](https://sepolia.basescan.org/tx/0xf985b76d042eb796836ead82d69df76e3bdc7490889f7c26a27ede1f0fc967ba) | 0.03 of `0xf5f1…CE60`, [`0xf9e69653…daca`](https://sepolia.arbiscan.io/tx/0xf9e696534f459622e41905993f24191b3cd85914d60b682634ec05e55bdbdaca) |
+| Gas to the rescuer | 0.002 ETH, [`0xbabaaad9…b579`](https://sepolia.basescan.org/tx/0xbabaaad90d72a5680ae02c57b2983f5d6b9ec23755ef26f3c1076e523484b579) | 0.0015 ETH, [`0x372b9bb1…dde9`](https://sepolia.arbiscan.io/tx/0x372b9bb1f77d5a72e54c61c316d84007d19e146df7736bd675d1d1e2ee8cdde9) |
+| Borrow to health factor 1.45, first pair | 48.8 USDC, [`0xaaff6cec…ece6`](https://sepolia.basescan.org/tx/0xaaff6cec8e245e357e97094207b1e98274f324340c759cd6c537cb26e150ece6) | 5.6 USDC, [`0xcf3c3066…9e06`](https://sepolia.arbiscan.io/tx/0xcf3c30667ba9d210487eafe6be419bdca9e3c682ff314fb0f3e35bf3b2bc9e06) |
+| Borrow to health factor 1.45, second pair | 3.99 USDC, [`0xa077f1ad…a82d`](https://sepolia.basescan.org/tx/0xa077f1ad10e78262859908f0e8f7fe17061bb90d7b296d088e9644c5d704a82d) | 2.83 USDC, [`0x62615334…9663`](https://sepolia.arbiscan.io/tx/0x62615334f6d65ed6463c0e0d820891f50bc5b552047beae9e265d5e1d2569663) |
+
+The four unwinds are in `evidence/runs/` and `docs/SPEC.md` section 9, "One contract, two chains". As before, the pools are ours, so what the sales paid is not a measure of slippage.

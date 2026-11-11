@@ -122,7 +122,7 @@ export function OutLinks({ next }: { next: { href: string; title: string; body: 
         </span>
         <span>
           <b>{CONTRACT_ID}</b>
-          <small>The v0.2 contract on NearBlocks, with every rescue call</small>
+          <small>The two-chain v0.2 contract on NearBlocks, with every rescue call</small>
         </span>
       </a>
       <a className="sign-card sign-card-U" href={UNWIND_URL} rel="noreferrer">
@@ -131,7 +131,7 @@ export function OutLinks({ next }: { next: { href: string; title: string; body: 
         </span>
         <span>
           <b>LeveeUnwind</b>
-          <small>The helper on Basescan Sepolia, with every unwind</small>
+          <small>The helper on Basescan Sepolia, at the same address on Arbiscan Sepolia</small>
         </span>
       </a>
       {GITHUB_URL ? (

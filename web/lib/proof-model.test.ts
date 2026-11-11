@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
-import { LEVEE_V1, LEVEE_V2, UNWIND } from "./contracts.ts";
+import { HELPERS, LEVEE_TWO_CHAINS, LEVEE_V1, LEVEE_V2, UNWIND } from "./contracts.ts";
 import { evidenceDir, parseRun, readRuns, type Claim } from "./evidence.ts";
 import { seconds } from "./format.ts";
 import { buildProof, dayList, hop, medianRun, monthName, overall, plainReason, rangeName, tokenAmount, usdcAmount } from "./proof-model.ts";
@@ -176,7 +176,7 @@ test("the repository's runs give the figures the site states", () => {
   assert.equal(proof.replay.id, proof.keyless.run);
   assert.equal(proof.replay.chosen, "keyless");
   assert.equal(proof.replay.mode, "collateral");
-  assert.equal(proof.replay.contract, LEVEE_V2);
+  assert.equal(proof.replay.contract, LEVEE_TWO_CHAINS);
   assert.ok(proof.replay.sale?.sold);
   assert.equal(landed.find((entry) => entry.replayed)?.id, proof.replay.id);
   // Every collateral rescue sold something and says how far from the oracle it sold.
@@ -198,7 +198,7 @@ test("the hop table states the README's figures", () => {
   const rows: Array<[string, "near" | "mpc" | "evm" | "overall"]> = [
     ["Detection to NEAR inclusion", "near"],
     ["NEAR inclusion to MPC signature", "mpc"],
-    ["Broadcast to Base inclusion", "evm"],
+    ["Broadcast to lending-chain inclusion", "evm"],
     ["Total from detection", "overall"],
   ];
   for (const [label, id] of rows) {
@@ -233,8 +233,13 @@ test("every run record names one of the site's contracts, by mode", () => {
   const dir = evidenceDir();
   for (const name of readdirSync(dir).filter((file) => file.endsWith(".json"))) {
     const record = JSON.parse(readFileSync(`${dir}/${name}`, "utf8")) as { near_contract?: string; mode?: string; trace?: { collateral?: { helper?: string } } };
-    assert.equal(record.near_contract, record.mode === "collateral" ? LEVEE_V2 : LEVEE_V1, name);
-    if (record.mode === "collateral") assert.equal(record.trace?.collateral?.helper, UNWIND, name);
+    if (record.mode === "collateral") {
+      assert.ok(record.near_contract === LEVEE_V2 || record.near_contract === LEVEE_TWO_CHAINS, name);
+      assert.equal(record.trace?.collateral?.helper, HELPERS[record.near_contract], name);
+    } else {
+      assert.equal(record.near_contract, LEVEE_V1, name);
+    }
   }
-  assert.deepEqual(buildProof({ runs: readRuns(dir), ...none }).contracts.sort(), [LEVEE_V1, LEVEE_V2].sort());
+  assert.equal(HELPERS[LEVEE_V2], UNWIND);
+  assert.deepEqual(buildProof({ runs: readRuns(dir), ...none }).contracts.sort(), [LEVEE_TWO_CHAINS, LEVEE_V1, LEVEE_V2].sort());
 });

@@ -208,4 +208,70 @@ Run on 2026-11-08 with the steps above, from wasm SHA-256 `991dda79c3cff0138c871
 | `delete-keys` on v0.2, `levee-core-v2-1503.testnet` | Its only full-access key, `ed25519:GRz6zN114TpPrRB5Go6zANhjC2csyW7kuLwUsWJV2ZdE`, deleted at block 276,764,289. No access key is left | [`C5aHVAah…zJJA`](https://testnet.nearblocks.io/txns/C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA) |
 | `rescue_from_collateral` after the deletion | Run `2026-11-08T10-39-36Z-base-sepolia-1`: the keeper's function-call key asked, the keyless contract signed through MPC, and the unwind repaid 7.31 USDC on Base Sepolia, health factor 1.48 to 1.8035 | [`EXWuscQy…oan3j`](https://testnet.nearblocks.io/txns/EXWuscQyobKfnFwUFvs7higAinm6RmRpCJ7ThLioan3j), block 276,764,677 |
 
-Both testnet contract accounts are now locked as a mainnet deployment would be: no key can sign for them, so only their own code acts for them, and the 1 yoctoNEAR each signature costs still comes from their balance. The claim `contracts-keyless-rescue-after` in `evidence/claims.json` names both accounts in `no_access_keys`, so `make verify` reads their key lists every time. The EVM side, the rescues and their records are in `evm/README.md` ("Base Sepolia deployment") and `docs/SPEC.md` section 9 ("Testnet").
+Both testnet contract accounts were then locked as a mainnet deployment would be: no key can sign for them, so only their own code acts for them, and the 1 yoctoNEAR each signature costs still comes from their balance. The claim `contracts-keyless-rescue-after` in `evidence/claims.json` names both accounts in `no_access_keys`, so `make verify` reads their key lists every time. The EVM side, the rescues and their records are in `evm/README.md` ("Base Sepolia deployment") and `docs/SPEC.md` section 9 ("Testnet").
+
+### v0.2 on two chains
+
+The same wasm, deployed again on 2026-11-11 to a new account, with Base Sepolia and Arbitrum Sepolia in its chain list. Base Sepolia uses a new `LeveeUnwind`, which has the Aave v3.0 fix that the Arbitrum Sepolia fork found. That helper is at the same address on both chains (`evm/README.md`, "Two-chain deployment").
+
+`contracts/build.sh` on 2026-11-11 gave wasm SHA-256 `991dda79c3cff0138c871dbc4a9d96087450dd76dcf3ecf3892db8995003eab3`, the same as v0.2. Both accounts report code hash `BJhnFqoK1e6JJQqKiciUtfQxmouGi81hhfJ3qPVRUASE`, its base58 form. Anyone can compare them:
+
+```sh
+for a in levee-core-v2-1503.testnet levee-v2-multi-1503.testnet; do
+  curl -s https://rpc.testnet.near.org -H 'Content-Type: application/json' \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"query\",\"params\":{\"request_type\":\"view_account\",\"finality\":\"final\",\"account_id\":\"$a\"}}" | jq -r '.result.code_hash'
+done
+```
+
+The account was created by the testnet faucet service, which funds it with 10 NEAR, so the owner's balance was not touched. Its key went to the legacy keychain:
+
+```sh
+near account create-account sponsor-by-faucet-service levee-v2-multi-1503.testnet \
+  autogenerate-new-keypair save-to-legacy-keychain network-config testnet create
+```
+
+Deploy and `new` with both chains. The fee ceilings and gas limits are v0.2's on both chains. Arbitrum's NodeInterface read zero L1 data gas for an `unwind` on Arbitrum Sepolia, and 938 on Arbitrum One, so 1,000,000 fits.
+
+```sh
+UNWIND=0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8
+near contract deploy levee-v2-multi-1503.testnet use-file contracts/target/near/levee/levee.wasm \
+  with-init-call new json-args "$(jq -cn --arg unwind "$UNWIND" '{
+    mpc_contract: "v1.signer-prod.testnet",
+    chains: [
+      { chain_id: 84532, pool: "0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27", usdc: "0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f", unwind: $unwind,
+        max_fee_per_gas_ceiling: "5000000000", max_priority_fee_ceiling: "2000000000",
+        gas_limit_approve: 100000, gas_limit_repay: 300000, gas_limit_transfer: 100000, gas_limit_unwind: 1000000 },
+      { chain_id: 421614, pool: "0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff", usdc: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", unwind: $unwind,
+        max_fee_per_gas_ceiling: "5000000000", max_priority_fee_ceiling: "2000000000",
+        gas_limit_approve: 100000, gas_limit_repay: 300000, gas_limit_transfer: 100000, gas_limit_unwind: 1000000 }
+    ]}')" prepaid-gas '30 Tgas' attached-deposit '0 NEAR' \
+  network-config testnet sign-with-legacy-keychain send
+```
+
+The owner registers one position per chain, with the same borrower, keeper and caps: 421614 with Aave's WETH `0x1dF462e2712496373A347f8ad10802a5E95f053D`, then 84532 with WETH `0x4200000000000000000000000000000000000006`. Both use `pool_fee` 3000, `max_per_rescue` "100000000", `max_per_day` "500000000" and `cooldown_secs` 0, with the same `register` call as above and `sign-with-legacy-keychain`.
+
+The keeper's new key was generated locally. Its private half went straight into the gitignored `.env.testnet-v2m`, and only the public half was added:
+
+```sh
+near account add-key levee-keeper-1503.testnet grant-function-call-access --allowance unlimited \
+  --contract-account-id levee-v2-multi-1503.testnet --function-names rescue_from_collateral \
+  use-manually-provided-public-key "$KEEPER_PUBLIC_KEY" network-config testnet sign-with-legacy-keychain send
+```
+
+One keeper process serves both positions. Its positions file lists ids 1 and 2, each with trigger 1.5, target 1.6, `mode` collateral, `max_slippage_bps` 100 and `quote_tolerance_bps` 50. Its `fee_ceilings` give 5 and 2 gwei for both 84532 and 421614. `BASE_RPC_URLS` and `ARBITRUM_RPC_URLS` each name two endpoints.
+
+#### Deployed
+
+| Step | Result | NEAR transaction |
+|---|---|---|
+| Create `levee-v2-multi-1503.testnet` through the faucet service | Created with 10 NEAR | [`Hwtdfic3…gY4U`](https://testnet.nearblocks.io/txns/Hwtdfic38KCCjBeiJZfTVTcdAfmY4tLzWnhTEyStgY4U) |
+| Deploy and `new` | `get_chain(84532)` and `get_chain(421614)` return the config above, each with `unwind` `0xd9a54f7743b5bba3fdc77c96b932f50ce67177e8` | [`CCSEgJer…c3gz`](https://testnet.nearblocks.io/txns/CCSEgJergAAGKMwXyfumzFqG488GYoALxRrwSWVrc3gz) |
+| `register`, Arbitrum Sepolia | Position 1 | [`CeQ2mnSh…m1aJn`](https://testnet.nearblocks.io/txns/CeQ2mnShUevhUbW2Wc58Q2Td9ounvvSeiNoREqom1aJn) |
+| `register`, Base Sepolia | Position 2 | [`9SmWN8QU…Srnn`](https://testnet.nearblocks.io/txns/9SmWN8QU2HWiXNwfc7Fkw2c1EaBqBWyrya7b4DfxSrnn) |
+| `add-key` | `ed25519:4PR4WfCfq421aCxP5wt9udHnYGxu93owDt7rvSKNfGKW` on the keeper, `rescue_from_collateral` on `levee-v2-multi-1503.testnet` only | [`FxQxXNiq…M48Z1`](https://testnet.nearblocks.io/txns/FxQxXNiqH5rqbd3Wv96uR6Ww8wfcfiDE4hjJo6CM48Z1) |
+| `derive-address --id 1`, `--id 2` | Rescuers `0x008418a72481867d027E2b9cA179AC089de69403` and `0x6d65fC5Cb4536abae4cD6526856bB10526e80295`, matching the live `derived_public_key` | |
+| Rescues on both chains, before the deletion | Runs `2026-11-11T20-30-08Z-arbitrum-sepolia-1` and `…-base-sepolia-2`, both NEAR calls at block 277,264,508 | in the records |
+| `delete-keys` | The only full-access key, `ed25519:F5ZXz26BWNVyBK8bDD97thjdESAYv58FarwTzgoieZML`, deleted at block 277,265,005. No access key is left | [`6SAwnLxi…yti62`](https://testnet.nearblocks.io/txns/6SAwnLxi8QTR4UKqCSfpAASkzZzENDrjXudakVJyti62) |
+| Rescues on both chains, after the deletion | Runs `2026-11-11T20-37-17Z-base-sepolia-2` and `…-arbitrum-sepolia-1`, NEAR calls at blocks 277,265,218 and 277,265,219 | in the records |
+
+The claims `one-keyless-policy-two-chains-arbitrum` and `one-keyless-policy-two-chains-base` name this account in `no_access_keys`, so `make verify` reads its empty key list every time.
