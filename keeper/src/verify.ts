@@ -41,6 +41,8 @@ export interface RunVerdict {
 export interface ClaimVerdict {
   id: string;
   claim: string;
+  /** What backs the claim in the ledger: a named test, or a recorded run. */
+  basis: 'test' | 'run';
   verdict: Verdict;
   note: string;
 }
@@ -438,7 +440,7 @@ async function verifyTestClaim(
   claim: Claim & { test: NonNullable<Claim['test']> },
   repoRoot: string,
 ): Promise<ClaimVerdict> {
-  const base = { id: claim.id, claim: claim.claim };
+  const base = { id: claim.id, claim: claim.claim, basis: 'test' as const };
   const { path, name } = claim.test;
   let source: string;
   try {
@@ -458,7 +460,7 @@ async function verifyRunClaim(
   records: Map<string, RunRecord>,
   lookups: Lookups,
 ): Promise<ClaimVerdict> {
-  const base = { id: claim.id, claim: claim.claim };
+  const base = { id: claim.id, claim: claim.claim, basis: 'run' as const };
   const verdict = claim.run ? runs.get(claim.run) : undefined;
   if (!verdict) return { ...base, verdict: 'FAIL', note: `run ${claim.run} is not on file` };
   const note = `run ${verdict.runId}: ${verdict.note}`;
@@ -556,5 +558,14 @@ export function formatReport(report: VerifyReport): string {
     '',
     `${report.claims.length} claims: ${count('PASS')} PASS, ${count('FAIL')} FAIL, ${count('RECORDED')} RECORDED`,
   );
+  const recorded = report.claims.filter((claim) => claim.verdict === 'RECORDED');
+  if (recorded.length > 0) {
+    const tests = recorded.filter((claim) => claim.basis === 'test').length;
+    const runs = recorded.length - tests;
+    const parts: string[] = [];
+    if (tests > 0) parts.push(`${tests} backed by a test this command does not run (make test runs them)`);
+    if (runs > 0) parts.push(`${runs} backed by a run kept on file that is not a live success (aborted, failed or simulated)`);
+    lines.push(`RECORDED means on file, not proven here: ${parts.join('; ')}.`);
+  }
   return lines.join('\n');
 }
