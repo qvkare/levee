@@ -1,6 +1,10 @@
 # Levee
 
-Levee repays your Aave debt when your health factor falls below a trigger you set. It sells just enough of your own collateral to bring the health factor back to your target. Your position stays in your wallet, and every sale is checked on chain against the trigger and price bound you set.
+- **What.** Levee repays your Aave v3 USDC debt from your own collateral when your health factor falls below a trigger you set. It sells just enough to bring the health factor back to your target.
+- **Why.** Repaying early costs a swap. Being liquidated costs a liquidation bonus, 5% of the debt closed on Aave's WETH on Base. Your position stays in your wallet, and every sale is checked on chain against your trigger and your price bound.
+- **NEAR.** A NEAR contract with no keys decides when and how much, and signs for the rescuer address through Chain Signatures. The keeper's key can call one method on it and nothing else.
+- **Proof.** 20 testnet rescues on Base Sepolia through NEAR testnet, 7 of them from collateral, the last two after both contract accounts had lost their last key. `make verify` reads them back from public chains. A backtest replays every USDC borrower on Aave v3 Base and Arbitrum through two crashes and a calm month, misses included.
+- **Try it.** https://leveefi.xyz reads any address, with no wallet. From a clone, `pnpm install && make judge` needs no keys or funds and takes about 6 minutes.
 
 ## The problem
 
@@ -9,6 +13,32 @@ Borrowers get liquidated in fast moves and pay the liquidator a bonus. Repaying 
 - The borrower approves a capped amount of their collateral's aToken to `LeveeUnwind` and calls `authorize` with their trigger, target, price bound, collateral and Uniswap pool. There is no Safe, module or credit delegation.
 - `LeveeUnwind` has no owner and cannot be upgraded. It sells only while the health factor is below the borrower's trigger, only within their bound against Aave's oracle, and only to repay their own USDC debt. `revoke()` stops it at once.
 - When to act and how much is decided by a NEAR contract with no keys. It signs for the rescuer address on every chain through Chain Signatures.
+
+## Why not DeFi Saver?
+
+DeFi Saver already automates Aave v3 repayment on Ethereum, Arbitrum, Optimism and Base ([automations](https://help.defisaver.com/protocols/aave-v3/compatibility-and-automations)). Since 21 October 2025 it does so for positions held in an ordinary wallet, with no migration ([newsletter](https://blog.defisaver.com/defi-saver-newsletter-november-2025/)). It is a live product. Levee is on testnet and does one thing: it repays USDC debt by selling one collateral in one Uniswap v3 pool. What differs is who can act on the position, and what they can do with it.
+
+| | DeFi Saver Automation | Levee |
+|---|---|---|
+| Who sends the transaction | DeFi Saver's own bots, whitelisted in its `BotAuth` contract ([docs](https://docs.defisaver.com/llms-full.txt)) | Anyone can: the NEAR contract publishes the signed transaction. The keeper that asks for it holds a NEAR key limited to one method |
+| Who can change the contracts | Automation contracts can be upgraded by DeFi Saver's multisigs after a 24-hour timelock ([admin access](https://docs.defisaver.com/protocol/security-and-audits/admin-access-control)) | Nobody. `LeveeUnwind` has no owner and no upgrade, and the NEAR contract accounts have no keys |
+| What the borrower grants | Its help pages do not say for automation. Its view contract reads an asset approval, an aToken approval and credit delegation from the wallet to a smart wallet ([`AaveV3View`](https://github.com/defisaver/defisaver-v3-contracts/blob/main/contracts/views/AaveV3View.sol)) | A capped aToken allowance to `LeveeUnwind`, and the trigger, target, price bound, collateral and pool in `authorize`. No Safe, module or credit delegation |
+| Fees | 0.05% of each triggered automation, gas, and 0.25% on swaps between uncorrelated assets such as ETH and USDC ([fees](https://help.defisaver.com/features/automation/fees)) | None today. A proposal is in "Who it is for" |
+| Minimum debt | $30,000 on Ethereum, $500 on Arbitrum, Optimism and Base ([requirements](https://help.defisaver.com/features/automation/requirements-for-using-automation)) | None enforced. The backtest says positions under about $10k lose money |
+| Chains | Ethereum, Arbitrum, Optimism, Base, on mainnet | Base Sepolia, live on testnet. Arbitrum in fork tests |
+
+Two others:
+
+- **Summer.fi** stopped its Pro automations on 12 February 2026 and sent users to DeFi Saver ([announcement](https://summerfi.beehiiv.com/p/summer-pro-is-moving-to-defi-saver-lazy-summer-protocol-goes-all-in)).
+- **Instadapp Protection Automation** needs an Instadapp smart account (DSA) and charges 0.3% to 0.4% per event ([guide](https://guides.instadapp.io/features/protection-automation)). We have not checked whether it still runs.
+
+What Levee does not claim: to be the first or only tool that works without moving a position, to cost less, or to be audited. It has run only on testnet. It still relies on NEAR, the MPC network, a keeper being up, Aave's oracle and the pool's depth.
+
+## Who it is for
+
+Borrowers with more than about $10k of USDC debt against volatile collateral. In the 2025-10 crash, at the 1% bound, the backtest made $34.5k net on positions with $10k to $100k of debt and $452.9k on larger ones, and lost $313k on smaller ones, mostly to gas. In the calm month it lost $122k in all: it avoided $22k of bonus and paid $134k for swaps. Wallets and lending front-ends that want to offer a rescue without holding their users' funds are the other audience.
+
+**Proposal, not built:** a fee of 0.1% of the USDC repaid, charged only on an unwind that lands, to an address fixed when the helper is deployed, with nothing to set up. In the 2025-10 replay at trigger 1.20 and the 1% bound, unwinds repaid $58.2M on both chains, so the fee would have been about $58k, 7% of the $781k of bonus they avoided, and the net would have fallen from +$175k to about +$116k. DeFi Saver charges 0.05% per automation plus its swap fee, so this is not a claim to be cheaper.
 
 ## Try it with no keys
 
@@ -23,7 +53,7 @@ make judge
 
 | Do | See |
 |---|---|
-| `make verify` | Every recorded run read back from public chains: the NEAR receipt, the rescuer derived from the MPC root key, the EVM sender, target, calldata and outcome, and that both contract accounts have no keys |
+| `make verify` | Every recorded run read back from public chains: the NEAR receipt, the rescuer derived from the MPC root key, the EVM sender, target, calldata and outcome, and that both contract accounts have no keys. Each claim in `evidence/claims.json` ends as PASS, proven here from public chains, or RECORDED, on file but not proven by this command: claims backed by a test, which `make test` runs, and runs that were aborted or failed, kept for the record |
 | `make replay` | The collateral rescue made after the contract lost its keys, walked step by step offline |
 | `make backtest` | Both backtests recomputed from cached data, including misses. About 5 minutes |
 | `make quote-dry` | Live NEAR Intents dry quotes for the reserve routes: Arbitrum to Base, Base to Arbitrum, Base to Hyperliquid. Nothing moves |
@@ -100,6 +130,18 @@ Repay from a reserve works the same way with `rescue(id, amount, fees)`, which s
 
 The full design is in `docs/SPEC.md`.
 
+## Limits on an automated agent
+
+The keeper is an automated agent that holds a key, and Levee assumes that key will leak one day. Three things limit what it can do, and the keeper controls none of them:
+
+| Where | The limit | How to check it |
+|---|---|---|
+| NEAR protocol | The keeper's key is a function-call key. It can call only `rescue_from_collateral` on the Levee contract, or only `rescue` on v0.1. It cannot attach a deposit, and it spends NEAR only on gas | `make attack-demo`: real keys try every other method in near-sandbox and fail with `MethodNameMismatch` |
+| The Levee contract on NEAR, which has no keys | A cap per rescue, a cap per UTC day, a cooldown, and fee ceilings per chain. Only the position's owner can loosen them, and only after 24 hours. The keeper passes an amount, `max_sold` and fees, never a target, calldata or payload | The unit, property and near-sandbox tests in `contracts/levee` |
+| `LeveeUnwind` on the lending chain | It sells only while the borrower's health factor is below their trigger, only their collateral in their pool, within their bound against Aave's oracle and the keeper's `max_sold`, and not much past their target | The fork tests in `evm/`, and the `unwind-*` claims in `evidence/claims.json` |
+
+The keeper is deterministic TypeScript, with no model in the money path. An AI agent in its place would be held by the same three limits: it could choose when to ask and how much within the caps, but not what gets signed, for whom, or where the value goes. "What each key can do" below gives the worst case for a stolen key.
+
 ## What each key can do
 
 | Actor | Can | Cannot |
@@ -118,7 +160,7 @@ A stolen keeper key can act only while the borrower's health factor is below the
 - **Chain Signatures.** The rescuer address on Base belongs to the contract. Without it, this design would need a hot key or a contract on every chain.
 - **Function-call keys.** The keeper's keys are limited to `rescue_from_collateral` or `rescue` by the protocol. `make attack-demo` shows both.
 - **NEAR contract as the policy layer.** One policy controls rescuers on several chains, and it has no admin or upgrade path. Both testnet contract accounts have no keys: the last full-access key was deleted on `levee-core-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/3u8yYEBB9eVJbRGjE27xiHru1aAA4W7Mh4C2rrsZ86fu)) and on `levee-core-v2-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA)). `make verify` checks it.
-- **NEAR Intents.** The site and `make quote-dry` take live confidential 1Click quotes for the reserve routes, with a partner key. No reserve moves through Intents yet: the reserve layer below is not built.
+- **NEAR Intents.** Quotes only, today. The site and `make quote-dry` take live confidential 1Click dry quotes for the reserve routes, with a partner key. Nothing has moved through Intents: the reserve layer below is not built.
 
 ## Backtest
 
@@ -158,10 +200,21 @@ Method, validation and every table: `backtest/README.md` and `backtest/results/c
 
 ## Not built yet
 
-- **Reserve layer.** The off-venue reserve in a NEAR Intents Agent API wallet needs partner access. Today the reserve is USDC held at the rescuer address.
+- **Reserve layer, through NEAR Intents.** The next step: one reserve, held in a NEAR Intents Agent API wallet, that moves USDC to whichever rescuer needs it, on whichever chain. For one position the backtest found a reserve no better than repaying the same USDC upfront, so its case is one reserve serving positions on several chains. It needs partner access. Today the reserve is USDC held at the rescuer address, and the routes exist only as dry quotes.
 - **Hyperliquid top-ups.** The site reads Hyperliquid, but Levee does not act on it.
 - **Arbitrum.** The contracts support it and fork tests cover both modes there. There are no live runs.
 - **Mainnet, an external audit and a reproducible build.**
+
+## NEAR Hackathon
+
+Levee is an entry in the NEAR Hackathon "Build Beyond Boundaries", for tracks 01 Unstoppable DeFi, 06 AI Security & Defense and 13 Open Innovation. Every commit in this repository is from 7 November 2026 or later. In that window:
+
+- The specification, and the NEAR contract in two immutable versions, each deployed on testnet and then locked by deleting its last key.
+- `LeveeUnwind`, its fork tests on Base, Arbitrum and Base Sepolia, the fixes from a security review, and its Base Sepolia deployment.
+- The keeper, `verify` and `replay`.
+- Both backtests, on cached Aave and Uniswap data.
+- The site and risk API at https://leveefi.xyz.
+- Every run in `evidence/runs/`, failures included.
 
 ## Repository
 

@@ -531,6 +531,30 @@ describe('verifyEvidence', () => {
     expect(text).toContain('0 PASS, 0 FAIL, 1 RECORDED');
   });
 
+  it('says what each RECORDED claim rests on, so it does not read as unproven', async () => {
+    const { run } = await writeRun(evidenceDir, successRun({ network: 'simulated' }));
+    await writeClaims([
+      { id: 'sim', claim: 'Simulated.', run: run.run_id },
+      { id: 't1', claim: 'Tested.', test: { path: 'evm/Repay.t.sol', name: 'test_repay' } },
+    ]);
+
+    const report = await verify();
+    const text = formatReport(report);
+
+    expect(report.claims.map((claim) => claim.basis)).toEqual(['run', 'test']);
+    expect(text).toContain('2 claims: 0 PASS, 0 FAIL, 2 RECORDED');
+    expect(text).toContain(
+      'RECORDED means on file, not proven here: 1 backed by a test this command does not run (make test runs them); 1 backed by a run kept on file that is not a live success (aborted, failed or simulated).',
+    );
+  });
+
+  it('adds no RECORDED line when every claim passes or fails', async () => {
+    await writeRun(evidenceDir, successRun());
+    await writeClaims([]);
+
+    expect(formatReport(await verify())).not.toContain('RECORDED means');
+  });
+
   it('prints each failed check under its run', async () => {
     await writeRun(evidenceDir, successRun());
     await writeClaims([]);
