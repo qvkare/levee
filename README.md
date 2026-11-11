@@ -148,7 +148,7 @@ A stolen keeper key can act only while the borrower's health factor is below the
 - **Chain Signatures.** The rescuer address on Base belongs to the contract. Without it, this design would need a hot key or a contract on every chain.
 - **Function-call keys.** The keeper's keys are limited to `rescue_from_collateral` or `rescue` by the protocol. `make attack-demo` shows both.
 - **NEAR contract as the policy layer.** One policy controls rescuers on several chains, and it has no admin or upgrade path. Both testnet contract accounts have no keys: the last full-access key was deleted on `levee-core-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/3u8yYEBB9eVJbRGjE27xiHru1aAA4W7Mh4C2rrsZ86fu)) and on `levee-core-v2-1503.testnet` ([tx](https://testnet.nearblocks.io/txns/C5aHVAahMMa3BjqddSDSf7AK8VCkuFiuqizGj7vbzJJA)). `make verify` checks it.
-- **NEAR Intents.** The site and `make quote-dry` take live confidential 1Click quotes for the reserve routes, with a partner key. No reserve moves through Intents yet: the reserve layer below is not built.
+- **NEAR Intents.** Quotes only, today. The site and `make quote-dry` take live confidential 1Click dry quotes for the reserve routes, with a partner key. Nothing has moved through Intents: the reserve layer below is not built.
 
 ## Backtest
 
@@ -188,7 +188,7 @@ Method, validation and every table: `backtest/README.md` and `backtest/results/c
 
 ## Not built yet
 
-- **Reserve layer.** The off-venue reserve in a NEAR Intents Agent API wallet needs partner access. Today the reserve is USDC held at the rescuer address.
+- **Reserve layer, through NEAR Intents.** The next step: one reserve, held in a NEAR Intents Agent API wallet, that moves USDC to whichever rescuer needs it, on whichever chain. For one position the backtest found a reserve no better than repaying the same USDC upfront, so its case is one reserve serving positions on several chains. It needs partner access. Today the reserve is USDC held at the rescuer address, and the routes exist only as dry quotes.
 - **Hyperliquid top-ups.** The site reads Hyperliquid, but Levee does not act on it.
 - **Arbitrum.** The contracts support it and fork tests cover both modes there. There are no live runs.
 - **Mainnet, an external audit and a reproducible build.**
