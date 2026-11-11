@@ -293,7 +293,7 @@ No wallet and no login. Paste an address and see:
 
 ## 9. Repay from collateral
 
-Status: v0.2, built and fork-tested on 2026-11-08, with an independent audit's findings fixed the same day. Deployed on Base Sepolia and NEAR testnet the same day, with seven live rescues and one refusal, the last two after every key on the contract accounts was deleted (subsection Testnet). Not on mainnet. Items marked UNVERIFIED must be checked before they are relied on.
+Status: v0.2, built and fork-tested on 2026-11-08, with an independent audit's findings fixed the same day. Deployed on Base Sepolia and NEAR testnet the same day, with seven live rescues and one refusal, the last two after every key on the contract accounts was deleted (subsection Testnet). On 2026-11-11 the same contract code was deployed again with Base Sepolia and Arbitrum Sepolia, with a `LeveeUnwind` fixed for Aave v3.0 on both, and four live rescues ran, one pair before and one after its last key was deleted (subsection "One contract, two chains"). Not on mainnet. Items marked UNVERIFIED must be checked before they are relied on.
 
 ### Why
 
@@ -439,6 +439,34 @@ Runs, all on position 1 with the borrower's health factor pushed to 1.48 by a bo
 - `unwind` used 528,445 to 545,639 gas, against the 1,000,000 limit. NEAR inclusion to MPC signature took 4.6 to 6.7 s.
 - The pool does not stay at the oracle price. Each sale moves it down, and others swap small amounts of test ETH for USDC through it, about one a minute when measured. Within minutes of a recentring it read 40 to 90 bps under the oracle, and 328 bps under after 40 minutes. Each rescue was preceded by a rerun of the seed script with 0.001 WETH, which moves the pool back. The aborted run was taken without one, on a pool 93 bps under the oracle: the keeper refused before asking NEAR, and the next run, after a recentring, succeeded.
 
+#### One contract, two chains
+
+Deployed on 2026-11-11 to show one NEAR policy rescuing on two chains. The contract is the v0.2 code again, built from the same source with `contracts/build.sh` to the same wasm, SHA-256 `991dda79c3cff0138c871dbc4a9d96087450dd76dcf3ecf3892db8995003eab3`. Both accounts report code hash `BJhnFqoK1e6JJQqKiciUtfQxmouGi81hhfJ3qPVRUASE`. The deployment and setup transactions are in `contracts/README.md` and `evm/README.md`.
+
+| Item | Value |
+|---|---|
+| Levee contract | `levee-v2-multi-1503.testnet`, MPC `v1.signer-prod.testnet`. Chains 84532 and 421614, each with `unwind` `0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8`, `gas_limit_unwind` 1,000,000, and fee ceilings of 5 and 2 gwei |
+| `LeveeUnwind` | `0xD9a54F7743B5BbA3fdC77c96b932f50ce67177e8` on both chains, the same deployer at the same nonce. Built with the Aave v3.0 fix from section 9, and verified on Sourcify as an exact match on both |
+| Positions | Id 1 on Arbitrum Sepolia, collateral Aave's WETH `0x1dF462e2712496373A347f8ad10802a5E95f053D`. Id 2 on Base Sepolia, collateral WETH `0x4200000000000000000000000000000000000006`. Both have `pool_fee` 3000, 100 USDC per rescue and 500 a day, and borrower `0xDb6A55bf949E488cb42BAD27C4714220100F3793`, a test EOA |
+| Rescuers | `0x008418a72481867d027E2b9cA179AC089de69403` for id 1 and `0x6d65fC5Cb4536abae4cD6526856bB10526e80295` for id 2, paths `levee/v1/1` and `levee/v1/2` |
+| Keeper | `levee-keeper-1503.testnet`, key `ed25519:4PR4WfCfq421aCxP5wt9udHnYGxu93owDt7rvSKNfGKW`, limited to `rescue_from_collateral` on `levee-v2-multi-1503.testnet` |
+| Borrower's `authorize` on each chain | Trigger 1.5, target 1.6, `max_slippage_bps` 100, WETH, 3000 |
+| Key deletion | `ed25519:F5ZXz26BWNVyBK8bDD97thjdESAYv58FarwTzgoieZML`, the only full-access key, deleted in [`6SAwnLxi8QTR4UKqCSfpAASkzZzENDrjXudakVJyti62`](https://testnet.nearblocks.io/txns/6SAwnLxi8QTR4UKqCSfpAASkzZzENDrjXudakVJyti62) at block 277,265,005 |
+
+One `keeper run` process, with both positions in its config file, ran each pair. The borrower's health factor on each chain was first pushed to 1.45 with a borrow. Before the second pair, both pools were recentred with a rerun of the seed script.
+
+| Run | How | Outcome | Repaid, USDC | Health factor | Price against the oracle | Detection to inclusion |
+|---|---|---|---|---|---|---|
+| `2026-11-11T20-30-08Z-arbitrum-sepolia-1` | `run` loop, NEAR block 277,264,508 | success | 6.28 | 1.4487 to 1.6014 | 51 bps below | 7.9 s |
+| `2026-11-11T20-30-08Z-base-sepolia-2` | `run` loop, the same NEAR block | success | 9.86 | 1.4507 to 1.6013 | 69 bps below | 8.9 s |
+| `2026-11-11T20-37-17Z-base-sepolia-2` | `run` loop, after the key was deleted, NEAR block 277,265,218 | success | 8.72 | 1.4500 to 1.6015 | 59 bps below | 8.7 s |
+| `2026-11-11T20-37-17Z-arbitrum-sepolia-1` | `run` loop, after the key was deleted, NEAR block 277,265,219 | success | 5.59 | 1.4500 to 1.6016 | 41 bps below | 8.0 s |
+
+- Both pools are ours, seeded at the oracle price in a 1.2% band either side, so the price paid is not a market's. Arbitrum Sepolia's held 0.013 WETH and 18.25 USDC, the least the funds allowed. The Base Sepolia pool had drifted to about $0.10 per WETH since the 8 November runs; the seed script moved it back with test USDC from Aave's faucet.
+- Each sale moved its pool down 40 to 62 bps, measured before the recentring. The repays were small to suit the pools: the borrowers held 0.03 and 0.04 WETH.
+- After the second Arbitrum Sepolia unwind, the keeper's reread of the health factor at the receipt's block failed on `sepolia-rollup.arbitrum.io`, which had not yet served that block. The second endpoint answered, and the record holds its reading.
+- On Arbitrum Sepolia an unwind's L1 data component read zero, so `gas_limit_unwind` covered execution alone.
+
 ### Failure conditions
 
 | Condition | Effect |
@@ -461,7 +489,7 @@ Runs, all on position 1 with the borrower's health factor pushed to 1.48 by a bo
 
 ### Positioning
 
-Read `research/incumbents.md` (outside the repo) before writing any comparison. DeFi Saver has protected Aave v3 positions held in an EOA on Base and Arbitrum since October 2025, so do not claim Levee is the only tool that works without migrating a position. What Levee can claim, once the helper is built and tested:
+The comparison is in the README, "Why not DeFi Saver?", with a source for each fact, read on 2026-11-11. DeFi Saver has automated Aave v3 positions held in an EOA on Ethereum, Arbitrum, Optimism and Base since 21 October 2025, so do not claim Levee is the only tool that works without migrating a position. What Levee can claim, once the helper is built and tested:
 
 - No smart wallet, no module and no credit delegation. The borrower gives a capped aToken allowance to a helper that has no owner and cannot be upgraded.
 - The sale price is bounded against Aave's oracle on chain, by the helper.
