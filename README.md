@@ -205,6 +205,17 @@ Method, validation and every table: `backtest/README.md` and `backtest/results/c
 - **Arbitrum.** The contracts support it and fork tests cover both modes there. There are no live runs.
 - **Mainnet, an external audit and a reproducible build.**
 
+## NEAR Hackathon
+
+Levee is an entry in the NEAR Hackathon "Build Beyond Boundaries", for tracks 01 Unstoppable DeFi, 06 AI Security & Defense and 13 Open Innovation. Every commit in this repository is from 7 November 2026 or later. In that window:
+
+- The specification, and the NEAR contract in two immutable versions, each deployed on testnet and then locked by deleting its last key.
+- `LeveeUnwind`, its fork tests on Base, Arbitrum and Base Sepolia, the fixes from a security review, and its Base Sepolia deployment.
+- The keeper, `verify` and `replay`.
+- Both backtests, on cached Aave and Uniswap data.
+- The site and risk API at https://leveefi.xyz.
+- Every run in `evidence/runs/`, failures included.
+
 ## Repository
 
 | Path | What |
