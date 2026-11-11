@@ -14,6 +14,26 @@ Borrowers get liquidated in fast moves and pay the liquidator a bonus. Repaying 
 - `LeveeUnwind` has no owner and cannot be upgraded. It sells only while the health factor is below the borrower's trigger, only within their bound against Aave's oracle, and only to repay their own USDC debt. `revoke()` stops it at once.
 - When to act and how much is decided by a NEAR contract with no keys. It signs for the rescuer address on every chain through Chain Signatures.
 
+## Why not DeFi Saver?
+
+DeFi Saver already automates Aave v3 repayment on Ethereum, Arbitrum, Optimism and Base ([automations](https://help.defisaver.com/protocols/aave-v3/compatibility-and-automations)). Since 21 October 2025 it does so for positions held in an ordinary wallet, with no migration ([newsletter](https://blog.defisaver.com/defi-saver-newsletter-november-2025/)). It is a live product. Levee is on testnet and does one thing: it repays USDC debt by selling one collateral in one Uniswap v3 pool. What differs is who can act on the position, and what they can do with it.
+
+| | DeFi Saver Automation | Levee |
+|---|---|---|
+| Who sends the transaction | DeFi Saver's own bots, whitelisted in its `BotAuth` contract ([docs](https://docs.defisaver.com/llms-full.txt)) | Anyone can: the NEAR contract publishes the signed transaction. The keeper that asks for it holds a NEAR key limited to one method |
+| Who can change the contracts | Automation contracts can be upgraded by DeFi Saver's multisigs after a 24-hour timelock ([admin access](https://docs.defisaver.com/protocol/security-and-audits/admin-access-control)) | Nobody. `LeveeUnwind` has no owner and no upgrade, and the NEAR contract accounts have no keys |
+| What the borrower grants | Its help pages do not say for automation. Its view contract reads an asset approval, an aToken approval and credit delegation from the wallet to a smart wallet ([`AaveV3View`](https://github.com/defisaver/defisaver-v3-contracts/blob/main/contracts/views/AaveV3View.sol)) | A capped aToken allowance to `LeveeUnwind`, and the trigger, target, price bound, collateral and pool in `authorize`. No Safe, module or credit delegation |
+| Fees | 0.05% of each triggered automation, gas, and 0.25% on swaps between uncorrelated assets such as ETH and USDC ([fees](https://help.defisaver.com/features/automation/fees)) | None today. A proposal is in "Who it is for" |
+| Minimum debt | $30,000 on Ethereum, $500 on Arbitrum, Optimism and Base ([requirements](https://help.defisaver.com/features/automation/requirements-for-using-automation)) | None enforced. The backtest says positions under about $10k lose money |
+| Chains | Ethereum, Arbitrum, Optimism, Base, on mainnet | Base Sepolia, live on testnet. Arbitrum in fork tests |
+
+Two others:
+
+- **Summer.fi** stopped its Pro automations on 12 February 2026 and sent users to DeFi Saver ([announcement](https://summerfi.beehiiv.com/p/summer-pro-is-moving-to-defi-saver-lazy-summer-protocol-goes-all-in)).
+- **Instadapp Protection Automation** needs an Instadapp smart account (DSA) and charges 0.3% to 0.4% per event ([guide](https://guides.instadapp.io/features/protection-automation)). We have not checked whether it still runs.
+
+What Levee does not claim: to be the first or only tool that works without moving a position, to cost less, or to be audited. It has run only on testnet. It still relies on NEAR, the MPC network, a keeper being up, Aave's oracle and the pool's depth.
+
 ## Who it is for
 
 Borrowers with more than about $10k of USDC debt against volatile collateral. In the 2025-10 crash, at the 1% bound, the backtest made $34.5k net on positions with $10k to $100k of debt and $452.9k on larger ones, and lost $313k on smaller ones, mostly to gas. In the calm month it lost $122k in all: it avoided $22k of bonus and paid $134k for swaps. Wallets and lending front-ends that want to offer a rescue without holding their users' funds are the other audience.
