@@ -161,6 +161,27 @@
         "levee-core-1503.testnet",
         "levee-core-v2-1503.testnet"
       ]
+    },
+    {
+      "id": "live-unwind-arbitrum-sepolia",
+      "claim": "A keeper holding a key limited to rescue_from_collateral repaid real Aave debt on Arbitrum Sepolia, whose Aave market runs Pool revision 3, by selling the borrower's own WETH in one transaction through LeveeUnwind, signed by levee-v2-multi-1503.testnet on NEAR testnet with Chain Signatures. The Uniswap pool it sold in was seeded by us at Aave's oracle price, so its price is not a measure of slippage.",
+      "run": "2026-11-11T20-30-08Z-arbitrum-sepolia-1"
+    },
+    {
+      "id": "one-keyless-policy-two-chains-arbitrum",
+      "claim": "levee-v2-multi-1503.testnet, which lists Base Sepolia and Arbitrum Sepolia, has no access key: its last full-access key was deleted in NEAR transaction 6SAwnLxi8QTR4UKqCSfpAASkzZzENDrjXudakVJyti62 at block 277,265,005. After that, one keeper loop with one key rescued a position on each chain through it. This is the Arbitrum Sepolia rescue, its NEAR call at block 277,265,219.",
+      "run": "2026-11-11T20-37-17Z-arbitrum-sepolia-1",
+      "no_access_keys": [
+        "levee-v2-multi-1503.testnet"
+      ]
+    },
+    {
+      "id": "one-keyless-policy-two-chains-base",
+      "claim": "The same keyless contract and keeper loop rescued the Base Sepolia position after the key deletion at block 277,265,005, its NEAR call at block 277,265,218, one block before the Arbitrum Sepolia one.",
+      "run": "2026-11-11T20-37-17Z-base-sepolia-2",
+      "no_access_keys": [
+        "levee-v2-multi-1503.testnet"
+      ]
     }
   ]
 }
