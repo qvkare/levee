@@ -231,6 +231,8 @@ Levee is an entry in the NEAR Hackathon "Build Beyond Boundaries", for tracks 01
 - The site and risk API at https://leveefi.xyz.
 - Every run in `evidence/runs/`, failures included.
 
+The same author also entered Weir (https://github.com/qvkare/weir), an independent project that shares no code with Levee.
+
 ## Repository
 
 | Path | What |
