@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { readDate } from "@/lib/format.ts";
 import { fitsHome, type HomeReading } from "@/lib/home-reading-rules.ts";
 import { buildLine, directionSentence, pointsFor, triggerSentence } from "@/lib/line.ts";
@@ -17,7 +17,7 @@ function sourceLine(source: HomeReading["source"], fresh: boolean, phase: Phase,
 }
 
 /** The home page's example: a real reading from the build, read again live in the browser. */
-export function ReadSection({ reading, trigger }: { reading: HomeReading; trigger: number | null }) {
+export function ReadSection({ reading, trigger, form }: { reading: HomeReading; trigger: number | null; form?: ReactNode }) {
   const { report, phase, fresh } = useReading(reading.report, { live: true, readOnMount: true, accept: fitsHome });
   const line = useMemo(() => buildLine(report), [report]);
   const points = useMemo(() => pointsFor(line), [line]);
@@ -31,6 +31,7 @@ export function ReadSection({ reading, trigger }: { reading: HomeReading; trigge
         </h2>
         <p>Free and read-only. Levee reads Aave on Base and Arbitrum, and Hyperliquid, and places each position on one line by its distance from liquidation. It repays only on Aave.</p>
       </div>
+      {form && <div className="rd-form">{form}</div>}
       <p className="rd-meta" aria-live="polite">
         <span className="tag">Example</span>
         <Link className="mono rd-address" href={`/a/${report.address}`} prefetch={false}>
