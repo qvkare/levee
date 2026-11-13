@@ -35,6 +35,23 @@ A rescue is a metro line with four lanes, one per actor. Time runs left to right
 
 Why the helper sits on the P lane and has no lane of its own: it has no owner and no discretion. It acts only on the terms the borrower set with `authorize`, from the borrower's own position, in the same transaction that repays their debt. A fifth lane would draw it as a party with a will of its own, and would crowd the phone map, where the four lanes take the left half of a 350 px drawing. A square tells it apart from the ring stops at the size a thumb sees, and ink ties it to the terminus panel, which spells out the one call and what the helper checks.
 
+## The first screen: the levee
+
+The homepage opens on the product's name drawn as its mechanism, `components/levee-hero.tsx`. The headline is "Hold the line." and the copy is one sentence. There are two buttons: "Watch a real rescue" goes to the replay below, and "Read an address" goes to the reading tool. The address box moved from the first screen into "Read any address".
+
+| In the drawing | Is |
+|---|---|
+| A levee of blue bricks, in the position's blue | The borrower's collateral |
+| Grey water against it | The borrower's USDC debt |
+| Water at the top of the levee | Health factor 1.00, liquidation |
+| A staff gauge in the water, marked at the trigger and the target | The terms the borrower set in `authorize` |
+| One dark brick on top | The slice the borrower allowed, which a rescue sells |
+| The route through K, N and M to an ink U on the levee | The keeper, the keyless contract on NEAR, the MPC signature, and `LeveeUnwind` |
+| The brick carried to the Uniswap pool, and a coin dropped into the water | The sale, and the USDC repaid |
+| A wallet behind the levee | The position, which never leaves it |
+
+It is one 12 s loop of the replayed run, and every figure in it comes from that run's record: health factor before and after, trigger, target, the USDC repaid, the collateral sold, the chain, the date, and the time from detection to inclusion. The card beside it says the drawing is an animation, the run's real time, and that it is shown faster. The water rises past the trigger, the route draws stop by stop, the brick goes, the water falls back to the target, and the loop rests. One motion at a time. Pause stops it, reduced motion stills it, and the still frame is the end of the rescue. Nothing in it is decoration: it has no gradient, glow or particles. On a phone, the drawing is cropped to its middle: the route, the pool and the levee.
+
 ## Lanes
 
 | Lane | Badge | Colour | Means |
@@ -146,8 +163,9 @@ The home page shows a third party's address only to show the tool, so it passes 
 
 ## Motion
 
-- The replay is the only animation, and it is data: the route draws itself at the run's real speed.
-- Nothing moves on scroll except that the replay waits to be seen before it plays. Nothing counts up. Nothing loops.
+- The replay is the only animation at real speed, and it is data: the route draws itself at the run's real speed.
+- The levee on the first screen is the one loop. It is labelled as an animation shown faster, it draws only the replayed run's recorded figures, and it has Pause.
+- Nothing moves on scroll except that the replay waits to be seen before it plays. Nothing counts up.
 - With `prefers-reduced-motion: reduce`, nothing plays by itself and nothing slides.
 
 ## Copy

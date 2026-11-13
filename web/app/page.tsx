@@ -1,12 +1,12 @@
-import Link from "next/link";
 import { AddressForm } from "@/components/address-form.tsx";
 import { BacktestSection } from "@/components/backtest.tsx";
-import { Badge } from "@/components/badge.tsx";
 import { Boards, WorstCase } from "@/components/boards.tsx";
+import { LeveeHero, type HeroRun } from "@/components/levee-hero.tsx";
 import { ReadSection } from "@/components/read-section.tsx";
 import { RescueMap } from "@/components/rescue-map.tsx";
 import { StopStrip, Terminus, stopsIntro } from "@/components/stops.tsx";
 import { Timetable } from "@/components/timetable.tsx";
+import { readDate, seconds } from "@/lib/format.ts";
 import { getHomeReading } from "@/lib/home-reading.ts";
 import { PROOF } from "@/lib/proof.ts";
 
@@ -16,51 +16,39 @@ import { PROOF } from "@/lib/proof.ts";
  */
 export const dynamic = "force-static";
 
-/** What ran live, in one line under the offer, from the run records. */
-function heroProof(): string | null {
-  const { counts, days } = PROOF.modes.collateral;
-  if (counts.success === 0) return null;
-  const chain = counts.chains.join(" and ");
-  const refused = counts.aborted > 0 ? ` and ${counts.aborted} the keeper refused` : "";
-  // Runs are newest first, so the first landed collateral run is the last rescue.
-  const last = PROOF.runs.find((run) => run.mode === "collateral" && run.outcome === "success");
-  const keyless = PROOF.keyless ? `, ${last?.id === PROOF.keyless.run ? "the last" : "one"} after both contract accounts lost their last key` : "";
-  return `Live on ${chain}, ${days}: ${counts.success} rescues from collateral${refused}${keyless}. Nothing is on a mainnet.`;
+/** The figures the first screen states, from the run the home page replays. */
+function heroRun(): HeroRun | null {
+  const { replay } = PROOF;
+  if (!replay || replay.trigger === null || replay.target === null) return null;
+  const total = replay.marks.included;
+  return {
+    before: replay.healthBefore.toFixed(2),
+    after: replay.healthAfter.toFixed(2),
+    trigger: replay.trigger.toFixed(2),
+    target: replay.target.toFixed(2),
+    amount: replay.amount,
+    sold: replay.sale?.sold ?? null,
+    chain: replay.chain,
+    when: readDate(replay.detectedAt),
+    total: seconds(total),
+    keyless: replay.chosen === "keyless",
+  };
 }
 
 export default async function Home() {
   const reading = await getHomeReading();
   const { replay } = PROOF;
-  const proofLine = heroProof();
+  const hero = heroRun();
 
   return (
     <main id="main">
-      <div className="hero">
-        <div>
-          <p className="lines">
-            <Badge lane="P" size="s" />
-            <Badge lane="K" size="s" />
-            <Badge lane="N" size="s" />
-            <Badge lane="M" size="s" />
-            <span className="t">Aave v3, signed on NEAR</span>
-          </p>
-          <h1>Below your trigger, Levee repays your Aave debt from your own collateral</h1>
-          <p className="lede">
-            When your health factor falls below the trigger you set, <b>a NEAR contract with no keys signs one call</b> that sells just enough of your collateral to repay USDC debt back to your target. <b>The position stays in your wallet.</b> On Base and Arbitrum, an ownerless helper checks the trigger and the price against Aave’s oracle before anything moves.
-          </p>
-          {proofLine && (
-            <p className="hero-proof">
-              {proofLine}{" "}
-              <Link href="/proof" prefetch={false}>
-                Every run
-              </Link>
-            </p>
-          )}
-        </div>
-        <AddressForm title="Check any address" lede="How far each Aave and Hyperliquid position is from liquidation. No wallet, no login." example={{ address: reading.report.address, label: "a public Aave borrower" }} />
-      </div>
+      {hero && <LeveeHero run={hero} />}
 
-      {replay && <RescueMap replay={replay} />}
+      {replay && (
+        <div id="rescue">
+          <RescueMap replay={replay} />
+        </div>
+      )}
 
       <section className="s" id="how" aria-labelledby="how-h">
         <div className="sh">
@@ -88,7 +76,11 @@ export default async function Home() {
 
       <BacktestSection />
 
-      <ReadSection reading={reading} trigger={PROOF.readingTrigger} />
+      <ReadSection
+        reading={reading}
+        trigger={PROOF.readingTrigger}
+        form={<AddressForm title="Check any address" lede="How far each Aave and Hyperliquid position is from liquidation. No wallet, no login." example={{ address: reading.report.address, label: "a public Aave borrower" }} />}
+      />
     </main>
   );
 }
